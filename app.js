@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.3.0';
+const APP_VERSAO = '1.3.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.3.1', data: '09/11/2026', itens: ['Escolha automática do modelo do Gemini, igual ao app Meus Concursos: usa o “flash” mais novo disponível para a chave, guarda por 7 dias e troca sozinho se o Google aposentar o modelo', 'Novas tentativas automáticas quando o Gemini está ocupado (limite por minuto)'] },
   { numero: '1.3.0', data: '09/11/2026', itens: ['Conexão com o escritório (como a repartição no Custódia Digital): o administrador conecta uma vez a conta Google do escritório e todos os usuários habilitados já entram conectados', 'Documentos juntados vão para o Google Drive da conta do escritório e a IA usa a chave do escritório — todo o código continua na conta da efstech', 'A equipe só começa a usar o app depois que o escritório estiver conectado'] },
   { numero: '1.2.0', data: '09/11/2026', itens: ['Cadastro de empresa pelo CNPJ com dados públicos da Receita Federal (razão social, atividade, situação, endereço, sócios)', 'Cadastro de empresa pelos documentos: a IA identifica a contratada nos contratos, o app consulta a Receita e cria a empresa já com os arquivos', 'Consulta de CNPJ também no cadastro de clientes pessoa jurídica'] },
   { numero: '1.1.0', data: '09/11/2026', itens: ['“Juntar documentos”: arraste a pasta com contratos, aditivos e planilha — o app guarda no Drive, lê os PDFs com IA (Gemini), liga cada arquivo ao contrato e sugere o preenchimento, com revisão antes de aplicar', 'Divergências entre cadastro e documento viram achados de auditoria', 'Postos e obrigações extraídos do contrato entram em Mão de obra e Obrigações', 'Configuração da chave do Gemini em Gestão do App › Sistema'] },
@@ -2498,7 +2499,7 @@ const Escritorio = {
     const s = Escritorio.st || {};
     return `<p class="muted small">Como a repartição no Custódia Digital: tudo o que a equipe junta vai para o <b>Google Drive da conta do escritório</b> e a IA usa a <b>chave do escritório</b>. O código e os cadastros ficam no app (efstech).</p>
       <div class="conn"><span class="dot ${s.conectado ? 'ok' : 'off'}"></span><div><b>Google Drive do escritório</b><small>${s.conectado ? esc(s.conta) + (s.pasta ? ` · <a href="${esc(s.pasta)}" target="_blank" rel="noopener">abrir pasta</a>` : '') : 'não conectado'}</small></div><button class="btn ghost sm" id="escCon">${s.conectado ? 'Trocar conta' : 'Conectar'}</button>${s.conectado ? `<button class="btn ghost sm danger-text" id="escDes">Desconectar</button>` : ''}</div>
-      <div class="conn"><span class="dot ${s.ia ? 'ok' : 'off'}"></span><div><b>IA para leitura de documentos (Gemini)</b><small>${s.ia ? 'chave do escritório configurada (' + esc(s.iaMascara) + ')' : 'sem chave — os documentos são guardados, mas não lidos'}</small></div><button class="btn ghost sm" id="escIA">Configurar</button></div>`;
+      <div class="conn"><span class="dot ${s.ia ? 'ok' : 'off'}"></span><div><b>IA para leitura de documentos (Gemini)</b><small>${s.ia ? 'chave do escritório configurada (' + esc(s.iaMascara) + ')' + (s.iaModelo ? ' · modelo ' + esc(s.iaModelo) + ' (escolhido automaticamente)' : '') : 'sem chave — os documentos são guardados, mas não lidos'}</small></div><button class="btn ghost sm" id="escIA">Configurar</button></div>`;
   },
   bindCard(el) {
     $('#escCon', el)?.addEventListener('click', Escritorio.conectar);
@@ -2512,7 +2513,7 @@ const Escritorio = {
         <div class="fld full"><label>Chave</label><input id="iaK" type="password" autocomplete="off" placeholder="AIza…"></div>
         <div class="notice soft">${icon('alert')}<div><b>Sigilo dos contratos:</b> no plano gratuito do Gemini, o Google pode usar o conteúdo enviado para melhorar os produtos dele. Para documentos de clientes, ative o faturamento no projeto da chave (AI Studio › Billing) — custa centavos por documento e o conteúdo deixa de ser usado pelo Google.</div></div>
         <p class="muted small">A chave fica guardada no servidor, nunca no navegador.</p>`, foot: `<button class="btn ghost danger-text" id="iaDel">Remover chave</button><span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="iaOk">Testar e salvar</button>` });
-      $('#iaOk', m).onclick = async () => { const b = $('#iaOk', m); b.disabled = true; b.textContent = 'Testando…'; try { Escritorio.st = await api('iaChave', { chave: $('#iaK').value.trim() }); UI.closeModal(); UI.toast('Chave do Gemini do escritório salva e testada.'); App.render(true); Escritorio.badge(); } catch (err) { UI.toast(err.message, 'bad', 6000); b.disabled = false; b.textContent = 'Testar e salvar'; } };
+      $('#iaOk', m).onclick = async () => { const b = $('#iaOk', m); b.disabled = true; b.textContent = 'Testando…'; try { Escritorio.st = await api('iaChave', { chave: $('#iaK').value.trim() }); UI.closeModal(); UI.toast('Chave do Gemini do escritório salva e testada' + (Escritorio.st.iaModelo ? ' · modelo ' + Escritorio.st.iaModelo : '') + '.'); App.render(true); Escritorio.badge(); } catch (err) { UI.toast(err.message, 'bad', 6000); b.disabled = false; b.textContent = 'Testar e salvar'; } };
       $('#iaDel', m).onclick = async () => { try { Escritorio.st = await api('iaChave', { chave: '' }); UI.closeModal(); App.render(true); Escritorio.badge(); } catch (err) { UI.toast(err.message, 'bad'); } };
     });
   }
