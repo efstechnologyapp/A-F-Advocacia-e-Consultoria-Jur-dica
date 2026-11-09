@@ -73,6 +73,15 @@ O servidor entrega a cada cliente **somente**:
 
 O aparelho fica lembrado por 90 dias (até clicar em **Sair**).
 
+## Juntar documentos (Drive + IA) — versão 1.1
+
+1. Cole o novo `Codigo.gs` no Apps Script, rode **configurarInicial** de novo e aceite a nova permissão (Google Drive). Ela cria a pasta **"Amorim Firmo — Consultoria (documentos)"** no Drive, com uma subpasta por empresa.
+2. **Implantar → Gerenciar implantações → lápis → Versão: Nova versão → Implantar** (a URL `/exec` continua a mesma).
+3. Crie uma chave do Gemini em https://aistudio.google.com/apikey (com a conta do escritório) e cole no app em **Gestão do App › Sistema › IA para leitura de documentos › Configurar**.
+4. Sigilo: no plano gratuito do Gemini, o Google pode usar o conteúdo enviado para melhorar os produtos dele. Para contratos de clientes, ative o faturamento no projeto da chave (custo de centavos por documento); com faturamento ativo o conteúdo não é usado.
+
+Uso: na empresa, clique em **Juntar documentos** e arraste a pasta (PDFs, planilha .xlsx ou .zip). Arquivos .rar precisam ser descompactados antes. O app importa a planilha, guarda cada PDF no Drive, lê com a IA, liga ao contrato certo (pelo nome do arquivo citado na planilha, pelo número do contrato ou pela unidade) e mostra uma tela de revisão antes de gravar.
+
 ## DataJud (movimentações dos tribunais)
 
 O botão **Buscar movimentações (DataJud)** e a rotina diária consultam a API pública do CNJ. A chave pública atual já está no script. Se um dia o CNJ trocá-la (o app avisa), pegue a nova em https://datajud-wiki.cnj.jus.br/api-publica/acesso e crie a propriedade `DATAJUD_CHAVE` com o novo valor.
