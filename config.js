@@ -1,7 +1,4 @@
-// Configuração do login. Preencha com os seus dados (veja CONFIGURAR-LOGIN.md).
 window.CONFIG = {
-  // ID do cliente OAuth do Google Cloud (termina em .apps.googleusercontent.com)
-  GOOGLE_CLIENT_ID: "",
-  // URL do app da Web do Google Apps Script (termina em /exec)
-  APPS_SCRIPT_URL: ""
+  GOOGLE_CLIENT_ID: 533289618463-2qeqav8r8jkltuvtrl0ck9arrk6fuo8t.apps.googleusercontent.com,
+  APPS_SCRIPT_URL: https://script.google.com/macros/s/AKfycbym1oZxmZfqmWm1VUWfzPg1JqoPRDL55reUZBfMFeTbhS1yOQ0V2cNaDefa9Z9Qr2-vYw/exec
 };
