@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.1.0';
+const APP_VERSAO = '1.2.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.2.0', data: '09/11/2026', itens: ['Cadastro de empresa pelo CNPJ com dados públicos da Receita Federal (razão social, atividade, situação, endereço, sócios)', 'Cadastro de empresa pelos documentos: a IA identifica a contratada nos contratos, o app consulta a Receita e cria a empresa já com os arquivos', 'Consulta de CNPJ também no cadastro de clientes pessoa jurídica'] },
   { numero: '1.1.0', data: '09/11/2026', itens: ['“Juntar documentos”: arraste a pasta com contratos, aditivos e planilha — o app guarda no Drive, lê os PDFs com IA (Gemini), liga cada arquivo ao contrato e sugere o preenchimento, com revisão antes de aplicar', 'Divergências entre cadastro e documento viram achados de auditoria', 'Postos e obrigações extraídos do contrato entram em Mão de obra e Obrigações', 'Configuração da chave do Gemini em Gestão do App › Sistema'] },
   { numero: '1.0.0', data: '09/11/2026', itens: ['Lançamento: seção Judicial (Cível, Penal, Administrativo, Previdenciário e Trabalhista) com movimentações, agenda e sincronização com o DataJud/CNJ', 'Portal do cliente com acesso próprio e restrito', 'Consultoria Jurídica: cadastro de empresas, auditoria de contratos em 10 abas espelhando a planilha, importação/exportação Excel, painel de indicadores e relatório de auditoria', 'Login com Google + código por e-mail + autorização do administrador', 'Gestão do App: informações, usuários, sistema e trilha de auditoria'] }
 ];
@@ -311,10 +312,16 @@ const SCHEMAS = {
   /* ---------------- Consultoria ---------------- */
   empresas: {
     titulo: 'Empresas', singular: 'empresa', fields: [
-      F('razao', 'Razão social', 'text', { req: 1, w: 'full' }),
+      F('cnpj', 'CNPJ', 'doc', { hint: 'Digite o CNPJ e clique em “Buscar na Receita” para preencher o resto' }),
+      F('razao', 'Razão social', 'text', { req: 1 }),
       F('fantasia', 'Nome fantasia', 'text'),
-      F('cnpj', 'CNPJ', 'doc'),
-      F('segmento', 'Segmento', 'text'),
+      F('segmento', 'Atividade principal (CNAE)', 'text'),
+      F('situacao', 'Situação cadastral (RFB)', 'text'),
+      F('abertura', 'Data de abertura', 'date'),
+      F('porte', 'Porte', 'text'),
+      F('capital', 'Capital social (R$)', 'money'),
+      F('endereco', 'Endereço', 'text', { w: 'full' }),
+      F('socios', 'Quadro de sócios e administradores', 'long'),
       F('sigla', 'Prefixo dos IDs de contrato', 'text', { hint: 'Ex.: JSP (gera JSP-001, JSP-002…)' }),
       F('contato', 'Contato principal', 'text'),
       F('email', 'E-mail', 'email'),
@@ -987,6 +994,7 @@ const UI = {
       if (!await UI.confirm(`Excluir este(a) ${sc.singular}? Esta ação não pode ser desfeita.`, 'Excluir')) return;
       await DB.remove(coll, rec.id); UI.toast('Registro excluído.'); App.render();
     });
+    if (coll === 'empresas' || coll === 'clientes') RFB.attach(m, coll);
     return m;
   },
   /* ---------- célula formatada ---------- */
@@ -1284,6 +1292,7 @@ const FUNCIONALIDADES = [
   'Aviso por e-mail ao cliente quando há nova movimentação (opcional por processo)',
   'Consultoria jurídica: empresas, contratos e auditoria em 10 abas (obrigações, mão de obra, materiais, financeiro, medições, indicadores, achados, documentos e aditivos)',
   '“Juntar documentos”: arraste contratos, aditivos e planilhas — o app guarda no Drive, lê com IA, liga ao contrato certo e sugere o preenchimento',
+  'Cadastro de empresas e clientes pelo CNPJ, com dados da Receita Federal, ou direto pelos documentos',
   'Importação e exportação no formato da planilha de auditoria (Excel)',
   'Painel com evolução de receitas, custos, tributos, previdência, admissões e desligamentos',
   'Visão 360º do contrato e índice de completude documental',
@@ -1681,15 +1690,17 @@ const Consult = {
   list(v) {
     App.crumbs([{ t: 'Consultoria jurídica' }, { t: 'Empresas' }]);
     const emps = DB.all('empresas').sort((a, b) => (a.fantasia || a.razao).localeCompare(b.fantasia || b.razao));
-    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Consultoria jurídica</span><h1>Empresas</h1><p class="muted">Empresas atendidas na gestão e auditoria de contratos.</p></div><div class="actions"><button class="btn primary" id="nEmp">${icon('plus')} Nova empresa</button></div></div>
+    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Consultoria jurídica</span><h1>Empresas</h1><p class="muted">Empresas atendidas na gestão e auditoria de contratos.</p></div><div class="actions"><button class="btn ghost" id="nEmp">${icon('plus')} Nova empresa</button><button class="btn primary" id="nEmpDocs">${icon('upload')} Cadastrar pelos documentos</button></div></div>
     ${emps.length ? `<div class="emp-grid">${emps.map(e => {
       const cs = empRecs('contratos', e.id), at = cs.filter(contratoAtivo), ach = empRecs('achados', e.id).filter(achadoAberto);
       const cart = at.reduce((s, c) => s + (num(c.valorMensal) || 0), 0);
       return `<a class="emp-card" href="#/empresa/${e.id}"><div class="emp-ini">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div class="emp-body"><b>${esc(e.fantasia || e.razao)}</b><small>${esc(e.razao)}${e.cnpj ? ' · ' + esc(fmtDoc(e.cnpj)) : ''}</small>
         <div class="emp-stats"><span><b>${cs.length}</b> contratos</span><span><b>${at.length}</b> vigentes</span><span><b>${ach.length}</b> achados abertos</span>${cart ? `<span><b>${fmtMoneyShort(cart)}</b>/mês</span>` : ''}</div></div>${icon('chevR')}</a>`;
-    }).join('')}</div>` : `<div class="empty big">${icon('building')}<h3>Nenhuma empresa cadastrada</h3><p>Cadastre a primeira empresa e importe a planilha de auditoria dos contratos.</p><button class="btn primary" id="nEmp2">${icon('plus')} Cadastrar empresa</button></div>`}`;
+    }).join('')}</div>` : `<div class="empty big">${icon('building')}<h3>Nenhuma empresa cadastrada</h3><p>Digite o CNPJ (os dados vêm da Receita Federal) ou simplesmente arraste a pasta com os contratos e a planilha — o app identifica a empresa e cadastra tudo.</p><div class="btn-row center"><button class="btn ghost" id="nEmp2">${icon('plus')} Cadastrar pelo CNPJ</button><button class="btn primary" id="nEmpDocs2">${icon('upload')} Cadastrar pelos documentos</button></div></div>`}`;
     $('#nEmp').onclick = () => Consult.editEmpresa(null);
     $('#nEmp2') && ($('#nEmp2').onclick = () => Consult.editEmpresa(null));
+    $('#nEmpDocs').onclick = () => Docs.open(null);
+    $('#nEmpDocs2') && ($('#nEmpDocs2').onclick = () => Docs.open(null));
   },
   editEmpresa(e) { UI.editRecord('empresas', e, { onSaved: s => { location.hash = '#/empresa/' + s.id; App.render(); } }); },
 
@@ -2132,7 +2143,7 @@ const Docs = {
   open(e) {
     Docs.fila = [];
     const m = UI.modal({
-      title: 'Juntar documentos', sub: esc(e.fantasia || e.razao), wide: true,
+      title: e ? 'Juntar documentos' : 'Nova empresa a partir dos documentos', sub: e ? esc(e.fantasia || e.razao) : 'Arraste os contratos e a planilha: o app identifica a empresa contratada, busca o CNPJ na Receita e cadastra tudo', wide: true,
       body: `<div class="drop" id="drop">${icon('upload')}<b>Arraste aqui a pasta ou os arquivos</b><span>Contratos, termos aditivos, termos de referência (PDF), a planilha de auditoria (.xlsx) ou um .zip com tudo</span>
         <div class="btn-row center"><label class="btn ghost sm">Escolher arquivos<input type="file" multiple hidden id="dFiles" accept=".pdf,.xlsx,.zip,.png,.jpg,.jpeg"></label><label class="btn ghost sm">Escolher pasta<input type="file" hidden id="dDir" webkitdirectory multiple></label></div></div>
         <p class="muted small">Arquivos .rar não podem ser lidos pelo navegador: descompacte antes (no Windows: botão direito › Extrair tudo) e arraste a pasta.</p>
@@ -2223,7 +2234,7 @@ const Docs = {
         if (opt.drive && Session.remote) {
           if (x.file.size > 45 * 1048576) throw new Error('arquivo acima de 45 MB');
           set('enviando ao Drive…', 'busy');
-          const up = await api('upload', { empresaId: e.id, empresa: e.fantasia || e.razao, nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file) });
+          const up = await api('upload', { empresaId: e?.id || '', empresa: e ? (e.fantasia || e.razao) : '_A classificar', nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file) });
           r.link = up.url; r.fileId = up.id;
         }
         if (opt.ia && Session.remote && r.fileId && /pdf|image/.test(x.file.type || 'pdf')) {
@@ -2235,10 +2246,35 @@ const Docs = {
       res.push(r);
     }
     UI.closeModal();
-    if (planilhas.length) {
-      for (const p of planilhas) await Consult.importar(e, p);
-    }
+    if (!e) return Docs.novaEmpresa(res, planilhas);
+    Docs.finalizar(e, res, planilhas);
+  },
+  async finalizar(e, res, planilhas) {
+    for (const p of planilhas) await Consult.importar(e, p);
     if (res.length) Docs.revisar(e, res.filter(r => !r.erro), res.filter(r => r.erro));
+    else location.hash = '#/empresa/' + e.id;
+  },
+  /* identifica a empresa contratada nos documentos e cadastra (com dados da Receita) */
+  async novaEmpresa(res, planilhas) {
+    const votos = {};
+    res.forEach(r => { const c = onlyDigits(r.ia?.cnpjContratada); const k = validCNPJ(c) ? c : ''; const nm = r.ia?.contratada; if (k || nm) { const v = votos[k || norm(nm)] = votos[k || norm(nm)] || { cnpj: k, nome: nm || '', n: 0 }; v.n++; if (!v.nome && nm) v.nome = nm; } });
+    for (const p of planilhas) { // planilha de auditoria: coluna "Responsável interno"
+      try { const book = await XLSX.read(await p.arrayBuffer()); for (const rows of Object.values(book)) { const hi = rows.findIndex(r => (r || []).some(c => norm(c) === 'responsavel interno')); if (hi < 0) continue; const ci = rows[hi].findIndex(c => norm(c) === 'responsavel interno'); rows.slice(hi + 1).forEach(r => { const nm = r?.[ci]; if (nm && typeof nm === 'string' && nm.length > 5 && !isGap(nm)) { const v = votos[norm(nm)] = votos[norm(nm)] || { cnpj: '', nome: nm, n: 0 }; v.n++; } }); } } catch { }
+    }
+    const best = Object.values(votos).sort((a, b) => (b.cnpj ? 1 : 0) - (a.cnpj ? 1 : 0) || b.n - a.n)[0] || { cnpj: '', nome: '' };
+    const existente = DB.all('empresas').find(x => (best.cnpj && onlyDigits(x.cnpj) === best.cnpj) || (best.nome && norm(x.razao) === norm(best.nome)));
+    const seguir = async emp => {
+      const ids = res.filter(r => r.fileId).map(r => r.fileId);
+      if (ids.length && Session.remote) { try { await api('moverArquivos', { ids, empresa: emp.fantasia || emp.razao }); } catch { } }
+      location.hash = '#/empresa/' + emp.id; App.render();
+      Docs.finalizar(emp, res, planilhas);
+    };
+    if (existente) {
+      if (await UI.confirm(`Os documentos são da empresa <b>${esc(existente.razao)}</b>, que já está cadastrada. Juntar a ela?`, 'Juntar', false)) return seguir(existente);
+    }
+    UI.toast(best.nome || best.cnpj ? `Empresa identificada nos documentos: ${String(best.nome || fmtDoc(best.cnpj)).replace(/\.$/, '')}. Confira e salve.` : 'Não identifiquei a empresa nos documentos: informe o CNPJ.', best.nome || best.cnpj ? 'ok' : 'warn', 6000);
+    const m = UI.editRecord('empresas', { cnpj: best.cnpj, razao: best.nome || '', sigla: best.nome ? RFB.siglaDe(best.nome) : '' }, { title: 'Confirmar empresa', onSaved: seguir });
+    if (best.cnpj) setTimeout(() => $('.rfb-btn', m)?.click(), 50);
   },
 
   /* ---------- revisão: o que será preenchido ---------- */
@@ -2333,5 +2369,68 @@ const Docs = {
       UI.toast(`Aplicado: ${saves.contratos.length} contrato(s), ${saves.documentos.length} documento(s), ${saves.maoDeObra.length} posto(s), ${saves.obrigacoes.length} obrigação(ões), ${saves.achados.length} achado(s).`, 'ok', 7000);
       App.render();
     };
+  }
+};
+/* =====================================================================
+   CONSULTA DE CNPJ (dados públicos da Receita Federal via BrasilAPI)
+   ===================================================================== */
+const RFB = {
+  async lookup(cnpj) {
+    const d = onlyDigits(cnpj);
+    if (!validCNPJ(d)) throw new Error('CNPJ inválido (confira os dígitos).');
+    let j = null;
+    try { const r = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + d); if (r.status === 404) throw new Error('CNPJ não encontrado na base da Receita.'); if (r.ok) j = RFB.deBrasilApi(await r.json()); } catch (e) { if (/não encontrado/.test(e.message)) throw e; }
+    if (!j && Session.remote) { try { j = RFB.deBrasilApi(await api('cnpj', { cnpj: d })); } catch { } }
+    if (!j) { try { const r = await fetch('https://open.cnpja.com/office/' + d); if (r.ok) j = RFB.deCnpja(await r.json()); } catch { } }
+    if (!j) throw new Error('Consulta indisponível no momento. Tente de novo em instantes.');
+    j.cnpj = d; return j;
+  },
+  cap: s => String(s || '').toLowerCase().replace(/(^|\s|\/|-)(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Da|Do|Das|Dos|E)\b/g, w => w.toLowerCase()).replace(/\b(Ltda|Me|Epp|Eireli|S\/a|Sa)\b/gi, w => w.toUpperCase()),
+  deBrasilApi(o) {
+    const end = [[o.descricao_tipo_de_logradouro, o.logradouro].filter(Boolean).join(' '), o.numero, o.complemento, o.bairro, [o.municipio, o.uf].filter(Boolean).join('/'), o.cep ? 'CEP ' + String(o.cep).replace(/(\d{5})(\d{3})/, '$1-$2') : ''].filter(x => x && String(x).trim()).join(', ');
+    const tel = String(o.ddd_telefone_1 || '').replace(/\D/g, '');
+    return {
+      razao: o.razao_social || '', fantasia: o.nome_fantasia || '', segmento: [o.cnae_fiscal, o.cnae_fiscal_descricao].filter(Boolean).join(' — '),
+      situacao: o.descricao_situacao_cadastral || '', abertura: parseDate(o.data_inicio_atividade), porte: o.porte || o.descricao_porte || '',
+      capital: num(o.capital_social), endereco: RFB.cap(end).replace(/Cep /, 'CEP ').replace(/\/([a-z]{2})\b/gi, (m, u) => '/' + u.toUpperCase()), telefone: tel ? tel.replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') : '', email: (o.email || '').toLowerCase(),
+      socios: (o.qsa || []).map(s => `${RFB.cap(s.nome_socio || s.nome)}${s.qualificacao_socio ? ' — ' + s.qualificacao_socio : ''}`).join('\n'), natureza: o.natureza_juridica || ''
+    };
+  },
+  deCnpja(o) {
+    const a = o.address || {};
+    return {
+      razao: o.company?.name || '', fantasia: o.alias || '', segmento: [o.mainActivity?.id, o.mainActivity?.text].filter(Boolean).join(' — '),
+      situacao: o.status?.text || '', abertura: parseDate(o.founded), porte: o.company?.size?.text || '', capital: num(o.company?.equity),
+      endereco: [a.street, a.number, a.details, a.district, [a.city, a.state].filter(Boolean).join('/'), a.zip ? 'CEP ' + a.zip : ''].filter(Boolean).join(', '),
+      telefone: o.phones?.[0] ? `(${o.phones[0].area}) ${o.phones[0].number}` : '', email: o.emails?.[0]?.address || '',
+      socios: (o.company?.members || []).map(m => `${m.person?.name}${m.role?.text ? ' — ' + m.role.text : ''}`).join('\n')
+    };
+  },
+  siglaDe(razao) {
+    const ws = norm(razao).replace(/[^a-z0-9 ]/g, ' ').split(' ').filter(w => w.length > 1 && !['de', 'da', 'do', 'das', 'dos', 'e', 'ltda', 'me', 'epp', 'sa', 'eireli', 'servicos', 'comercio'].includes(w));
+    const first = ws[0] || 'CT';
+    return (first.length <= 4 ? first : ws.slice(0, 3).map(w => w[0]).join('')).toUpperCase();
+  },
+  /** adiciona o botão "Buscar na Receita" ao formulário */
+  attach(m, coll) {
+    const fk = coll === 'empresas' ? 'cnpj' : 'doc';
+    const inp = $('#f_' + fk, m); if (!inp) return;
+    const fld = inp.closest('.fld');
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn ghost sm rfb-btn'; b.innerHTML = icon('search') + ' Buscar na Receita';
+    fld.appendChild(b);
+    const set = (k, v, force) => { const el = $('#f_' + k, m); if (!el || v === null || v === undefined || v === '') return; if (!force && el.value && !isGap(el.value)) return; el.value = k === 'abertura' ? (parseDate(v) || '') : k === 'capital' ? num(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : v; el.classList.add('filled'); };
+    const run = async () => {
+      if (coll === 'clientes' && onlyDigits(inp.value).length !== 14) return UI.toast('A consulta à Receita funciona para CNPJ (pessoa jurídica).', 'warn');
+      b.disabled = true; b.innerHTML = icon('sync', 'spin') + ' Consultando…';
+      try {
+        const j = await RFB.lookup(inp.value); inp.value = fmtDoc(j.cnpj);
+        if (coll === 'empresas') { ['razao', 'fantasia', 'segmento', 'situacao', 'abertura', 'porte', 'capital', 'endereco', 'telefone', 'email', 'socios'].forEach(k => set(k, j[k], true)); if (!$('#f_sigla', m).value) $('#f_sigla', m).value = RFB.siglaDe(j.fantasia || j.razao); }
+        else { set('nome', j.razao, true); set('endereco', j.endereco); set('telefone', j.telefone); set('email', j.email); const t = $('#f_tipo', m); if (t) t.value = 'Pessoa jurídica'; }
+        UI.toast(`Dados da Receita carregados${j.situacao ? ' · situação: ' + j.situacao : ''}.`, /ativa/i.test(j.situacao || 'ativa') ? 'ok' : 'warn', 5000);
+      } catch (e) { UI.toast(e.message, 'bad', 5000); }
+      finally { b.disabled = false; b.innerHTML = icon('search') + ' Buscar na Receita'; }
+    };
+    b.onclick = run;
+    inp.addEventListener('input', () => { if (onlyDigits(inp.value).length === 14 && validCNPJ(inp.value) && coll === 'empresas' && !$('#f_razao', m).value) run(); });
   }
 };

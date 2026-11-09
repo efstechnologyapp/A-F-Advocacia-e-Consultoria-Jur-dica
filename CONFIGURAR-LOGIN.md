@@ -82,6 +82,12 @@ O aparelho fica lembrado por 90 dias (até clicar em **Sair**).
 
 Uso: na empresa, clique em **Juntar documentos** e arraste a pasta (PDFs, planilha .xlsx ou .zip). Arquivos .rar precisam ser descompactados antes. O app importa a planilha, guarda cada PDF no Drive, lê com a IA, liga ao contrato certo (pelo nome do arquivo citado na planilha, pelo número do contrato ou pela unidade) e mostra uma tela de revisão antes de gravar.
 
+## Cadastro de empresa pelo CNPJ ou pelos documentos — versão 1.2
+
+- **Pelo CNPJ:** em Empresas › Nova empresa (ou num cliente pessoa jurídica), digite o CNPJ: o app busca na base pública da Receita Federal (BrasilAPI) razão social, nome fantasia, atividade (CNAE), situação cadastral, abertura, porte, capital, endereço, telefone, e-mail e sócios.
+- **Pelos documentos:** em Empresas › **Cadastrar pelos documentos**, arraste a pasta: a IA identifica a empresa contratada e o CNPJ nos contratos (ou o app usa o “Responsável interno” da planilha), consulta a Receita, você confere e salva — e os arquivos já são organizados na pasta da empresa no Drive.
+- Depois de colar o novo `Codigo.gs`, publique **Nova versão** da implantação (não precisa rodar configurarInicial de novo).
+
 ## DataJud (movimentações dos tribunais)
 
 O botão **Buscar movimentações (DataJud)** e a rotina diária consultam a API pública do CNJ. A chave pública atual já está no script. Se um dia o CNJ trocá-la (o app avisa), pegue a nova em https://datajud-wiki.cnj.jus.br/api-publica/acesso e crie a propriedade `DATAJUD_CHAVE` com o novo valor.
