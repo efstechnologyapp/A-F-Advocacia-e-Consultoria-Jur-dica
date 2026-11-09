@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.2.0';
+const APP_VERSAO = '1.3.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.3.0', data: '09/11/2026', itens: ['Conexão com o escritório (como a repartição no Custódia Digital): o administrador conecta uma vez a conta Google do escritório e todos os usuários habilitados já entram conectados', 'Documentos juntados vão para o Google Drive da conta do escritório e a IA usa a chave do escritório — todo o código continua na conta da efstech', 'A equipe só começa a usar o app depois que o escritório estiver conectado'] },
   { numero: '1.2.0', data: '09/11/2026', itens: ['Cadastro de empresa pelo CNPJ com dados públicos da Receita Federal (razão social, atividade, situação, endereço, sócios)', 'Cadastro de empresa pelos documentos: a IA identifica a contratada nos contratos, o app consulta a Receita e cria a empresa já com os arquivos', 'Consulta de CNPJ também no cadastro de clientes pessoa jurídica'] },
   { numero: '1.1.0', data: '09/11/2026', itens: ['“Juntar documentos”: arraste a pasta com contratos, aditivos e planilha — o app guarda no Drive, lê os PDFs com IA (Gemini), liga cada arquivo ao contrato e sugere o preenchimento, com revisão antes de aplicar', 'Divergências entre cadastro e documento viram achados de auditoria', 'Postos e obrigações extraídos do contrato entram em Mão de obra e Obrigações', 'Configuração da chave do Gemini em Gestão do App › Sistema'] },
   { numero: '1.0.0', data: '09/11/2026', itens: ['Lançamento: seção Judicial (Cível, Penal, Administrativo, Previdenciário e Trabalhista) com movimentações, agenda e sincronização com o DataJud/CNJ', 'Portal do cliente com acesso próprio e restrito', 'Consultoria Jurídica: cadastro de empresas, auditoria de contratos em 10 abas espelhando a planilha, importação/exportação Excel, painel de indicadores e relatório de auditoria', 'Login com Google + código por e-mail + autorização do administrador', 'Gestão do App: informações, usuários, sistema e trilha de auditoria'] }
@@ -1082,6 +1083,10 @@ const App = {
     if (!Session.isStaff) { Portal.shell(); return; }
     App.shell(); window.onhashchange = () => App.render(); App.render();
     App.checkPendentes();
+    Escritorio.check().then(() => {
+      const pend = ls.get('escPend'); if (pend && Session.isAdmin) { ls.del('escPend'); if (pend.error) UI.toast('Conexão cancelada.', 'warn'); else return Escritorio.receber(pend.code, pend.state); }
+      App.render(true);
+    });
   },
   async checkPendentes() {
     if (!Session.isAdmin || !Session.remote) return;
@@ -1198,6 +1203,7 @@ const App = {
         <div class="side-profile">${foto}<div><b>${esc(u.nome || 'Usuário')}</b><small>${esc(u.email === 'local' ? 'modo local' : u.email)}</small><span class="role">${u.papel === 'admin' ? 'Administrador' : 'Equipe'}</span></div></div>
         <nav class="nav" id="nav"></nav>
         <div class="side-foot">
+          <div id="conexSlot"></div>
           ${Session.isAdmin ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
           <button class="side-btn danger" id="btnOut">${icon('logout')}<span>Sair</span></button>
           <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
@@ -1221,7 +1227,7 @@ const App = {
     $('#btnClose').onclick = $('#scrim').onclick = () => document.body.classList.remove('side-open');
     $('#btnSobre').onclick = () => App.sobre();
     $('#syncBadge').onclick = async () => { if (!Session.remote) return UI.toast('Modo local: os dados ficam apenas neste navegador. Use Gestão do App › Sistema › Backup para guardar uma cópia.', 'warn', 6000); try { await DB.flush(); await DB.pull(); App.render(true); UI.toast('Dados atualizados.'); } catch (e) { UI.toast(e.message, 'bad'); } };
-    App.globalSearch(); UI.syncBadge(); App.badge();
+    App.globalSearch(); UI.syncBadge(); App.badge(); Escritorio.badge();
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => $$('[data-chart]').length && App.render(true), 250); });
   },
   sobre() {
@@ -1254,6 +1260,7 @@ const App = {
     App.nav(route); document.body.classList.remove('side-open'); Tip.hide();
     const v = $('#view'); const y = scrollY;
     try {
+      if (Session.remote && Escritorio.st && !Escritorio.st.conectado && a !== 'gestao') { Escritorio.gate(v); UI.syncBadge(); return; }
       if (a === 'painel' || !a) Views.painel(v);
       else if (a === 'judicial') Judicial.list(v, b || 'todos');
       else if (a === 'processo') Judicial.detail(v, b);
@@ -1486,10 +1493,12 @@ const Gestao = {
         <div class="conn"><span class="dot ${apiUrl() ? 'ok' : 'off'}"></span><div><b>Servidor (Google Apps Script)</b><small>${apiUrl() ? esc(apiUrl().slice(0, 60)) + '…' : 'não configurado — preencha APPS_SCRIPT_URL no config.js'}</small></div>${apiUrl() ? `<button class="btn ghost sm" id="tstSrv">Testar</button>` : ''}</div>
         <div class="conn"><span class="dot ${CONFIG.GOOGLE_CLIENT_ID ? 'ok' : 'off'}"></span><div><b>Login com Google</b><small>${CONFIG.GOOGLE_CLIENT_ID ? 'Client ID configurado' : 'não configurado — preencha GOOGLE_CLIENT_ID no config.js'}</small></div></div>
         <div class="conn"><span class="dot ${Session.remote ? 'ok' : 'off'}"></span><div><b>DataJud / CNJ (movimentações)</b><small>${Session.remote ? 'consulta pelo servidor; sincronização diária automática' : 'disponível com o servidor conectado'}</small></div></div>
-        <div class="conn"><span class="dot off" id="iaDot"></span><div><b>IA para leitura de documentos (Gemini)</b><small id="iaTxt">${Session.remote ? 'verificando…' : 'disponível com o servidor conectado'}</small></div>${Session.remote ? `<button class="btn ghost sm" id="iaCfg">Configurar</button>` : ''}</div>
+
         <div class="conn"><span class="dot ${Session.remote ? 'ok' : 'off'}"></span><div><b>E-mails (códigos, convites e avisos)</b><small>${Session.remote ? 'enviados pela conta Google dona do Apps Script' : 'disponível com o servidor conectado'}</small></div></div>
+
         ${CONFIG.APPS_SCRIPT_URL ? '' : `<p class="muted small">Para testar sem editar o config.js: <button class="link" id="cfgSrv">informar URL do servidor neste aparelho</button></p>`}
       </section>
+      <section class="card"><header><h2>${icon('briefcase')} Conexão com o escritório (Drive e IA)</h2></header>${Escritorio.cardHtml()}</section>
       <section class="card"><header><h2>${icon('building')} Dados do escritório</h2></header>
         <p class="muted small">Usados no portal do cliente e no cabeçalho/assinatura dos relatórios.</p>
         <form id="cfgEsc" class="grid-form">
@@ -1505,16 +1514,7 @@ const Gestao = {
     <section class="card"><header><h2>${icon('layers')} Backup</h2></header>
       <p class="muted small">${Session.remote ? 'Os dados já ficam guardados na planilha do servidor. O backup em arquivo é uma cópia extra.' : 'No modo local, faça backups regulares: os dados existem só neste navegador.'}</p>
       <div class="btn-row"><button class="btn ghost" id="bkExp">${icon('download')} Baixar backup (.json)</button><label class="btn ghost">${icon('upload')} Restaurar backup<input type="file" accept=".json" id="bkImp" hidden></label></div></section>`;
-    const iaShow = st => { $('#iaDot').className = 'dot ' + (st.gemini ? 'ok' : 'off'); $('#iaTxt').textContent = st.gemini ? 'chave configurada (' + st.mascara + ') — usada no “Juntar documentos”' : 'sem chave — os documentos são guardados, mas não lidos'; };
-    if (Session.remote) api('iaStatus').then(iaShow).catch(() => $('#iaTxt').textContent = 'atualize o Apps Script para a versão 1.1');
-    $('#iaCfg') && ($('#iaCfg').onclick = () => {
-      const m = UI.modal({ title: 'Chave do Gemini (IA)', body: `<ol class="steps"><li>Abra o <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> com a conta do escritório.</li><li>Clique em <b>Create API key</b> e copie a chave.</li><li>Cole abaixo e clique em Testar e salvar.</li></ol>
-        <div class="fld full"><label>Chave</label><input id="iaK" type="password" autocomplete="off" placeholder="AIza…"></div>
-        <div class="notice soft">${icon('alert')}<div><b>Sigilo dos contratos:</b> no plano gratuito do Gemini, o Google pode usar o conteúdo enviado para melhorar os produtos dele. Para documentos de clientes, recomenda-se ativar o faturamento no projeto da chave (Google AI Studio › Billing) — o custo é de centavos por documento e o conteúdo deixa de ser usado pelo Google.</div></div>
-        <p class="muted small">A chave fica guardada no servidor (Apps Script), nunca no navegador.</p>`, foot: `<button class="btn ghost danger-text" id="iaDel">Remover chave</button><span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="iaOk">Testar e salvar</button>` });
-      $('#iaOk', m).onclick = async () => { const b = $('#iaOk', m); b.disabled = true; b.textContent = 'Testando…'; try { const st = await api('iaChave', { chave: $('#iaK').value.trim() }); UI.closeModal(); iaShow(st); UI.toast('Chave do Gemini salva e testada.'); } catch (err) { UI.toast(err.message, 'bad', 6000); b.disabled = false; b.textContent = 'Testar e salvar'; } };
-      $('#iaDel', m).onclick = async () => { try { iaShow(await api('iaChave', { chave: '' })); UI.closeModal(); } catch (err) { UI.toast(err.message, 'bad'); } };
-    });
+    Escritorio.bindCard(el);
     $('#tstSrv') && ($('#tstSrv').onclick = async () => { try { const r = await api('ping'); UI.toast('Servidor respondeu: ' + (r.versao || 'ok')); } catch (err) { UI.toast(err.message, 'bad'); } });
     $('#cfgSrv') && ($('#cfgSrv').onclick = () => {
       const m = UI.modal({ title: 'Endereço do servidor', body: `<div class="fld full"><label>URL do Apps Script (termina em /exec)</label><input id="srvUrl" value="${esc(apiUrl())}"></div>`, foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="srvOk">Salvar</button>` });
@@ -2126,6 +2126,7 @@ const Portal = {
 
 /* ---------------- INÍCIO (após a splash) ---------------- */
 window.addEventListener('DOMContentLoaded', async () => {
+  if (window.__afPopup) return; // janela de retorno do login do Google
   const splash = document.getElementById('splash'); const t0 = performance.now();
   try { await App.start(); } catch (e) { console.error(e); App.loginScreen(); }
   const wait = Math.max(0, 2300 - (performance.now() - t0));
@@ -2149,9 +2150,9 @@ const Docs = {
         <p class="muted small">Arquivos .rar não podem ser lidos pelo navegador: descompacte antes (no Windows: botão direito › Extrair tudo) e arraste a pasta.</p>
         <div id="dList"></div>
         <div class="dopts">
-          <label class="switch"><input type="checkbox" id="dDrive" ${Session.remote ? 'checked' : 'disabled'}><span></span>Guardar os arquivos no Google Drive do escritório (pasta da empresa)</label>
-          <label class="switch"><input type="checkbox" id="dIA" ${Session.remote ? 'checked' : 'disabled'}><span></span>Ler o conteúdo dos PDFs com IA e sugerir o preenchimento</label>
-          ${Session.remote ? '' : '<p class="muted small">No modo local, o app só cadastra os documentos e os liga aos contratos. Guardar no Drive e ler com IA exigem o servidor conectado.</p>'}
+          <label class="switch"><input type="checkbox" id="dDrive" ${Escritorio.conectado ? 'checked' : 'disabled'}><span></span>Guardar os arquivos no Google Drive do escritório${Escritorio.st?.conta ? ' (' + esc(Escritorio.st.conta) + ')' : ''}</label>
+          <label class="switch"><input type="checkbox" id="dIA" ${Escritorio.conectado && Escritorio.st.ia ? 'checked' : 'disabled'}><span></span>Ler o conteúdo dos PDFs com IA (chave do escritório) e sugerir o preenchimento</label>
+          ${!Session.remote ? '<p class="muted small">No modo local, o app só cadastra os documentos e os liga aos contratos.</p>' : !Escritorio.conectado ? '<p class="muted small">Conecte a conta do escritório (Gestão do App › Sistema) para guardar no Drive e ler com IA.</p>' : !Escritorio.st.ia ? '<p class="muted small">Para a leitura por IA, cadastre a chave do Gemini do escritório em Gestão do App › Sistema.</p>' : ''}
         </div>`,
       foot: `<span class="muted small" id="dCount"></span><span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="dGo" disabled>${icon('sparkle')} Processar</button>`
     });
@@ -2231,17 +2232,14 @@ const Docs = {
       if (x.file.name.toLowerCase().endsWith('.xlsx')) { planilhas.push(x.file); set('planilha — será importada', 'ok'); continue; }
       const r = { nome: x.file.name, path: x.path, size: x.file.size };
       try {
-        if (opt.drive && Session.remote) {
-          if (x.file.size > 45 * 1048576) throw new Error('arquivo acima de 45 MB');
-          set('enviando ao Drive…', 'busy');
-          const up = await api('upload', { empresaId: e?.id || '', empresa: e ? (e.fantasia || e.razao) : '_A classificar', nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file) });
-          r.link = up.url; r.fileId = up.id;
+        if (opt.drive) {
+          if (x.file.size > 30 * 1048576) throw new Error('arquivo acima de 30 MB');
+          const ler = opt.ia && /pdf|image/.test(x.file.type || 'pdf');
+          set(ler ? 'guardando no Drive do escritório e lendo com IA…' : 'guardando no Drive do escritório…', 'busy');
+          const up = await api('juntar', { empresaKey: e ? e.id : '_classificar', empresa: e ? (e.fantasia || e.razao) : '_A classificar', nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file), ler });
+          r.link = up.url; r.fileId = up.id; r.ia = up.ia || null; if (up.iaErro) r.iaErro = up.iaErro;
         }
-        if (opt.ia && Session.remote && r.fileId && /pdf|image/.test(x.file.type || 'pdf')) {
-          set('lendo com IA…', 'busy');
-          try { r.ia = await api('analisarDocumento', { fileId: r.fileId, nome: x.file.name }); } catch (err) { r.iaErro = err.message; }
-        }
-        set(r.iaErro ? 'guardado (IA: ' + r.iaErro.slice(0, 60) + ')' : r.ia ? 'lido' : r.link ? 'guardado' : 'pronto', r.iaErro ? 'err' : 'ok');
+        set(r.iaErro ? (r.link ? 'guardado no Drive' : 'pronto') + ' (IA: ' + r.iaErro.slice(0, 60) + ')' : r.ia ? (r.link ? 'guardado e lido' : 'lido') : r.link ? 'guardado no Drive' : 'pronto', r.iaErro ? 'err' : 'ok');
       } catch (err) { r.erro = err.message; set('erro: ' + err.message, 'err'); }
       res.push(r);
     }
@@ -2265,7 +2263,7 @@ const Docs = {
     const existente = DB.all('empresas').find(x => (best.cnpj && onlyDigits(x.cnpj) === best.cnpj) || (best.nome && norm(x.razao) === norm(best.nome)));
     const seguir = async emp => {
       const ids = res.filter(r => r.fileId).map(r => r.fileId);
-      if (ids.length && Session.remote) { try { await api('moverArquivos', { ids, empresa: emp.fantasia || emp.razao }); } catch { } }
+      if (ids.length && Escritorio.conectado) { try { await api('mover', { ids, empresaKey: emp.id, empresa: emp.fantasia || emp.razao }); } catch (err) { UI.toast('Arquivos ficaram na pasta “_A classificar”: ' + err.message, 'warn'); } }
       location.hash = '#/empresa/' + emp.id; App.render();
       Docs.finalizar(emp, res, planilhas);
     };
@@ -2434,3 +2432,99 @@ const RFB = {
     inp.addEventListener('input', () => { if (onlyDigits(inp.value).length === 14 && validCNPJ(inp.value) && coll === 'empresas' && !$('#f_razao', m).value) run(); });
   }
 };
+/* =====================================================================
+   CONEXÃO COM O ESCRITÓRIO — como a conexão com a repartição do
+   Custódia Digital. O administrador conecta UMA VEZ a conta Google do
+   escritório; depois disso todos os usuários habilitados já entram
+   conectados. Arquivos vão para o Drive do escritório e a IA usa a chave
+   do escritório, embora todo o código fique na conta da efstech.
+   ===================================================================== */
+const Escritorio = {
+  st: null, erro: null,
+  get conectado() { return !!this.st?.conectado; },
+  redirectUri: () => location.origin + location.pathname,
+  async check() {
+    if (!Session.remote || !Session.isStaff) return;
+    try { Escritorio.st = await api('escStatus'); Escritorio.erro = null; }
+    catch (e) { Escritorio.erro = e.message; if (/desconhecida/i.test(e.message)) Escritorio.st = { conectado: false, desatualizado: true }; }
+    Escritorio.badge();
+  },
+  /** login do Google (janela) com a conta do escritório → código → servidor guarda a autorização */
+  conectar() {
+    if (!CONFIG.GOOGLE_CLIENT_ID) return UI.toast('Preencha o GOOGLE_CLIENT_ID no config.js.', 'bad');
+    const state = 'afesc' + Math.random().toString(36).slice(2);
+    ls.set('escState', state);
+    const p = new URLSearchParams({ client_id: CONFIG.GOOGLE_CLIENT_ID, redirect_uri: Escritorio.redirectUri(), response_type: 'code', scope: 'https://www.googleapis.com/auth/drive.file', access_type: 'offline', prompt: 'consent select_account', include_granted_scopes: 'true', state });
+    const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + p;
+    const w = window.open(url, 'afesc', 'width=520,height=680');
+    if (!w) { location.href = url; return; } // janela bloqueada: segue na mesma aba
+    UI.toast('Entre com a conta Google do escritório na janela que abriu.', 'ok', 6000);
+  },
+  /** chamado quando a janela do Google volta com o código */
+  async receber(code, state) {
+    if (!code || state !== ls.get('escState')) return UI.toast('Conexão cancelada ou expirada. Tente de novo.', 'warn');
+    ls.del('escState');
+    try { Escritorio.st = await api('escConectar', { code, redirectUri: Escritorio.redirectUri() }); UI.toast('Conta do escritório conectada: ' + Escritorio.st.conta + '. Todos os usuários habilitados já estão conectados.', 'ok', 7000); }
+    catch (e) { UI.toast(e.message, 'bad', 9000); }
+    Escritorio.badge(); App.render();
+  },
+  /** sidebar: “Conectado ao escritório ●” (como o status da repartição no Custódia) */
+  badge() {
+    const h = $('#conexSlot'); if (!h) return;
+    if (!Session.remote) { h.innerHTML = ''; return; }
+    const s = Escritorio.st || {};
+    h.innerHTML = `<div class="drive-card ${s.conectado ? 'on' : ''}"><div class="drive-row"><span class="dot ${s.conectado ? 'ok' : 'off'}"></span><div><b>${s.conectado ? 'Conectado ao escritório' : 'Escritório não conectado'}</b><small>${s.conectado ? esc(s.conta) + (s.ia ? ' · IA ativa' : '') : Escritorio.erro ? 'sem resposta do servidor' : 'Drive e IA indisponíveis'}</small></div></div>${s.conectado && s.pasta ? `<a class="side-btn mini" href="${esc(s.pasta)}" target="_blank" rel="noopener">${icon('link')} Pasta no Drive</a>` : ''}${!s.conectado && Session.isAdmin ? `<button class="side-btn mini" id="escSideBtn">Conectar</button>` : ''}</div>`;
+    $('#escSideBtn')?.addEventListener('click', Escritorio.conectar);
+  },
+  /** tela de bloqueio enquanto o escritório não estiver conectado */
+  gate(v) {
+    App.crumbs([{ t: 'Conectar ao escritório' }]);
+    const adm = Session.isAdmin, des = Escritorio.st?.desatualizado;
+    v.innerHTML = `<div class="gate"><img src="${BRAND.logoDark}" alt="" class="gate-logo"><div class="caption dark">${BRAND.caption}</div>
+      <h1>Conectar ao escritório</h1>
+      ${des ? `<div class="notice">${icon('alert')}<div>O servidor (Apps Script) ainda está na versão anterior. Cole o novo <b>Codigo.gs</b> e publique uma <b>Nova versão</b> da implantação.</div></div>` : ''}
+      ${adm ? `<p>Para começar, conecte a <b>conta Google do escritório</b>. Os documentos que a equipe juntar serão guardados no Google Drive dessa conta, e a leitura por IA usará a chave dela — o app só guarda os cadastros.</p>
+        <ol class="steps left"><li>Clique em <b>Conectar conta do escritório</b>.</li><li>Na janela do Google, entre com <b>a conta do escritório</b> (ex.: amorimfirmo.adv@gmail.com) e clique em <b>Continuar / Permitir</b>.</li><li>Pronto: daqui em diante todos os usuários habilitados entram já conectados.</li></ol>
+        <button class="btn primary big" id="gateBtn" ${des ? 'disabled' : ''}>${icon('link')} Conectar conta do escritório</button>
+        <p class="muted small">O app só terá acesso aos arquivos que ele mesmo criar no Drive (permissão “drive.file”). Dá para desconectar a qualquer momento em Gestão do App › Sistema.</p>`
+      : `<p>O administrador ainda não conectou a conta do escritório. Assim que ele conectar, você terá acesso automaticamente — basta recarregar esta página.</p><button class="btn ghost" id="gateRe">${icon('sync')} Verificar de novo</button>`}
+    </div>`;
+    $('#gateBtn')?.addEventListener('click', Escritorio.conectar);
+    $('#gateRe')?.addEventListener('click', async () => { await Escritorio.check(); App.render(); });
+  },
+  /** cartão em Gestão do App › Sistema */
+  cardHtml() {
+    if (!Session.remote) return `<p class="muted small">Disponível com o servidor conectado.</p>`;
+    const s = Escritorio.st || {};
+    return `<p class="muted small">Como a repartição no Custódia Digital: tudo o que a equipe junta vai para o <b>Google Drive da conta do escritório</b> e a IA usa a <b>chave do escritório</b>. O código e os cadastros ficam no app (efstech).</p>
+      <div class="conn"><span class="dot ${s.conectado ? 'ok' : 'off'}"></span><div><b>Google Drive do escritório</b><small>${s.conectado ? esc(s.conta) + (s.pasta ? ` · <a href="${esc(s.pasta)}" target="_blank" rel="noopener">abrir pasta</a>` : '') : 'não conectado'}</small></div><button class="btn ghost sm" id="escCon">${s.conectado ? 'Trocar conta' : 'Conectar'}</button>${s.conectado ? `<button class="btn ghost sm danger-text" id="escDes">Desconectar</button>` : ''}</div>
+      <div class="conn"><span class="dot ${s.ia ? 'ok' : 'off'}"></span><div><b>IA para leitura de documentos (Gemini)</b><small>${s.ia ? 'chave do escritório configurada (' + esc(s.iaMascara) + ')' : 'sem chave — os documentos são guardados, mas não lidos'}</small></div><button class="btn ghost sm" id="escIA">Configurar</button></div>`;
+  },
+  bindCard(el) {
+    $('#escCon', el)?.addEventListener('click', Escritorio.conectar);
+    $('#escDes', el)?.addEventListener('click', async () => {
+      if (!await UI.confirm('Desconectar a conta do escritório? A equipe deixa de conseguir juntar documentos até conectar de novo. Os arquivos já guardados continuam no Drive do escritório.', 'Desconectar')) return;
+      try { Escritorio.st = await api('escDesconectar'); Escritorio.badge(); App.render(); } catch (e) { UI.toast(e.message, 'bad'); }
+    });
+    $('#escIA', el)?.addEventListener('click', () => {
+      const conta = Escritorio.st?.conta;
+      const m = UI.modal({ title: 'Chave do Gemini do escritório', body: `<ol class="steps"><li>Abra o <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> entrando com a conta do escritório${conta ? ` (<b>${esc(conta)}</b>)` : ''} — a cota e o custo da IA ficam nessa conta.</li><li>Clique em <b>Create API key</b> e copie a chave.</li><li>Cole abaixo e clique em Testar e salvar.</li></ol>
+        <div class="fld full"><label>Chave</label><input id="iaK" type="password" autocomplete="off" placeholder="AIza…"></div>
+        <div class="notice soft">${icon('alert')}<div><b>Sigilo dos contratos:</b> no plano gratuito do Gemini, o Google pode usar o conteúdo enviado para melhorar os produtos dele. Para documentos de clientes, ative o faturamento no projeto da chave (AI Studio › Billing) — custa centavos por documento e o conteúdo deixa de ser usado pelo Google.</div></div>
+        <p class="muted small">A chave fica guardada no servidor, nunca no navegador.</p>`, foot: `<button class="btn ghost danger-text" id="iaDel">Remover chave</button><span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="iaOk">Testar e salvar</button>` });
+      $('#iaOk', m).onclick = async () => { const b = $('#iaOk', m); b.disabled = true; b.textContent = 'Testando…'; try { Escritorio.st = await api('iaChave', { chave: $('#iaK').value.trim() }); UI.closeModal(); UI.toast('Chave do Gemini do escritório salva e testada.'); App.render(true); Escritorio.badge(); } catch (err) { UI.toast(err.message, 'bad', 6000); b.disabled = false; b.textContent = 'Testar e salvar'; } };
+      $('#iaDel', m).onclick = async () => { try { Escritorio.st = await api('iaChave', { chave: '' }); UI.closeModal(); App.render(true); Escritorio.badge(); } catch (err) { UI.toast(err.message, 'bad'); } };
+    });
+  }
+};
+
+/* retorno do login do Google (janela ou mesma aba) */
+(function () {
+  const q = new URLSearchParams(location.search);
+  if (!q.get('state') || !/^afesc/.test(q.get('state'))) return;
+  const msg = { afesc: true, code: q.get('code'), state: q.get('state'), error: q.get('error') };
+  history.replaceState(null, '', location.pathname + location.hash);
+  if (window.opener && window.opener !== window) { try { window.opener.postMessage(msg, location.origin); } catch { } document.documentElement.innerHTML = '<p style="font:16px sans-serif;padding:40px;text-align:center">Conta conectada. Pode fechar esta janela.</p>'; setTimeout(() => window.close(), 300); window.__afPopup = true; }
+  else ls.set('escPend', msg);
+})();
+window.addEventListener('message', e => { if (e.origin === location.origin && e.data?.afesc) { if (e.data.error) UI.toast('Conexão cancelada.', 'warn'); else Escritorio.receber(e.data.code, e.data.state); } });

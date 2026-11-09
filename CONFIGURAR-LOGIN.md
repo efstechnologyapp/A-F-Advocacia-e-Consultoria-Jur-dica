@@ -59,6 +59,32 @@ window.CONFIG = {
 
 Salve (commit) no GitHub. Em um ou dois minutos o app passa a pedir o login.
 
+## Conexão com o escritório (Drive e IA do escritório) — versão 1.3
+
+Todo o código continua na conta **efstech** (GitHub, Apps Script e Google Cloud). O escritório só **autoriza uma vez** o app a guardar arquivos no Drive dele — como a conexão com a repartição no Custódia Digital. Depois disso, todos os usuários habilitados já entram conectados.
+
+**No Google Cloud (conta efstech, projeto do ID do cliente):**
+1. **APIs e serviços › Biblioteca** › pesquise **Google Drive API** › **Ativar**.
+2. **Credenciais** › clique no ID do cliente **Amorim Firmo** (lápis):
+   - em **URIs de redirecionamento autorizados**, adicione exatamente:
+     `https://efstechnologyapp.github.io/A-F-Advocacia-e-Consultoria-Jur-dica/`
+     e também `https://efstechnologyapp.github.io/A-F-Advocacia-e-Consultoria-Jur-dica/index.html` › **Salvar**;
+   - copie a **Chave secreta do cliente** (se não aparecer, clique em **Adicionar chave secreta**).
+3. **Tela de permissão OAuth / Google Auth Platform**: complete a página de **Branding** (nome do app, e-mail de suporte, e-mail do desenvolvedor) e em **Público-alvo** clique em **Publicar app**.
+   ⚠️ Importante: enquanto o app estiver em “Testando”, o Google faz a autorização do Drive **expirar a cada 7 dias**. Publicado, ela não expira. A permissão usada (`drive.file`) é a mais restrita do Drive e não passa por análise do Google.
+
+**No Apps Script (conta efstech):**
+4. **Propriedades do script** › adicione `GOOGLE_CLIENT_SECRET` = a chave secreta copiada.
+5. Cole o novo `Codigo.gs` › **Implantar › Gerenciar implantações › lápis › Nova versão › Implantar**.
+
+**No app (como administrador):**
+6. Aparece a tela **Conectar ao escritório** › **Conectar conta do escritório** › entre com **amorimfirmo.adv@gmail.com** › **Continuar/Permitir**.
+7. **Gestão do App › Sistema › IA para leitura de documentos › Configurar** › cole a chave do Gemini criada em https://aistudio.google.com/apikey **com a conta do escritório**.
+
+Pronto: a pasta **“Amorim Firmo — Consultoria (documentos)”** é criada no Drive do escritório, com uma subpasta por empresa. A rotina diária mantém a conexão ativa; se um dia o acesso for revogado, os administradores recebem um e-mail e a equipe volta a ver a tela de conexão.
+
+> A pasta vazia “Amorim Firmo — Consultoria (documentos)” que a versão 1.1 criou no Drive da efstech pode ser apagada.
+
 ## Como funciona o acesso
 
 **Administrador (e-mails em `DONOS`)** — sempre entra. Vê a **Gestão do App** na sidebar, com a contagem de pedidos pendentes.
@@ -73,20 +99,10 @@ O servidor entrega a cada cliente **somente**:
 
 O aparelho fica lembrado por 90 dias (até clicar em **Sair**).
 
-## Juntar documentos (Drive + IA) — versão 1.1
-
-1. Cole o novo `Codigo.gs` no Apps Script, rode **configurarInicial** de novo e aceite a nova permissão (Google Drive). Ela cria a pasta **"Amorim Firmo — Consultoria (documentos)"** no Drive, com uma subpasta por empresa.
-2. **Implantar → Gerenciar implantações → lápis → Versão: Nova versão → Implantar** (a URL `/exec` continua a mesma).
-3. Crie uma chave do Gemini em https://aistudio.google.com/apikey (com a conta do escritório) e cole no app em **Gestão do App › Sistema › IA para leitura de documentos › Configurar**.
-4. Sigilo: no plano gratuito do Gemini, o Google pode usar o conteúdo enviado para melhorar os produtos dele. Para contratos de clientes, ative o faturamento no projeto da chave (custo de centavos por documento); com faturamento ativo o conteúdo não é usado.
-
-Uso: na empresa, clique em **Juntar documentos** e arraste a pasta (PDFs, planilha .xlsx ou .zip). Arquivos .rar precisam ser descompactados antes. O app importa a planilha, guarda cada PDF no Drive, lê com a IA, liga ao contrato certo (pelo nome do arquivo citado na planilha, pelo número do contrato ou pela unidade) e mostra uma tela de revisão antes de gravar.
-
 ## Cadastro de empresa pelo CNPJ ou pelos documentos — versão 1.2
 
 - **Pelo CNPJ:** em Empresas › Nova empresa (ou num cliente pessoa jurídica), digite o CNPJ: o app busca na base pública da Receita Federal (BrasilAPI) razão social, nome fantasia, atividade (CNAE), situação cadastral, abertura, porte, capital, endereço, telefone, e-mail e sócios.
 - **Pelos documentos:** em Empresas › **Cadastrar pelos documentos**, arraste a pasta: a IA identifica a empresa contratada e o CNPJ nos contratos (ou o app usa o “Responsável interno” da planilha), consulta a Receita, você confere e salva — e os arquivos já são organizados na pasta da empresa no Drive.
-- Depois de colar o novo `Codigo.gs`, publique **Nova versão** da implantação (não precisa rodar configurarInicial de novo).
 
 ## DataJud (movimentações dos tribunais)
 
