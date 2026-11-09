@@ -1048,7 +1048,7 @@ function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions
    acessos e configurações
    ===================================================================== */
 const BRAND = {
-  logoDark: 'assets/brasao.png', logoLight: 'assets/brasao-claro.png',
+  logoDark: 'brasao.png', logoLight: 'brasao-claro.png',
   caption: 'Advocacia e Consultoria Jurídica'
 };
 const escritorio = () => DB.get('config', 'escritorio') || { id: 'escritorio', nome: 'Amorim Firmo', subtitulo: BRAND.caption };

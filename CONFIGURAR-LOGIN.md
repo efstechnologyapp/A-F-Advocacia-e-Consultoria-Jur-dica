@@ -11,7 +11,7 @@ Leva uns 20 minutos e é feito uma vez só. **Use a conta Google do escritório*
 ## 1. Publicar o app no GitHub Pages
 
 1. Crie um repositório (ex.: `AmorimFirmo`) na conta GitHub de sua preferência.
-2. Envie **todos os arquivos deste pacote** (inclusive a pasta `assets`), menos a pasta `apps-script` e a pasta `src` (opcionais).
+2. Envie **todos os arquivos deste pacote** para a raiz do repositório (a pasta `apps-script` e a pasta `src` são opcionais).
 3. Em **Settings → Pages**, escolha *Deploy from a branch*, branch `main`, pasta `/ (root)`.
 4. Anote o endereço, ex.: `https://SEU-USUARIO.github.io/AmorimFirmo/`.
 

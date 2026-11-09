@@ -10,7 +10,7 @@ App (PWA) de gestão do escritório, no mesmo formato do Custódia Digital e do 
 | `app.js` | toda a lógica do app (gerado a partir da pasta `src/`) |
 | `config.js` | ID do cliente Google e URL do Apps Script |
 | `sw.js`, `manifest.json` | instalar como app e funcionar sem internet |
-| `assets/` | brasão (versões clara e escura) e ícones |
+| `brasao.png`, `brasao-claro.png`, `icon-192.png`, `icon-512.png` | brasão (versões escura e clara) e ícones — ficam na raiz, junto do index.html |
 | `apps-script/Codigo.gs` | servidor (cole no Google Apps Script) |
 | `src/` | código-fonte em módulos (para manutenção; não precisa ir ao GitHub) |
 | `CONFIGURAR-LOGIN.md` | passo a passo de instalação |
