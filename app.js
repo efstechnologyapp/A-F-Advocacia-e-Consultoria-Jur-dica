@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.8.0';
+const APP_VERSAO = '1.8.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca dos últimos 12 meses começa na hora — inclusive para advogados acrescentados depois'] },
   { numero: '1.8.0', data: '10/11/2026', itens: ['Partes em campos próprios: polo ativo e polo passivo, cada parte com seus advogados (OAB/UF) e o selo “escritório” nos advogados da casa', 'Cliente automático: a parte do lado em que atua o advogado do escritório vira o cliente — vinculada se já existir, criada se não existir', 'Na revisão dos processos encontrados pela OAB, a coluna “Cliente do escritório” mostra o lado detectado e permite corrigir', 'Processos já cadastrados sem cliente recebem partes e cliente a cada nova intimação'] },
   { numero: '1.7.0', data: '10/11/2026', itens: ['Cadastro dos advogados do escritório (nome, OAB, UF) em Gestão do App › Sistema', 'Consulta automática diária às intimações do DJEN (API pública do CNJ) em nome desses advogados: cada intimação é lançada no processo, com o texto publicado', 'Processos com intimação ainda não cadastrados aparecem para revisar e cadastrar com um clique (com os andamentos do DataJud) ou ignorar'] },
   { numero: '1.6.0', data: '10/11/2026', itens: ['A IA lê as PEÇAS PRINCIPAIS dos autos (inicial, contestação, réplica, saneador, audiência de instrução, alegações finais, sentença, recursos, contrarrazões, decisões monocráticas e acórdãos, cumprimento de sentença e impugnação, alvará, termo de compromisso/guarda e certidão de trânsito), identificadas pelo índice do PDF ou pelo rodapé do PJe', 'Cada peça principal vira movimentação com data e resumo do que pede ou decide', 'Trânsito em julgado da fase de conhecimento: detectado nos arquivos, no DataJud e na sincronização diária, com selo no processo e no portal do cliente'] },
@@ -2967,7 +2968,8 @@ const DJEN = {
   API: 'https://comunicaapi.pje.jus.br/api/v1/comunicacao',
   rodando: false,
   estado() { return DB.get('config', 'djen') || { id: 'djen', pendentes: [], ignorados: [] }; },
-  advogados() { return (escritorio().advogados || []).filter(a => a.ativo !== false && onlyDigits(a.oab) && a.uf); },
+  advogados() { return (escritorio().advogados || []).filter(a => a.ativo !== false && onlyDigits(a.oab) && a.uf).map(a => ({ ...a })); },
+  titulo: n => String(n || '').toLowerCase().replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Da|Do|Das|Dos|E)\b/g, w => w.toLowerCase()),
   dataISO(d) { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); },
   limpar: t => String(t || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/[ \t]+/g, ' ').replace(/\n\s*\n\s*\n+/g, '\n\n').trim(),
   /** aceita variações de nomes de campos da API */
@@ -3034,7 +3036,14 @@ const DJEN = {
     try {
       const de = st.ultima ? DJEN.dataISO(new Date(new Date(st.ultima + 'T12:00:00').getTime() - 2 * 864e5)) : DJEN.dataISO(Date.now() - (manual ? 365 : 90) * 864e5);
       let itens = [];
-      for (const a of advs) itens.push(...await DJEN.buscar(a, de, hoje, progresso));
+      for (const a of advs) {
+        // advogado recém-cadastrado: busca os últimos 12 meses só para ele
+        const res = await DJEN.buscar(a, a.consultado ? de : DJEN.dataISO(Date.now() - 365 * 864e5), hoje, progresso);
+        itens.push(...res);
+        if (!a.nome) { const n = res.flatMap(x => x.advogados).find(x => onlyDigits(x.oab) === onlyDigits(a.oab) && x.nome); if (n) a.nome = DJEN.titulo(n.nome); }
+        a.consultado = hoje;
+      }
+      { const lista = (escritorio().advogados || []).map(x => { const a = advs.find(y => y.id === x.id); return a ? { ...x, nome: x.nome || a.nome || '', consultado: a.consultado } : x; }); await DB.save('config', { ...escritorio(), id: 'escritorio', advogados: lista }); }
       const vistos = new Set(); itens = itens.filter(x => x.numero && x.id && !vistos.has(x.id) && vistos.add(x.id));
       const procs = DB.all('processos'), porNum = {}; procs.forEach(p => porNum[onlyDigits(p.numero)] = p);
       const temMov = new Set(DB.all('movimentos').filter(m => m.chave).map(m => m.chave));
@@ -3196,9 +3205,9 @@ const DJEN = {
   /* ---------- cadastro dos advogados (Gestão do App › Sistema) ---------- */
   advHtml() {
     const lista = escritorio().advogados || [];
-    return `<p class="muted small">O app consulta <b>uma vez por dia</b>, sozinho, as intimações publicadas no DJEN em nome destes advogados: lança as intimações nos processos e mostra os processos ainda não cadastrados.</p>
-      ${lista.length ? `<div class="adv-list">${lista.map((a, i) => `<div class="adv-row"><span class="dot ${a.ativo !== false ? 'ok' : 'off'}"></span><div><b>${esc(a.nome || '—')}</b><small>OAB/${esc(String(a.uf || '').toUpperCase())} ${esc(a.oab)}</small></div><button class="btn ghost sm" data-advtg="${i}">${a.ativo !== false ? 'Pausar' : 'Ativar'}</button><button class="icon-btn sm" data-advrm="${i}" title="Remover">${icon('trash')}</button></div>`).join('')}</div>` : '<p class="muted small">Nenhum advogado cadastrado.</p>'}
-      <form class="adv-form" id="advForm"><input name="nome" placeholder="Nome do advogado"><input name="oab" placeholder="Nº OAB" inputmode="numeric"><select name="uf">${UF_TR.slice(1).map(u => u === 'dft' ? 'DF' : u.toUpperCase()).sort().map(u => `<option ${u === 'PE' ? 'selected' : ''}>${u}</option>`).join('')}</select><button class="btn primary sm">${icon('plus')} Adicionar</button></form>
+    return `<p class="muted small">Informe só o <b>número da OAB e a seccional</b>; o nome vem do próprio DJEN. O app consulta <b>uma vez por dia</b>, sozinho, as intimações publicadas no DJEN em nome destes advogados: lança as intimações nos processos e mostra os processos ainda não cadastrados.</p>
+      ${lista.length ? `<div class="adv-list">${lista.map((a, i) => `<div class="adv-row"><span class="dot ${a.ativo !== false ? 'ok' : 'off'}"></span><div><b>${esc(a.nome || 'Nome aparece após a primeira consulta')}</b><small>OAB/${esc(String(a.uf || '').toUpperCase())} ${esc(a.oab)}</small></div><button class="btn ghost sm" data-advtg="${i}">${a.ativo !== false ? 'Pausar' : 'Ativar'}</button><button class="icon-btn sm" data-advrm="${i}" title="Remover">${icon('trash')}</button></div>`).join('')}</div>` : '<p class="muted small">Nenhum advogado cadastrado.</p>'}
+      <form class="adv-form" id="advForm"><input name="oab" placeholder="Nº da OAB" inputmode="numeric"><select name="uf">${UF_TR.slice(1).map(u => u === 'dft' ? 'DF' : u.toUpperCase()).sort().map(u => `<option ${u === 'PE' ? 'selected' : ''}>${u}</option>`).join('')}</select><button class="btn primary sm">${icon('plus')} Adicionar</button></form>
       <div class="conn"><span class="dot ${DJEN.estado().erro ? 'off' : DJEN.estado().ultimaExec ? 'ok' : 'off'}"></span><div><b>Consulta diária ao DJEN</b><small data-djen-st>${DJEN.status()}</small></div><button class="btn ghost sm" id="advAgora">Consultar agora</button></div>`;
   },
   bindAdv(el) {
@@ -3208,8 +3217,8 @@ const DJEN = {
       if (!oab) return UI.toast('Informe o número da OAB.', 'bad');
       const lista = [...(escritorio().advogados || [])];
       if (lista.some(a => onlyDigits(a.oab) === oab && String(a.uf).toUpperCase() === f.uf.value)) return UI.toast('Essa OAB já está cadastrada.', 'warn');
-      lista.push({ id: uid('ad'), nome: f.nome.value.trim(), oab, uf: f.uf.value, ativo: true });
-      salvar(lista).then(() => UI.toast('Advogado cadastrado. Use “Consultar agora” para a primeira busca (últimos 12 meses).', 'ok', 7000));
+      lista.push({ id: uid('ad'), nome: '', oab, uf: f.uf.value, ativo: true });
+      salvar(lista).then(() => { UI.toast(`OAB/${f.uf.value} ${oab} cadastrada. Buscando as intimações dos últimos 12 meses — o nome do advogado vem do DJEN.`, 'ok', 7000); $('#advAgora', el)?.click(); });
     });
     $$('[data-advtg]', el).forEach(b => b.onclick = () => { const l = [...escritorio().advogados]; l[+b.dataset.advtg] = { ...l[+b.dataset.advtg], ativo: l[+b.dataset.advtg].ativo === false }; salvar(l); });
     $$('[data-advrm]', el).forEach(b => b.onclick = async () => { if (!await UI.confirm('Remover este advogado da consulta diária?', 'Remover')) return; const l = [...escritorio().advogados]; l.splice(+b.dataset.advrm, 1); salvar(l); });
