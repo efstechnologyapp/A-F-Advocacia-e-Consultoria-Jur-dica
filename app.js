@@ -9,7 +9,7 @@
 const APP_VERSAO = '1.8.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca dos últimos 12 meses começa na hora — inclusive para advogados acrescentados depois'] },
+  { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca começa na hora e traz todo o histórico de intimações do advogado no DJEN (depois, só as novas)', 'Consulta ao DJEN mais robusta: quando a API responde “sistema muito ocupado”, o app espera e tenta de novo, respeitando o limite de consultas por minuto', 'Consulta testada com a OAB real: a API do DJEN às vezes falha em páginas com registros defeituosos (“sistema muito ocupado”) — o app agora tenta de novo e, se preciso, lê a página em partes e pula só o trecho defeituoso', 'Cliente: vinculado sozinho quando uma parte já é cliente cadastrado; nos demais casos, a revisão mostra as partes de cada processo para escolher o cliente (com sugestão quando as intimações dão sinal claro) — testes com os processos reais mostraram que o lado do escritório não dá para deduzir com segurança só pelo DJEN'] },
   { numero: '1.8.0', data: '10/11/2026', itens: ['Partes em campos próprios: polo ativo e polo passivo, cada parte com seus advogados (OAB/UF) e o selo “escritório” nos advogados da casa', 'Cliente automático: a parte do lado em que atua o advogado do escritório vira o cliente — vinculada se já existir, criada se não existir', 'Na revisão dos processos encontrados pela OAB, a coluna “Cliente do escritório” mostra o lado detectado e permite corrigir', 'Processos já cadastrados sem cliente recebem partes e cliente a cada nova intimação'] },
   { numero: '1.7.0', data: '10/11/2026', itens: ['Cadastro dos advogados do escritório (nome, OAB, UF) em Gestão do App › Sistema', 'Consulta automática diária às intimações do DJEN (API pública do CNJ) em nome desses advogados: cada intimação é lançada no processo, com o texto publicado', 'Processos com intimação ainda não cadastrados aparecem para revisar e cadastrar com um clique (com os andamentos do DataJud) ou ignorar'] },
   { numero: '1.6.0', data: '10/11/2026', itens: ['A IA lê as PEÇAS PRINCIPAIS dos autos (inicial, contestação, réplica, saneador, audiência de instrução, alegações finais, sentença, recursos, contrarrazões, decisões monocráticas e acórdãos, cumprimento de sentença e impugnação, alvará, termo de compromisso/guarda e certidão de trânsito), identificadas pelo índice do PDF ou pelo rodapé do PJe', 'Cada peça principal vira movimentação com data e resumo do que pede ou decide', 'Trânsito em julgado da fase de conhecimento: detectado nos arquivos, no DataJud e na sincronização diária, com selo no processo e no portal do cliente'] },
@@ -1686,7 +1686,7 @@ const Judicial = {
   partesHtml(p) {
     const ps = p.partes || []; if (!ps.length) return '';
     const grupo = (pl, tit) => { const l = ps.filter(x => (x.polo || '') === pl); return l.length ? `<div class="pt-grupo"><h4>${tit}</h4>${l.map(x => `<div class="pt-item"><div><b>${esc(x.nome)}</b>${x.cliente ? ' <span class="pill good">cliente</span>' : ''}${x.papel ? ` <small class="muted">${esc(x.papel)}</small>` : ''}${x.doc ? ` <small class="muted mono">${esc(fmtDoc(x.doc))}</small>` : ''}</div>${(x.advogados || []).length ? `<small class="pt-adv">${icon('user')} ${x.advogados.map(a => esc(a.nome) + (a.oab ? ` <span class="muted">(OAB ${esc(a.oab)}${a.uf ? '/' + esc(a.uf) : ''})</span>` : '') + (a.escritorio ? ' <span class="badge soft">escritório</span>' : '')).join(' · ')}</small>` : ''}</div>`).join('')}</div>` : ''; };
-    return `<section class="card"><header><h2>${icon('users')} Partes</h2></header>${grupo('Ativo', 'Polo ativo')}${grupo('Passivo', 'Polo passivo')}${grupo('', 'Outros / polo não informado')}</section>`;
+    return `<section class="card"><header><h2>${icon('users')} Partes</h2></header>${grupo('Ativo', 'Polo ativo')}${grupo('Passivo', 'Polo passivo')}${grupo('Terceiro', 'Terceiros interessados')}${grupo('', 'Polo não informado')}</section>`;
   },
   mergeDatajud(p, r) {
     p.ultimaSync = new Date().toISOString();
@@ -2976,7 +2976,7 @@ const DJEN = {
   norm(it) {
     const g = (...ks) => { for (const k of ks) if (it[k] !== undefined && it[k] !== null && it[k] !== '') return it[k]; return ''; };
     const num = onlyDigits(g('numero_processo', 'numeroProcesso', 'numeroprocessocommascara', 'numero_processo_com_mascara'));
-    const dest = (it.destinatarios || []).map(d => ({ nome: d.nome || '', polo: d.polo === 'A' ? 'Ativo' : d.polo === 'P' ? 'Passivo' : (d.polo || '') }));
+    const dest = (it.destinatarios || []).map(d => ({ nome: d.nome || '', polo: d.polo === 'A' ? 'Ativo' : d.polo === 'P' ? 'Passivo' : d.polo === 'T' ? 'Terceiro' : (d.polo || '') }));
     const advs = (it.destinatarioadvogados || it.destinatarioAdvogados || []).map(d => { const a = d.advogado || d; return { nome: a.nome || '', oab: onlyDigits(a.numero_oab || a.numeroOab || ''), uf: a.uf_oab || a.ufOab || '' }; });
     return {
       id: String(g('id', 'hash')), hash: g('hash'), numero: num.length === 20 ? num : '', data: parseDate(g('data_disponibilizacao', 'datadisponibilizacao', 'dataDisponibilizacao')) || '',
@@ -2984,34 +2984,58 @@ const DJEN = {
       tipo: g('tipoComunicacao', 'tipo_comunicacao') || 'Intimação', tipoDoc: g('tipoDocumento', 'tipo_documento'), texto: DJEN.limpar(g('texto')), link: g('link'), destinatarios: dest, advogados: advs
     };
   },
-  async pagina(params) {
+  /** uma página da API. O DJEN limita ~20 consultas/min (429) e responde 500 ("sistema muito ocupado")
+   *  quando a página contém certos registros defeituosos — aí a página é lida em blocos menores. */
+  async pagina(params, progresso) {
     const qs = new URLSearchParams(params).toString();
-    try {
-      const r = await fetch(DJEN.API + '?' + qs, { headers: { Accept: 'application/json' } });
-      if (!r.ok) throw new Error('DJEN respondeu ' + r.status);
-      return await r.json();
-    } catch (e) {
-      if (!Session.remote) throw new Error('não consegui acessar o DJEN pelo navegador (' + e.message + ')');
-      return await apiT('djen', { params }, 120000); // reserva: pelo servidor
+    for (let t = 0; ; t++) {
+      let r;
+      try { r = await fetch(DJEN.API + '?' + qs, { headers: { Accept: 'application/json' }, cache: 'no-store' }); }
+      catch (e) {
+        // falha de rede/CORS no navegador: reserva pelo servidor
+        if (!Session.remote) throw new Error('não consegui acessar o DJEN (' + e.message + ')');
+        return await apiT('djen', { params }, 120000);
+      }
+      if (r.ok) return await r.json();
+      if (r.status === 429 && t < 3) { progresso && progresso('limite de consultas por minuto do DJEN — aguardando…'); await sleep(20000); continue; }
+      if (r.status >= 500 && t < 1) { await sleep(4000); continue; }
+      const e = new Error(r.status === 429 ? 'o DJEN limitou as consultas por agora' : r.status >= 500 ? 'o DJEN está instável agora' : 'o DJEN respondeu ' + r.status);
+      e.status = r.status; throw e;
     }
   },
-  /** todas as intimações de um advogado no período (em blocos de 30 dias) */
-  async buscar(adv, de, ate, progresso) {
-    const out = []; let ini = new Date(de + 'T12:00:00');
-    const fim = new Date(ate + 'T12:00:00');
-    while (ini <= fim) {
-      const blocoFim = new Date(Math.min(fim, new Date(ini.getTime() + 29 * 864e5)));
-      for (let pag = 1; pag <= 30; pag++) {
-        progresso && progresso(`${adv.nome || 'OAB ' + adv.oab}: ${fmtDate(DJEN.dataISO(ini))} a ${fmtDate(DJEN.dataISO(blocoFim))}…`);
-        const j = await DJEN.pagina({ numeroOab: onlyDigits(adv.oab), ufOab: String(adv.uf).toUpperCase(), dataDisponibilizacaoInicio: DJEN.dataISO(ini), dataDisponibilizacaoFim: DJEN.dataISO(blocoFim), itensPorPagina: 100, pagina: pag });
-        const itens = (j.items || j.itens || j.content || []).map(DJEN.norm);
-        out.push(...itens.map(x => ({ ...x, advogadoBusca: adv.nome || adv.oab })));
-        if (itens.length < 100) break;
-        await sleep(500);
+  /** intimações de um advogado, da mais nova para a mais antiga, até a data "de" (sem "de": todo o histórico) */
+  async buscar(adv, de, progresso) {
+    const out = [], nome = adv.nome || 'OAB ' + adv.oab + '/' + String(adv.uf).toUpperCase();
+    const base = { numeroOab: onlyDigits(adv.oab), ufOab: String(adv.uf).toUpperCase() };
+    let falhas = 0, seguidas = 0;
+    for (let pag = 1; pag <= 60; pag++) {
+      progresso && progresso(`${nome}: página ${pag}${out.length ? ` · ${out.length} intimações` : ''}…`);
+      let itens = [], fim = false;
+      try {
+        const j = await DJEN.pagina({ ...base, itensPorPagina: 100, pagina: pag }, progresso);
+        itens = (j.items || j.itens || j.content || []).map(DJEN.norm); fim = itens.length < 100; seguidas = 0;
+      } catch (e) {
+        if (!(e.status >= 500)) throw e;
+        // página com registro defeituoso: lê em blocos de 5 e pula só o bloco que falhar
+        let ruins = 0;
+        for (let k = 20 * (pag - 1) + 1; k <= 20 * pag; k++) {
+          progresso && progresso(`${nome}: página ${pag} em partes (${k - 20 * (pag - 1)}/20)…`);
+          await sleep(3200);
+          try {
+            const j = await DJEN.pagina({ ...base, itensPorPagina: 5, pagina: k }, progresso);
+            const l = (j.items || j.itens || j.content || []).map(DJEN.norm); itens.push(...l);
+            if (l.length < 5) { fim = true; break; }
+          } catch (e2) { if (!(e2.status >= 500)) throw e2; ruins++; }
+        }
+        falhas += ruins;
+        if (ruins === 20) { if (++seguidas >= 2) throw new Error('o DJEN está instável agora'); } else seguidas = 0;
       }
-      ini = new Date(blocoFim.getTime() + 864e5);
-      await sleep(300);
+      const dentro = de ? itens.filter(x => !x.data || x.data >= de) : itens;
+      out.push(...dentro.map(x => ({ ...x, advogadoBusca: adv.nome || adv.oab })));
+      if (fim || (de && dentro.length < itens.length)) break;
+      await sleep(3200); // a API aceita ~20 consultas por minuto
     }
+    out.falhas = falhas;
     return out;
   },
   areaPorTribunal(numero, classe) {
@@ -3035,11 +3059,11 @@ const DJEN = {
     DJEN.rodando = true; DJEN.badge();
     try {
       const de = st.ultima ? DJEN.dataISO(new Date(new Date(st.ultima + 'T12:00:00').getTime() - 2 * 864e5)) : DJEN.dataISO(Date.now() - (manual ? 365 : 90) * 864e5);
-      let itens = [];
+      let itens = [], falhas = 0;
       for (const a of advs) {
-        // advogado recém-cadastrado: busca os últimos 12 meses só para ele
-        const res = await DJEN.buscar(a, a.consultado ? de : DJEN.dataISO(Date.now() - 365 * 864e5), hoje, progresso);
-        itens.push(...res);
+        // advogado recém-cadastrado: todo o histórico disponível no DJEN; depois, só o que é novo
+        const res = await DJEN.buscar(a, a.consultado ? de : null, progresso);
+        itens.push(...res); falhas += res.falhas || 0;
         if (!a.nome) { const n = res.flatMap(x => x.advogados).find(x => onlyDigits(x.oab) === onlyDigits(a.oab) && x.nome); if (n) a.nome = DJEN.titulo(n.nome); }
         a.consultado = hoje;
       }
@@ -3069,7 +3093,7 @@ const DJEN = {
       for (const [pid, ints] of Object.entries(porProc)) { const p = DB.get('processos', pid); if (p && await DJEN.aplicarPartes(p, ints)) procAt.push(p); }
       if (procAt.length) await DB.save('processos', procAt);
       const pendentes = Object.values(pend).filter(q => !porNum[q.numero]).sort((a, b) => String(b.ultima).localeCompare(String(a.ultima)));
-      const r = { intimacoes: itens.length, novasMov: novasMov.length, processosNovos: pendentes.length - (st.pendentes || []).filter(q => !porNum[q.numero]).length };
+      const r = { falhas, intimacoes: itens.length, novasMov: novasMov.length, processosNovos: pendentes.length - (st.pendentes || []).filter(q => !porNum[q.numero]).length };
       await DB.save('config', { ...st, id: 'djen', ultima: hoje, ultimaExec: new Date().toISOString(), por: Session.user.email, pendentes, erro: '', resumo: r });
       if (novasMov.length || r.processosNovos > 0) UI.toast(`DJEN: ${novasMov.length} intimação(ões) nova(s) lançada(s)${r.processosNovos > 0 ? ` · ${r.processosNovos} processo(s) novo(s) encontrado(s) pela OAB` : ''}.`, 'ok', 8000);
       else if (manual) UI.toast(`DJEN consultado: ${itens.length} intimação(ões) no período, nada novo.`);
@@ -3083,7 +3107,7 @@ const DJEN = {
   /** roda sozinho uma vez por dia (o primeiro da equipe que abrir o app) */
   auto() { if (Session.isStaff && DJEN.advogados().length && DJEN.estado().ultima !== todayISO()) setTimeout(() => DJEN.sincronizar(), 4000); },
   badge() { $$('[data-djen-st]').forEach(el => el.innerHTML = DJEN.rodando ? `${icon('sync', 'spin')} consultando o DJEN…` : DJEN.status()); },
-  status() { const s = DJEN.estado(); return s.ultimaExec ? `última consulta ${fmtDateTime(s.ultimaExec)}${s.erro ? ` · <span class="t-bad">${esc(s.erro)}</span>` : ''}` : 'ainda não consultado'; },
+  status() { const s = DJEN.estado(); return s.ultimaExec ? `última consulta ${fmtDateTime(s.ultimaExec)}${!s.erro && s.resumo?.falhas ? ` · <span class="muted">${s.resumo.falhas} bloco(s) com defeito no próprio DJEN foram pulados</span>` : ''}${s.erro ? ` · <span class="t-bad">${esc(s.erro)}</span>` : ''}` : 'ainda não consultado'; },
 
   /* ---------- cartão do painel / judicial ---------- */
   cardHtml() {
@@ -3103,27 +3127,35 @@ const DJEN = {
   PJ: /\b(ltda|s\.?\s?\/?a\.?|eireli|\bme\b|epp|cia|companhia|banco|instituto|associa[cç][aã]o|cooperativa|funda[cç][aã]o|sindicato|munic[ií]pio|estado d|uni[aã]o|inss|caixa econ|empresa|com[eé]rcio|servi[cç]os|engenharia|construtora|ind[uú]stria|condom[ií]nio|igreja|partido|minist[eé]rio|secretaria|prefeitura|c[aâ]mara)\b/i,
   intsDe(q) { return (q.intimacoes || []).some(i => i.dest) ? q.intimacoes : [{ dest: q.partes || [], advs: [] }]; },
   meuAdv(a) { return DJEN.advogados().some(x => onlyDigits(x.oab) === onlyDigits(a.oab) && String(x.uf).toUpperCase() === String(a.uf || '').toUpperCase()) || DJEN.advogados().some(x => a.nome && norm(x.nome) === norm(a.nome)); },
-  /** lê as intimações: partes por polo, advogados de cada polo e o lado do escritório */
+  /** lê as intimações: partes por polo, advogados de cada polo e votos de lado (intimações que só intimam um polo) */
   analisar(ints) {
     const partes = [], votos = { Ativo: 0, Passivo: 0 };
     const achar = nome => partes.find(p => norm(p.nome) === norm(nome));
     for (const i of ints) {
       const dest = (i.dest || []).filter(d => d.nome);
       dest.forEach(d => { const p = achar(d.nome); if (!p) partes.push({ nome: d.nome, polo: d.polo || '', advogados: [] }); else if (!p.polo && d.polo) p.polo = d.polo; });
-      const polos = [...new Set(dest.map(d => d.polo).filter(x => x === 'Ativo' || x === 'Passivo'))];
-      if (polos.length !== 1) continue;
-      // a intimação veio pela OAB do escritório e só intima um polo: é o lado do escritório
+      const polos = [...new Set(dest.map(d => d.polo || '?'))];
+      if (polos.length !== 1 || !['Ativo', 'Passivo'].includes(polos[0])) continue;
       votos[polos[0]]++;
       dest.forEach(d => { const p = achar(d.nome); (i.advs || []).forEach(a => { if (a.nome && !p.advogados.some(x => norm(x.nome) === norm(a.nome))) p.advogados.push({ nome: a.nome, oab: a.oab || '', uf: a.uf || '', escritorio: DJEN.meuAdv(a) }); }); });
     }
-    const lado = votos.Ativo > votos.Passivo ? 'Ativo' : votos.Passivo > votos.Ativo ? 'Passivo' : null;
-    return { partes, lado };
+    // os próprios advogados do escritório não são partes (ex.: execução de honorários aparece com o nome do advogado)
+    const meus = new Set(DJEN.advogados().map(a => norm(a.nome)).filter(Boolean));
+    return { partes: partes.filter(p => !meus.has(norm(p.nome))), votos };
   },
-  ladoSelect(q, i) {
-    const { partes, lado } = DJEN.analisar(DJEN.intsDe(q));
-    const nomes = pl => partes.filter(p => p.polo === pl).map(p => p.nome).slice(0, 2).join(', ') || '—';
-    const sug = lado ? `<small class="muted">${esc(nomes(lado))}</small>` : '<small class="muted">não deu para saber</small>';
-    return `<select class="input sm" data-djlado="${i}"><option value="auto">${lado ? 'Polo ' + lado.toLowerCase() + ' (detectado)' : 'Definir depois'}</option><option value="Ativo">Polo ativo</option><option value="Passivo">Polo passivo</option><option value="nenhum">Definir depois</option></select><br>${sug}`;
+  clienteDe: pt => DB.all('clientes').find(c => norm(c.nome) === norm(pt.nome)) || null,
+  /** sugestão de cliente: 1º parte que já é cliente cadastrado; 2º sinal forte das intimações (só um polo intimado, ≥2 vezes, nenhuma do outro) com uma única parte nesse polo */
+  sugerir(partes, votos) {
+    const k = partes.findIndex(p => DJEN.clienteDe(p)); if (k >= 0) return { i: k, por: 'já é cliente' };
+    const forte = votos.Ativo >= 2 && !votos.Passivo ? 'Ativo' : votos.Passivo >= 2 && !votos.Ativo ? 'Passivo' : null;
+    const l = forte ? partes.map((p, i) => [p, i]).filter(([p]) => p.polo === forte) : [];
+    return l.length === 1 ? { i: l[0][1], por: 'sugestão pelas intimações' } : null;
+  },
+  /** seletor "quem é o cliente" na revisão */
+  clienteSelect(q, i) {
+    const { partes, votos } = DJEN.analisar(DJEN.intsDe(q)), sug = DJEN.sugerir(partes, votos);
+    if (!partes.length) return '<small class="muted">sem partes na intimação</small>';
+    return `<select class="input sm" data-djcli="${i}"><option value="">Definir depois</option>${partes.map((p, k) => `<option value="${esc(p.nome)}" ${sug?.i === k ? 'selected' : ''}>${esc(p.nome.length > 42 ? p.nome.slice(0, 40) + '…' : p.nome)}${p.polo ? ' (' + esc(p.polo.toLowerCase()) + ')' : ''}${DJEN.clienteDe(p) ? ' ✓' : ''}</option>`).join('')}</select>${sug ? `<br><small class="muted">${esc(sug.por)}</small>` : ''}`;
   },
   fundirPartes(atuais, novas) {
     const l = (atuais || []).map(p => ({ ...p, advogados: [...(p.advogados || [])] }));
@@ -3136,28 +3168,28 @@ const DJEN = {
     }
     return l;
   },
-  poloCliente(lado, area) { const trab = area === 'trabalhista'; return lado === 'Ativo' ? (trab ? 'Reclamante' : 'Autor') : (trab ? 'Reclamado' : 'Réu'); },
-  /** grava as partes no processo e, se ele ainda não tem cliente, vincula/cria o cliente. Devolve true se mudou algo. */
-  async aplicarPartes(p, ints, ladoForcado) {
-    const { partes, lado: ladoAuto } = DJEN.analisar(ints);
+  poloCliente(lado, area) { const trab = area === 'trabalhista'; return lado === 'Ativo' ? (trab ? 'Reclamante' : 'Autor') : lado === 'Passivo' ? (trab ? 'Reclamado' : 'Réu') : 'Terceiro interessado'; },
+  /**
+   * Grava as partes no processo. Cliente: escolha = nome da parte escolhida na revisão (cria o cliente se preciso);
+   * sem escolha, só vincula se alguma parte JÁ for cliente cadastrado. Devolve true se mudou algo.
+   */
+  async aplicarPartes(p, ints, escolha) {
+    const { partes } = DJEN.analisar(ints);
     if (!partes.length) return false;
     const antes = JSON.stringify([p.partes, p.clienteIds, p.parteContraria, p.polo]);
     p.partes = DJEN.fundirPartes(p.partes, partes);
-    const lado = ladoForcado === 'nenhum' ? null : (ladoForcado || ladoAuto || (p.partes.find(x => x.cliente)?.polo) || null);
-    if (lado && !(p.clienteIds || []).length) {
-      const ids = [], novos = [];
-      for (const pt of p.partes.filter(x => x.polo === lado)) {
-        let c = DB.all('clientes').find(c => norm(c.nome) === norm(pt.nome));
-        if (!c) { c = { id: uid('cl'), tipo: DJEN.PJ.test(pt.nome) ? 'Pessoa jurídica' : 'Pessoa física', nome: pt.nome, obs: `Cadastrado automaticamente pelo processo ${fmtCNJ(p.numero)} (intimação no DJEN). Completar CPF/CNPJ e contato.` }; novos.push(c); }
-        pt.cliente = true; ids.push(c.id);
+    if (!(p.clienteIds || []).length) {
+      let alvo = escolha ? p.partes.find(x => norm(x.nome) === norm(escolha)) : p.partes.find(x => DJEN.clienteDe(x));
+      if (alvo) {
+        let c = DJEN.clienteDe(alvo);
+        if (!c) { c = { id: uid('cl'), tipo: DJEN.PJ.test(alvo.nome) ? 'Pessoa jurídica' : 'Pessoa física', nome: alvo.nome, obs: `Cadastrado pelo processo ${fmtCNJ(p.numero)} (intimação no DJEN). Completar CPF/CNPJ e contato.` }; await DB.save('clientes', c); }
+        alvo.cliente = true; p.clienteIds = [c.id];
       }
-      if (novos.length) await DB.save('clientes', novos);
-      p.clienteIds = [...new Set(ids)];
     }
-    const ladoCli = p.partes.find(x => x.cliente)?.polo;
-    if (ladoCli) {
-      if (!p.polo) p.polo = DJEN.poloCliente(ladoCli, p.area);
-      if (!p.parteContraria) p.parteContraria = p.partes.filter(x => x.polo && x.polo !== ladoCli).map(x => x.nome).join('; ');
+    const pc = p.partes.find(x => x.cliente);
+    if (pc && pc.polo) {
+      if (!p.polo) p.polo = DJEN.poloCliente(pc.polo, p.area);
+      if (!p.parteContraria) p.parteContraria = p.partes.filter(x => x.polo && x.polo !== pc.polo && x.polo !== 'Terceiro').map(x => x.nome).join('; ');
     }
     return JSON.stringify([p.partes, p.clienteIds, p.parteContraria, p.polo]) !== antes;
   },
@@ -3167,9 +3199,9 @@ const DJEN = {
     if (!pend.length) return UI.toast('Nenhum processo pendente.');
     const m = UI.modal({
       title: 'Processos encontrados pela OAB', sub: `${pend.length} processo(s) com intimação no DJEN em nome dos advogados do escritório`, wide: true,
-      body: `<p class="muted small">Marque os que deseja cadastrar. O app cria o processo com tribunal, vara, classe e as partes de cada polo, busca os andamentos no DataJud e lança as intimações. O cliente é a parte do lado em que atua o advogado do escritório: se já estiver cadastrado, é vinculado; se não, é criado. Confira a coluna “Cliente do escritório” e corrija o lado, se precisar.</p>
+      body: `<p class="muted small">Marque os que deseja cadastrar. O app cria o processo com tribunal, vara, classe e as partes de cada polo, busca os andamentos no DataJud e lança as intimações. Na coluna “Cliente do escritório”, escolha qual parte é o cliente: partes que já são clientes vêm marcadas (✓); nas demais, o app sugere quando as intimações dão sinal claro. O cliente é vinculado ou criado na hora — e pode ficar para depois.</p>
         <div class="table-wrap"><table class="dt"><thead><tr><th><input type="checkbox" id="djTodos" checked></th><th>Processo</th><th>Tribunal / órgão</th><th>Classe</th><th>Partes</th><th>Cliente do escritório</th><th>Última intimação</th></tr></thead><tbody>
-        ${pend.map((q, i) => `<tr><td><input type="checkbox" data-dj="${i}" checked></td><td class="mono">${esc(fmtCNJ(q.numero))}</td><td>${esc(q.tribunal || '')}<br><small class="muted">${esc(q.orgao || '')}</small></td><td>${esc(q.classe || '')}</td><td class="wrap"><small>${q.partes.slice(0, 4).map(p => esc(p.nome) + (p.polo ? ` <em class="muted">(${esc(p.polo)})</em>` : '')).join('<br>')}</small></td><td>${DJEN.ladoSelect(q, i)}</td><td>${esc(fmtDate(q.ultima))}<br><small class="muted">${q.intimacoes.length} intimação(ões)</small></td></tr>`).join('')}
+        ${pend.map((q, i) => `<tr><td><input type="checkbox" data-dj="${i}" checked></td><td class="mono">${esc(fmtCNJ(q.numero))}</td><td>${esc(q.tribunal || '')}<br><small class="muted">${esc(q.orgao || '')}</small></td><td>${esc(q.classe || '')}</td><td class="wrap"><small>${q.partes.slice(0, 4).map(p => esc(p.nome) + (p.polo ? ` <em class="muted">(${esc(p.polo)})</em>` : '')).join('<br>')}</small></td><td>${DJEN.clienteSelect(q, i)}</td><td>${esc(fmtDate(q.ultima))}<br><small class="muted">${q.intimacoes.length} intimação(ões)</small></td></tr>`).join('')}
         </tbody></table></div>`,
       foot: `<button class="btn ghost" id="djIgn">Ignorar marcados</button><span class="sp"></span><button class="btn ghost" data-close>Fechar</button><button class="btn primary" id="djCad">${icon('plus')} Cadastrar marcados</button>`
     });
@@ -3189,8 +3221,7 @@ const DJEN = {
       for (const q of sel) {
         b.innerHTML = `${icon('sync', 'spin')} Cadastrando ${++n} de ${sel.length}…`;
         const proc = { numero: q.numero, area: DJEN.areaPorTribunal(q.numero, q.classe), tribunal: q.tribunal || (tribunalAlias(q.numero) || '').toUpperCase(), orgao: q.orgao, classe: q.classe, status: 'Ativo', clienteIds: [], partes: [], responsavel: q.advogado || '', obs: 'Cadastrado pela consulta à OAB no DJEN.' };
-        const esc0 = $(`[data-djlado="${pend.indexOf(q)}"]`, m)?.value || 'auto';
-        await DJEN.aplicarPartes(proc, DJEN.intsDe(q), esc0 === 'auto' ? undefined : esc0);
+        await DJEN.aplicarPartes(proc, DJEN.intsDe(q), $(`[data-djcli="${pend.indexOf(q)}"]`, m)?.value || '');
         if (!proc.clienteIds.length) { semCli++; proc.obs += ' Indicar o cliente.'; }
         const [p] = await DB.save('processos', proc);
         await DB.save('movimentos', q.intimacoes.map(i => ({ processoId: p.id, data: i.data, titulo: `${i.tipo}${i.tipoDoc ? ' — ' + i.tipoDoc : ''} (DJEN)`, descricao: i.texto, origem: 'djen', chave: 'djen:' + i.id, visivelCliente: false, link: i.link || '' })));
@@ -3198,7 +3229,7 @@ const DJEN = {
       }
       const nums = new Set(sel.map(q => q.numero));
       await DB.save('config', { ...DJEN.estado(), pendentes: pend.filter(q => !nums.has(q.numero)) });
-      UI.closeModal(); UI.toast(`${sel.length} processo(s) cadastrado(s)${semCli ? ` · em ${semCli}, indique o cliente (não deu para saber o lado do escritório)` : ', com partes e cliente'}.`, 'ok', 8000);
+      UI.closeModal(); UI.toast(`${sel.length} processo(s) cadastrado(s)${semCli ? ` · ${semCli} ainda sem cliente (indique depois, no processo)` : ', com partes e cliente'}.`, 'ok', 8000);
       location.hash = '#/judicial/todos'; App.render();
     };
   },
@@ -3218,7 +3249,7 @@ const DJEN = {
       const lista = [...(escritorio().advogados || [])];
       if (lista.some(a => onlyDigits(a.oab) === oab && String(a.uf).toUpperCase() === f.uf.value)) return UI.toast('Essa OAB já está cadastrada.', 'warn');
       lista.push({ id: uid('ad'), nome: '', oab, uf: f.uf.value, ativo: true });
-      salvar(lista).then(() => { UI.toast(`OAB/${f.uf.value} ${oab} cadastrada. Buscando as intimações dos últimos 12 meses — o nome do advogado vem do DJEN.`, 'ok', 7000); $('#advAgora', el)?.click(); });
+      salvar(lista).then(() => { UI.toast(`OAB/${f.uf.value} ${oab} cadastrada. Buscando todas as intimações dele no DJEN — o nome vem de lá.`, 'ok', 7000); $('#advAgora', el)?.click(); });
     });
     $$('[data-advtg]', el).forEach(b => b.onclick = () => { const l = [...escritorio().advogados]; l[+b.dataset.advtg] = { ...l[+b.dataset.advtg], ativo: l[+b.dataset.advtg].ativo === false }; salvar(l); });
     $$('[data-advrm]', el).forEach(b => b.onclick = async () => { if (!await UI.confirm('Remover este advogado da consulta diária?', 'Remover')) return; const l = [...escritorio().advogados]; l.splice(+b.dataset.advrm, 1); salvar(l); });
