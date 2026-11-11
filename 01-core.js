@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.14.3';
+const APP_VERSAO = '1.15.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.15.0', data: '11/11/2026', itens: ['Judicial: cada área (e “Todos os processos”) tem os cards “Pessoas físicas” e “Pessoas jurídicas”; tocar num card mostra só os processos daquele tipo, com as relações do escritório e em parceria. O tipo vem do cadastro do cliente (ou do CNPJ).', 'Card “Cliente a definir” aparece quando há processos sem cliente vinculado.'] },
   { numero: '1.14.3', data: '11/11/2026', itens: ['Judicial: botão “Alterar representação” nas relações de processos do escritório e em parceria, para corrigir em lote se o processo é próprio ou em parceria (e com quem).', 'Ficha do processo: campo “Representação” para trocar entre próprio e os parceiros.'] },
   { numero: '1.14.2', data: '11/11/2026', itens: ['Processos encontrados pela OAB: a tabela rola dentro da janela, com a barra de rolagem lateral sempre visível embaixo e o cabeçalho fixo no topo.'] },
   { numero: '1.14.1', data: '11/11/2026', itens: ['Processos encontrados pela OAB: nova coluna “Representação” para indicar se o processo é próprio ou em parceria (com parceiro já cadastrado ou com o advogado intimado junto, que passa a ser parceiro). Quando um parceiro cadastrado aparece na intimação, a opção já vem marcada.'] },

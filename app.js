@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.14.3';
+const APP_VERSAO = '1.15.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.15.0', data: '11/11/2026', itens: ['Judicial: cada área (e “Todos os processos”) tem os cards “Pessoas físicas” e “Pessoas jurídicas”; tocar num card mostra só os processos daquele tipo, com as relações do escritório e em parceria. O tipo vem do cadastro do cliente (ou do CNPJ).', 'Card “Cliente a definir” aparece quando há processos sem cliente vinculado.'] },
   { numero: '1.14.3', data: '11/11/2026', itens: ['Judicial: botão “Alterar representação” nas relações de processos do escritório e em parceria, para corrigir em lote se o processo é próprio ou em parceria (e com quem).', 'Ficha do processo: campo “Representação” para trocar entre próprio e os parceiros.'] },
   { numero: '1.14.2', data: '11/11/2026', itens: ['Processos encontrados pela OAB: a tabela rola dentro da janela, com a barra de rolagem lateral sempre visível embaixo e o cabeçalho fixo no topo.'] },
   { numero: '1.14.1', data: '11/11/2026', itens: ['Processos encontrados pela OAB: nova coluna “Representação” para indicar se o processo é próprio ou em parceria (com parceiro já cadastrado ou com o advogado intimado junto, que passa a ser parceiro). Quando um parceiro cadastrado aparece na intimação, a opção já vem marcada.'] },
@@ -1671,7 +1672,11 @@ const Judicial = {
     const all = area === 'todos';
     const A = AREAS[area];
     App.crumbs([{ t: 'Judicial', href: '/judicial/todos' }, { t: all ? 'Todos os processos' : A?.nome || area }]);
-    const procs = DB.where('processos', p => all || p.area === area), procsT = procs;
+    const procsA = DB.where('processos', p => all || p.area === area);
+    const cnt = { pf: 0, pj: 0, nd: 0 }; procsA.forEach(p => cnt[Judicial.pessoa(p)]++);
+    let pes = Judicial._pes || 'pf'; if (pes === 'nd' && !cnt.nd) pes = Judicial._pes = 'pf';
+    const procs = procsA.filter(p => Judicial.pessoa(p) === pes), procsT = procs;
+    const PES = { pf: ['Pessoas físicas', 'user'], pj: ['Pessoas jurídicas', 'briefcase'], nd: ['Cliente a definir', 'alert'] };
     const lastMov = id => DB.where('movimentos', m => m.processoId === id).sort((a, b) => String(b.data).localeCompare(String(a.data)))[0];
     const rowsT = procs.map(p => { const m = lastMov(p.id), pa = Parceria.de(p); return { ...p, _parc: pa ? Parceria.rotulo(pa) : '', _cli: clienteNomes(p) || '⚠ cliente a definir', _area: AREAS[p.area]?.nome, _ult: m?.data || null, _ultT: m?.titulo || '', _prox: DB.where('prazos', x => x.processoId === p.id && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data))[0]?.data || null }; });
     const sc = { fields: [F('numero', 'Número', 'cnj'), F('_cli', 'Cliente(s)'), F('_area', 'Área'), F('classe', 'Classe'), F('orgao', 'Órgão julgador'), F('status', 'Situação', 'select', { opts: [] }), F('_ult', 'Última movimentação', 'date'), F('_prox', 'Próximo compromisso', 'date'), F('parteContraria', 'Parte contrária'), F('assunto', 'Assunto'), F('_parc', 'Parceiro')] };
@@ -1682,11 +1687,13 @@ const Judicial = {
     v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Judicial</span><h1>${icon(A?.icon || 'layers', 'h-ic')} ${all ? 'Todos os processos' : 'Direito ' + (A.nome === 'Cível' ? 'Civil' : A.nome)}</h1><p class="muted">Processos próprios do escritório, com movimentações e acesso do cliente pelo portal.</p></div>
       <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn primary" id="nProcDocs">${icon('upload')} Cadastrar pelos arquivos</button></div></div>
       <div class="kpis sm">${kpi('Em andamento', ativos.length)}${kpi('Total cadastrados', procs.length)}${kpi('Valor das causas', fmtMoneyShort(valor), comValor < procs.length ? `em ${comValor} de ${procs.length} processos · <button class="link" id="kVal">informar os demais</button>` : '')}${kpi('Sem movimentação há 30+ dias', semMov30, 'merecem consulta', semMov30 ? 'warn' : '')}</div>
+      <div class="pes-cards">${Object.entries(PES).filter(([k]) => k !== 'nd' || cnt.nd).map(([k, [t, ic]]) => `<button type="button" class="pes-card ${k} ${pes === k ? 'on' : ''}" data-pes="${k}">${icon(ic)}<span><b>${t}</b><small>${cnt[k]} processo(s)</small></span></button>`).join('')}</div>
       ${DJEN.pendentes().length ? `<div class="notice">${icon('mail')}<div><b>${DJEN.pendentes().length} processo(s) com intimação no DJEN em nome dos advogados do escritório ainda não cadastrados.</b> <button class="link" id="djPendJ">Revisar e cadastrar</button></div></div>` : ''}
       ${DJEN.cadastrados().length ? `<p class="muted small right"><button class="link" id="djDesfJ">${icon('list')} Processos cadastrados pela OAB (${DJEN.cadastrados().length}) — devolver para a revisão</button></p>` : ''}
       <section class="card flush" id="tbl"></section>
       <div class="parc-h"><h2>${icon('users')} Processos em parceria <small class="muted">${rowsP.length}</small></h2><span class="btn-row"><button class="btn ghost sm" id="pRepP">${icon('edit')} Alterar representação</button><button class="btn ghost sm" id="pParc">${icon('users')} Parceiros</button></span></div>
       ${rowsP.length ? '<section class="card flush" id="tblP"></section>' : `<p class="muted small">${Parceria.lista().length ? 'Nenhum processo desta relação tem advogado parceiro intimado junto com os nossos.' : 'Toque em “Parceiros” e marque os advogados/escritórios parceiros (pela OAB intimada junto com os nossos): os processos deles passam a aparecer aqui.'}</p>`}`;
+    $$('[data-pes]', v).forEach(b => b.onclick = () => { Judicial._pes = b.dataset.pes; App.render(true); });
     $('#djPendJ')?.addEventListener('click', () => DJEN.revisarPendentes());
     $('#djDesfJ')?.addEventListener('click', () => DJEN.gerenciarCadastrados());
     $('#kVal')?.addEventListener('click', () => Judicial.completarValores(procs));
@@ -1701,12 +1708,18 @@ const Judicial = {
       filters: [{ k: '_parc', label: 'Parceiro', opts: [...new Set(rowsP.map(r => r._parc))].sort() }], onOpen: p => location.hash = '#/processo/' + p.id, emptyMsg: 'Nenhum processo em parceria.'
     });
     $('#pParc').onclick = () => Parceria.gerenciar();
-    const nomeRel = all ? 'Todos os processos' : (A?.nome || area);
+    const nomeRel = (all ? 'Todos os processos' : (A?.nome || area)) + ' · ' + PES[pes][0];
     $('#pRep')?.addEventListener('click', () => Parceria.alterar(rows.map(r => DB.get('processos', r.id)).filter(Boolean), 'Processos do escritório — ' + nomeRel));
     $('#pRepP').onclick = () => Parceria.alterar(rowsP.map(r => DB.get('processos', r.id)).filter(Boolean), 'Processos em parceria — ' + nomeRel);
     $('#pRel').onclick = () => { const st = TableState['proc-' + area] || {}; Report.processos($('#tbl')._list || rows, { area: all ? null : area, situacao: st.f?.status || '', busca: st.q || '' }); };
     $('#nProc').onclick = () => Judicial.edit(null, all ? 'civil' : area);
     $('#nProcDocs').onclick = () => JudDocs.open();
+  },
+  /** pessoa física (pf), jurídica (pj) ou cliente a definir (nd), pelo tipo do cliente (ou CNPJ) */
+  pessoa(p) {
+    const cs = (p.clienteIds || []).map(id => DB.get('clientes', id)).filter(Boolean);
+    if (!cs.length) return 'nd';
+    return cs.some(c => c.tipo === 'Pessoa jurídica' || (!c.tipo && onlyDigits(c.doc).length === 14)) ? 'pj' : 'pf';
   },
   edit(p, area) {
     p = p || { area, status: 'Ativo', clienteIds: [] };
