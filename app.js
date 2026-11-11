@@ -9,7 +9,7 @@
 const APP_VERSAO = '1.8.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)'] },
+  { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar'] },
   { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca começa na hora e traz todo o histórico de intimações do advogado no DJEN (depois, só as novas)', 'Consulta ao DJEN mais robusta: quando a API responde “sistema muito ocupado”, o app espera e tenta de novo, respeitando o limite de consultas por minuto', 'Consulta testada com a OAB real: a API do DJEN às vezes falha em páginas com registros defeituosos (“sistema muito ocupado”) — o app agora tenta de novo e, se preciso, lê a página em partes e pula só o trecho defeituoso', 'Cliente: vinculado sozinho quando uma parte já é cliente cadastrado; nos demais casos, a revisão mostra as partes de cada processo para escolher o cliente (com sugestão quando as intimações dão sinal claro) — testes com os processos reais mostraram que o lado do escritório não dá para deduzir com segurança só pelo DJEN'] },
   { numero: '1.8.0', data: '10/11/2026', itens: ['Partes em campos próprios: polo ativo e polo passivo, cada parte com seus advogados (OAB/UF) e o selo “escritório” nos advogados da casa', 'Cliente automático: a parte do lado em que atua o advogado do escritório vira o cliente — vinculada se já existir, criada se não existir', 'Na revisão dos processos encontrados pela OAB, a coluna “Cliente do escritório” mostra o lado detectado e permite corrigir', 'Processos já cadastrados sem cliente recebem partes e cliente a cada nova intimação'] },
   { numero: '1.7.0', data: '10/11/2026', itens: ['Cadastro dos advogados do escritório (nome, OAB, UF) em Gestão do App › Sistema', 'Consulta automática diária às intimações do DJEN (API pública do CNJ) em nome desses advogados: cada intimação é lançada no processo, com o texto publicado', 'Processos com intimação ainda não cadastrados aparecem para revisar e cadastrar com um clique (com os andamentos do DataJud) ou ignorar'] },
@@ -1592,8 +1592,10 @@ const Judicial = {
       <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn primary" id="nProcDocs">${icon('upload')} Cadastrar pelos arquivos</button></div></div>
       <div class="kpis sm">${kpi('Em andamento', ativos.length)}${kpi('Total cadastrados', procs.length)}${kpi('Valor das causas', fmtMoneyShort(valor))}${kpi('Sem movimentação há 30+ dias', semMov30, 'merecem consulta', semMov30 ? 'warn' : '')}</div>
       ${DJEN.pendentes().length ? `<div class="notice">${icon('mail')}<div><b>${DJEN.pendentes().length} processo(s) com intimação no DJEN em nome dos advogados do escritório ainda não cadastrados.</b> <button class="link" id="djPendJ">Revisar e cadastrar</button></div></div>` : ''}
+      ${DJEN.cadastrados().length ? `<p class="muted small right"><button class="link" id="djDesfJ">${icon('list')} Processos cadastrados pela OAB (${DJEN.cadastrados().length}) — devolver para a revisão</button></p>` : ''}
       <section class="card flush" id="tbl"></section>`;
     $('#djPendJ')?.addEventListener('click', () => DJEN.revisarPendentes());
+    $('#djDesfJ')?.addEventListener('click', () => DJEN.gerenciarCadastrados());
     dataTable($('#tbl'), {
       id: 'proc-' + area, rows, schema: sc, cols: all ? ['numero', '_cli', '_area', 'classe', 'status', '_ult', '_prox'] : ['numero', '_cli', 'classe', 'orgao', 'status', '_ult', '_prox'],
       filters: [{ k: 'status', label: 'Situação', opts: SCHEMAS.processos.fields.find(f => f.k === 'status').opts }],
@@ -3210,11 +3212,12 @@ const DJEN = {
     return `<section class="card djen-card"><header><h2>${icon('mail')} Intimações pela OAB (DJEN)</h2><span class="muted small" data-djen-st>${DJEN.rodando ? icon('sync', 'spin') + ' consultando…' : DJEN.status()}</span></header>
       ${pend.length ? `<div class="notice">${icon('alert')}<div><b>${pend.length} processo(s) com intimação em nome dos advogados do escritório ainda não estão cadastrados.</b><div class="btn-row" style="margin-top:8px"><button class="btn primary sm" id="djPend">${icon('list')} Revisar e cadastrar</button></div></div></div>` : ''}
       ${recentes.length ? `<ul class="feed">${recentes.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + (clienteNomes(p) || p.classe || '') : '')}</small></div></a></li>`; }).join('')}</ul>` : '<p class="muted small">Nenhuma intimação lançada ainda.</p>'}
-      <div class="right"><button class="btn ghost sm" id="djAgora">${icon('sync')} Consultar agora</button></div></section>`;
+      <div class="right btn-row">${DJEN.cadastrados().length ? `<button class="btn ghost sm" id="djDesf">${icon('list')} Processos cadastrados pela OAB (${DJEN.cadastrados().length})</button>` : ''}<button class="btn ghost sm" id="djAgora">${icon('sync')} Consultar agora</button></div></section>`;
   },
   bindCard(root) {
     $('#djPend', root)?.addEventListener('click', () => DJEN.revisarPendentes());
     $('#djAgora', root)?.addEventListener('click', () => DJEN.sincronizar({ manual: true }));
+    $('#djDesf', root)?.addEventListener('click', () => DJEN.gerenciarCadastrados());
   },
   /* ---------- partes, advogados e cliente ---------- */
   PJ: /\b(ltda|s\.?\s?\/?a\.?|eireli|\bme\b|epp|cia|companhia|banco|instituto|associa[cç][aã]o|cooperativa|funda[cç][aã]o|sindicato|munic[ií]pio|estado d|uni[aã]o|inss|caixa econ|empresa|com[eé]rcio|servi[cç]os|engenharia|construtora|ind[uú]stria|condom[ií]nio|igreja|partido|minist[eé]rio|secretaria|prefeitura|c[aâ]mara)\b/i,
@@ -3293,14 +3296,16 @@ const DJEN = {
     if (!pend.length) return UI.toast('Nenhum processo pendente.');
     const m = UI.modal({
       title: 'Processos encontrados pela OAB', sub: `${pend.length} processo(s) com intimação no DJEN em nome dos advogados do escritório`, wide: true,
-      body: `<p class="muted small">Marque os que deseja cadastrar. O app cria o processo com tribunal, vara, classe e as partes de cada polo, busca os andamentos no DataJud e lança as intimações. Na coluna “Cliente do escritório”, escolha qual parte é o cliente: partes que já são clientes vêm marcadas (✓); nas demais, o app sugere quando as intimações dão sinal claro. O cliente é vinculado ou criado na hora — e pode ficar para depois.</p>
-        <div class="table-wrap"><table class="dt"><thead><tr><th><input type="checkbox" id="djTodos" checked></th><th>Processo</th><th>Tribunal / órgão</th><th>Classe</th><th>Partes</th><th>Cliente do escritório</th><th>Última intimação</th></tr></thead><tbody>
-        ${pend.map((q, i) => `<tr><td><input type="checkbox" data-dj="${i}" checked></td><td class="mono">${esc(fmtCNJ(q.numero))}</td><td>${esc(q.tribunal || '')}<br><small class="muted">${esc(q.orgao || '')}</small></td><td>${esc(q.classe || '')}</td><td class="wrap"><small>${q.partes.slice(0, 4).map(p => esc(p.nome) + (p.polo ? ` <em class="muted">(${esc(p.polo)})</em>` : '')).join('<br>')}</small></td><td>${DJEN.clienteSelect(q, i)}</td><td>${esc(fmtDate(q.ultima))}<br><small class="muted">${q.intimacoes.length} intimação(ões)</small></td></tr>`).join('')}
+      body: `<p class="muted small"><b>Marque só os processos que o escritório acompanha</b> (nenhum vem marcado; a caixa do cabeçalho marca todos). O app cria o processo com tribunal, vara, classe e as partes de cada polo, busca os andamentos no DataJud e lança as intimações. Na coluna “Cliente do escritório”, escolha qual parte é o cliente: partes que já são clientes vêm marcadas (✓); nas demais, o app sugere quando as intimações dão sinal claro. O cliente é vinculado ou criado na hora — e pode ficar para depois.</p>
+        <div class="table-wrap"><table class="dt"><thead><tr><th><input type="checkbox" id="djTodos" title="Marcar/desmarcar todos"></th><th>Processo</th><th>Tribunal / órgão</th><th>Classe</th><th>Partes</th><th>Cliente do escritório</th><th>Última intimação</th></tr></thead><tbody>
+        ${pend.map((q, i) => `<tr><td><input type="checkbox" data-dj="${i}"></td><td class="mono">${esc(fmtCNJ(q.numero))}</td><td>${esc(q.tribunal || '')}<br><small class="muted">${esc(q.orgao || '')}</small></td><td>${esc(q.classe || '')}</td><td class="wrap"><small>${q.partes.slice(0, 4).map(p => esc(p.nome) + (p.polo ? ` <em class="muted">(${esc(p.polo)})</em>` : '')).join('<br>')}</small></td><td>${DJEN.clienteSelect(q, i)}</td><td>${esc(fmtDate(q.ultima))}<br><small class="muted">${q.intimacoes.length} intimação(ões)</small></td></tr>`).join('')}
         </tbody></table></div>`,
       foot: `<button class="btn ghost" id="djIgn">Ignorar marcados</button><span class="sp"></span><button class="btn ghost" data-close>Fechar</button><button class="btn primary" id="djCad">${icon('plus')} Cadastrar marcados</button>`
     });
-    $('#djTodos', m).onchange = ev => $$('[data-dj]', m).forEach(c => c.checked = ev.target.checked);
     const marcados = () => $$('[data-dj]:checked', m).map(c => pend[+c.dataset.dj]);
+    const conta = () => { const n = marcados().length; $('#djCad', m).innerHTML = `${icon('plus')} Cadastrar ${n} de ${pend.length}`; $('#djCad', m).disabled = !n; $('#djIgn', m).textContent = `Ignorar ${n} marcado(s)`; };
+    $('#djTodos', m).onchange = ev => { $$('[data-dj]', m).forEach(c => c.checked = ev.target.checked); conta(); };
+    $$('[data-dj]', m).forEach(c => c.onchange = conta); conta();
     $('#djIgn', m).onclick = async () => {
       const sel = marcados(); if (!sel.length) return;
       if (!await UI.confirm(`Ignorar ${sel.length} processo(s)? Eles não voltarão a aparecer nesta lista.`, 'Ignorar', false)) return;
@@ -3317,7 +3322,7 @@ const DJEN = {
       for (const q of sel) {
         b.innerHTML = `${icon('sync', 'spin')} Cadastrando ${++n} de ${sel.length}…`;
         if (DB.all('processos').some(x => onlyDigits(x.numero) === q.numero)) { jaTinha++; continue; } // nunca duplica
-        const proc = { numero: q.numero, area: DJEN.areaPorTribunal(q.numero, q.classe), tribunal: q.tribunal || (tribunalAlias(q.numero) || '').toUpperCase(), orgao: q.orgao, classe: q.classe, status: 'Ativo', clienteIds: [], partes: [], responsavel: DJEN.nomeAdv(q.advogado), obs: 'Cadastrado pela consulta à OAB no DJEN.' };
+        const proc = { numero: q.numero, area: DJEN.areaPorTribunal(q.numero, q.classe), tribunal: q.tribunal || (tribunalAlias(q.numero) || '').toUpperCase(), orgao: q.orgao, classe: q.classe, status: 'Ativo', clienteIds: [], partes: [], responsavel: DJEN.nomeAdv(q.advogado), obs: 'Cadastrado pela consulta à OAB no DJEN.', origemCadastro: 'djen' };
         await DJEN.aplicarPartes(proc, DJEN.intsDe(q), $(`[data-djcli="${pend.indexOf(q)}"]`, m)?.value || '');
         if (!proc.clienteIds.length) { semCli++; proc.obs += ' Indicar o cliente.'; }
         const [p] = await DB.save('processos', proc);
@@ -3330,6 +3335,44 @@ const DJEN = {
       UI.closeModal(); UI.toast(`${sel.length - jaTinha} processo(s) cadastrado(s)${jaTinha ? ` · ${jaTinha} já existia(m) e não foi(ram) duplicado(s)` : ''}${semCli ? ` · ${semCli} ainda sem cliente (indique depois, no processo)` : ', com partes e cliente'}.`, 'ok', 8000);
       location.hash = '#/judicial/todos'; App.render();
     };
+  },
+  /** processos que entraram pela consulta à OAB */
+  cadastrados() { return DB.all('processos').filter(p => p.origemCadastro === 'djen' || /^Cadastrado pela consulta à OAB/.test(p.obs || '')); },
+  /** desfazer em lote: devolve à lista de revisão ou remove e ignora */
+  gerenciarCadastrados() {
+    const l = DJEN.cadastrados().sort((a, b) => String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')));
+    if (!l.length) return UI.toast('Nenhum processo cadastrado pela OAB.');
+    const m = UI.modal({
+      title: 'Processos cadastrados pela OAB', sub: `${l.length} processo(s) entraram pela consulta ao DJEN`, wide: true,
+      body: `<p class="muted small">Marque os que <b>não</b> devem ficar na relação do escritório. <b>Devolver para a revisão</b> tira o processo da relação e o põe de volta na lista “Revisar e cadastrar”; <b>Remover e ignorar</b> tira e não mostra mais nas consultas pela OAB. Movimentações e prazos desses processos também saem.</p>
+        <div class="table-wrap"><table class="dt"><thead><tr><th><input type="checkbox" id="dcTodos"></th><th>Processo</th><th>Tribunal / órgão</th><th>Classe</th><th>Cliente</th><th>Movimentações</th></tr></thead><tbody>
+        ${l.map((p, i) => `<tr><td><input type="checkbox" data-dc="${i}"></td><td class="mono">${esc(fmtCNJ(p.numero))}</td><td>${esc(p.tribunal || '')}<br><small class="muted">${esc(p.orgao || '')}</small></td><td>${esc(p.classe || '')}</td><td>${esc(clienteNomes(p) || '—')}</td><td>${DB.where('movimentos', x => x.processoId === p.id).length}</td></tr>`).join('')}
+        </tbody></table></div>`,
+      foot: `<button class="btn ghost danger-text" id="dcIgn" disabled>Remover e ignorar</button><span class="sp"></span><button class="btn ghost" data-close>Fechar</button><button class="btn primary" id="dcVolta" disabled>Devolver para a revisão</button>`
+    });
+    const sel = () => $$('[data-dc]:checked', m).map(c => l[+c.dataset.dc]);
+    const conta = () => { const n = sel().length; $('#dcVolta', m).disabled = $('#dcIgn', m).disabled = !n; $('#dcVolta', m).textContent = `Devolver ${n} para a revisão`; $('#dcIgn', m).textContent = `Remover e ignorar ${n}`; };
+    $('#dcTodos', m).onchange = ev => { $$('[data-dc]', m).forEach(c => c.checked = ev.target.checked); conta(); };
+    $$('[data-dc]', m).forEach(c => c.onchange = conta); conta();
+    const tirar = async (ignorar, ps) => {
+      if (!ps.length) return;
+      const st = DJEN.estado(), pend = [...(st.pendentes || [])], ign = new Set(st.ignorados || []);
+      for (const p of ps) {
+        const n = onlyDigits(p.numero), movs = DB.where('movimentos', x => x.processoId === p.id);
+        if (ignorar) ign.add(n);
+        else if (!pend.some(q => q.numero === n)) {
+          const ints = movs.filter(x => x.origem === 'djen').map(x => ({ id: String(x.chave || '').replace('djen:', '') || x.id, data: x.data, tipo: (x.titulo || '').split(' — ')[0].replace(' (DJEN)', ''), tipoDoc: ((x.titulo || '').split(' — ')[1] || '').replace(' (DJEN)', ''), texto: x.descricao || '', link: x.link || '', dest: (p.partes || []).filter(y => y.polo).map(y => ({ nome: y.nome, polo: y.polo })), advs: [] }));
+          pend.push({ numero: n, tribunal: p.tribunal, orgao: p.orgao, classe: p.classe, partes: (p.partes || []).map(y => ({ nome: y.nome, polo: y.polo })), intimacoes: ints, advogado: p.responsavel, ultima: ints.map(x => x.data).sort().pop() || '' });
+        }
+        if (movs.length) await DB.remove('movimentos', movs.map(x => x.id));
+        const zs = DB.where('prazos', x => x.processoId === p.id); if (zs.length) await DB.remove('prazos', zs.map(x => x.id));
+      }
+      await DB.remove('processos', ps.map(p => p.id));
+      await DB.save('config', { ...st, id: 'djen', pendentes: pend.filter(q => !ign.has(q.numero)), ignorados: [...ign] });
+      UI.closeModal(); UI.toast(ignorar ? `${ps.length} processo(s) removido(s) e ignorado(s).` : `${ps.length} processo(s) devolvido(s) para a revisão.`, 'ok', 7000); App.render(true);
+    };
+    $('#dcVolta', m).onclick = () => tirar(false, sel());
+    $('#dcIgn', m).onclick = async () => { const ps = sel(); if (await UI.confirm(`Remover ${ps.length} processo(s) da relação do escritório e não mostrar mais nas consultas pela OAB?`, 'Remover')) tirar(true, ps); };
   },
   /* ---------- cadastro dos advogados (Gestão do App › Sistema) ---------- */
   advHtml() {
