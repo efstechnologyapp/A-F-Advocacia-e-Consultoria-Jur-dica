@@ -246,8 +246,31 @@ const Parceria = {
   de(p, ignorarNao) {
     if (!p || (!ignorarNao && p.parceria === 'nao')) return null;
     const L = Parceria.lista(); if (!L.length) return null;
+    if (p.parceiroId) { const x = L.find(x => x.id === p.parceiroId); if (x) return x; }
     for (const a of Parceria.coAdvs(p)) { const x = L.find(x => Parceria.igual(x, a)); if (x) return x; }
     return null;
+  },
+  /** seletor de representação na revisão do DJEN (q = processo pendente) */
+  select(q, i) {
+    const { partes } = DJEN.analisar(DJEN.intsDe(q)), co = Parceria.coAdvs({ partes }), L = Parceria.lista();
+    const det = Parceria.de({ partes });
+    const novos = co.filter((a, k) => !L.some(x => Parceria.igual(x, a)) && co.findIndex(b => Parceria.igual(b, a)) === k);
+    const opt = (v, t, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(t)}</option>`;
+    return `<select class="input sm" data-djrep="${i}">${opt('', 'Selecionar representação…', !det)}${opt('proprio', 'Próprio (só o escritório)')}
+      ${L.map(x => opt('p:' + x.id, 'Em parceria com ' + Parceria.rotulo(x), det === x)).join('')}
+      ${novos.map(a => opt('c:' + JSON.stringify({ nome: a.nome || '', oab: onlyDigits(a.oab), uf: Parceria.uf(a.uf) }), `Em parceria com ${DJEN.titulo ? DJEN.titulo(a.nome || '') : a.nome} (OAB ${onlyDigits(a.oab) || '—'}/${Parceria.uf(a.uf) || '—'})`)).join('')}</select>${det ? '<small class="muted">parceiro já cadastrado</small>' : co.length ? `<small class="muted">${co.length} advogado(s) de fora na mesma parte</small>` : ''}`;
+  },
+  /** aplica a escolha da revisão ao processo novo */
+  async aplicar(proc, v) {
+    if (!v) return;
+    if (v === 'proprio') { proc.parceria = 'nao'; return; }
+    if (v.startsWith('p:')) { proc.parceiroId = v.slice(2); return; }
+    if (v.startsWith('c:')) {
+      const a = JSON.parse(v.slice(2)), L = Parceria.lista();
+      let x = L.find(x => Parceria.igual(x, a));
+      if (!x) { x = { id: uid('pa'), nome: DJEN.titulo ? DJEN.titulo(a.nome) : a.nome, oab: a.oab, uf: a.uf, escritorio: '' }; await DB.save('config', { ...escritorio(), id: 'escritorio', parceiros: [...L, x] }); }
+      proc.parceiroId = x.id;
+    }
   },
   rotulo: x => x.escritorio || x.nome || `OAB ${x.oab}/${Parceria.uf(x.uf)}`,
   candidatos() {

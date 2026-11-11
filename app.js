@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.14.0';
+const APP_VERSAO = '1.14.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.14.1', data: '11/11/2026', itens: ['Processos encontrados pela OAB: nova coluna “Representação” para indicar se o processo é próprio ou em parceria (com parceiro já cadastrado ou com o advogado intimado junto, que passa a ser parceiro). Quando um parceiro cadastrado aparece na intimação, a opção já vem marcada.'] },
   { numero: '1.14.0', data: '11/11/2026', itens: ['Judicial: processos em parceria com outros advogados/escritórios ficam numa relação própria, abaixo dos processos do escritório, em cada área e em “Todos os processos”.', 'Botão “Parceiros”: lista os advogados intimados junto com os nossos (na mesma parte) para marcar quem é parceiro, com o nome do escritório; também dá para incluir pela OAB.', 'Ficha do processo: etiqueta “Em parceria com …” e a opção “não é parceria” para casos isolados.'] },
   { numero: '1.13.8', data: '11/11/2026', itens: ['Painel da empresa: “+ outros” em Contratos por tomador expande e recolhe a lista.', 'Achados em aberto: tocar num risco ou numa área abre a página de achados já filtrada para resolver.', 'Vencimentos: tocar num mês (gráfico ou tabela) lista os contratos que vencem nele; “Ver todos” mostra os 12 meses, e cada contrato abre a ficha.'] },
   { numero: '1.13.7', data: '11/11/2026', itens: ['Visão geral: o quadro “Últimas movimentações” passou a ser o último da página.'] },
@@ -1908,8 +1909,31 @@ const Parceria = {
   de(p, ignorarNao) {
     if (!p || (!ignorarNao && p.parceria === 'nao')) return null;
     const L = Parceria.lista(); if (!L.length) return null;
+    if (p.parceiroId) { const x = L.find(x => x.id === p.parceiroId); if (x) return x; }
     for (const a of Parceria.coAdvs(p)) { const x = L.find(x => Parceria.igual(x, a)); if (x) return x; }
     return null;
+  },
+  /** seletor de representação na revisão do DJEN (q = processo pendente) */
+  select(q, i) {
+    const { partes } = DJEN.analisar(DJEN.intsDe(q)), co = Parceria.coAdvs({ partes }), L = Parceria.lista();
+    const det = Parceria.de({ partes });
+    const novos = co.filter((a, k) => !L.some(x => Parceria.igual(x, a)) && co.findIndex(b => Parceria.igual(b, a)) === k);
+    const opt = (v, t, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(t)}</option>`;
+    return `<select class="input sm" data-djrep="${i}">${opt('', 'Selecionar representação…', !det)}${opt('proprio', 'Próprio (só o escritório)')}
+      ${L.map(x => opt('p:' + x.id, 'Em parceria com ' + Parceria.rotulo(x), det === x)).join('')}
+      ${novos.map(a => opt('c:' + JSON.stringify({ nome: a.nome || '', oab: onlyDigits(a.oab), uf: Parceria.uf(a.uf) }), `Em parceria com ${DJEN.titulo ? DJEN.titulo(a.nome || '') : a.nome} (OAB ${onlyDigits(a.oab) || '—'}/${Parceria.uf(a.uf) || '—'})`)).join('')}</select>${det ? '<small class="muted">parceiro já cadastrado</small>' : co.length ? `<small class="muted">${co.length} advogado(s) de fora na mesma parte</small>` : ''}`;
+  },
+  /** aplica a escolha da revisão ao processo novo */
+  async aplicar(proc, v) {
+    if (!v) return;
+    if (v === 'proprio') { proc.parceria = 'nao'; return; }
+    if (v.startsWith('p:')) { proc.parceiroId = v.slice(2); return; }
+    if (v.startsWith('c:')) {
+      const a = JSON.parse(v.slice(2)), L = Parceria.lista();
+      let x = L.find(x => Parceria.igual(x, a));
+      if (!x) { x = { id: uid('pa'), nome: DJEN.titulo ? DJEN.titulo(a.nome) : a.nome, oab: a.oab, uf: a.uf, escritorio: '' }; await DB.save('config', { ...escritorio(), id: 'escritorio', parceiros: [...L, x] }); }
+      proc.parceiroId = x.id;
+    }
   },
   rotulo: x => x.escritorio || x.nome || `OAB ${x.oab}/${Parceria.uf(x.uf)}`,
   candidatos() {
@@ -3833,9 +3857,9 @@ const DJEN = {
     if (!pend.length) return UI.toast('Nenhum processo pendente.');
     const m = UI.modal({
       title: 'Processos encontrados pela OAB', sub: `${pend.length} processo(s) com intimação no DJEN em nome dos advogados do escritório`, wide: true,
-      body: `<p class="muted small"><b>Marque só os processos que o escritório acompanha</b> (nenhum vem marcado; a caixa do cabeçalho marca todos). O app cria o processo com tribunal, vara, classe e as partes de cada polo, busca os andamentos no DataJud e lança as intimações. Na coluna “Cliente do escritório”, escolha qual parte é o cliente: partes que já são clientes vêm marcadas (✓); nas demais, o app sugere quando as intimações dão sinal claro. O cliente é vinculado ou criado na hora — e pode ficar para depois.</p>
-        <div class="table-wrap"><table class="dt"><thead><tr><th><input type="checkbox" id="djTodos" title="Marcar/desmarcar todos"></th><th>Processo</th><th>Tribunal / órgão</th><th>Classe</th><th>Partes</th><th>Cliente do escritório</th><th>Última intimação</th></tr></thead><tbody>
-        ${pend.map((q, i) => `<tr><td><input type="checkbox" data-dj="${i}"></td><td class="mono">${esc(fmtCNJ(q.numero))}</td><td>${esc(q.tribunal || '')}<br><small class="muted">${esc(q.orgao || '')}</small></td><td>${esc(q.classe || '')}</td><td class="wrap"><small>${q.partes.slice(0, 4).map(p => esc(p.nome) + (p.polo ? ` <em class="muted">(${esc(p.polo)})</em>` : '')).join('<br>')}</small></td><td>${DJEN.clienteSelect(q, i)}</td><td>${esc(fmtDate(q.ultima))}<br><small class="muted">${q.intimacoes.length} intimação(ões)</small></td></tr>`).join('')}
+      body: `<p class="muted small"><b>Marque só os processos que o escritório acompanha</b> (nenhum vem marcado; a caixa do cabeçalho marca todos). O app cria o processo com tribunal, vara, classe e as partes de cada polo, busca os andamentos no DataJud e lança as intimações. Na coluna “Cliente do escritório”, escolha qual parte é o cliente: partes que já são clientes vêm marcadas (✓); nas demais, o app sugere quando as intimações dão sinal claro. O cliente é vinculado ou criado na hora — e pode ficar para depois. Em “Representação”, diga se o processo é <b>próprio</b> ou <b>em parceria</b> (o app já indica quando um parceiro cadastrado é intimado junto); processos em parceria vão para a relação própria, abaixo dos processos do escritório.</p>
+        <div class="table-wrap"><table class="dt"><thead><tr><th><input type="checkbox" id="djTodos" title="Marcar/desmarcar todos"></th><th>Processo</th><th>Tribunal / órgão</th><th>Classe</th><th>Partes</th><th>Cliente do escritório</th><th>Representação</th><th>Última intimação</th></tr></thead><tbody>
+        ${pend.map((q, i) => `<tr><td><input type="checkbox" data-dj="${i}"></td><td class="mono">${esc(fmtCNJ(q.numero))}</td><td>${esc(q.tribunal || '')}<br><small class="muted">${esc(q.orgao || '')}</small></td><td>${esc(q.classe || '')}</td><td class="wrap"><small>${q.partes.slice(0, 4).map(p => esc(p.nome) + (p.polo ? ` <em class="muted">(${esc(p.polo)})</em>` : '')).join('<br>')}</small></td><td>${DJEN.clienteSelect(q, i)}</td><td>${Parceria.select(q, i)}</td><td>${esc(fmtDate(q.ultima))}<br><small class="muted">${q.intimacoes.length} intimação(ões)</small></td></tr>`).join('')}
         </tbody></table></div>`,
       foot: `<button class="btn ghost" id="djIgn">Ignorar marcados</button><span class="sp"></span><button class="btn ghost" data-close>Fechar</button><button class="btn primary" id="djCad">${icon('plus')} Cadastrar marcados</button>`
     });
@@ -3861,6 +3885,7 @@ const DJEN = {
         if (DB.all('processos').some(x => onlyDigits(x.numero) === q.numero)) { jaTinha++; continue; } // nunca duplica
         const proc = { numero: q.numero, area: DJEN.areaPorTribunal(q.numero, q.classe), tribunal: q.tribunal || (tribunalAlias(q.numero) || '').toUpperCase(), orgao: q.orgao, classe: q.classe, status: 'Ativo', clienteIds: [], partes: [], responsavel: DJEN.nomeAdv(q.advogado), obs: 'Cadastrado pela consulta à OAB no DJEN.', origemCadastro: 'djen' };
         await DJEN.aplicarPartes(proc, DJEN.intsDe(q), $(`[data-djcli="${pend.indexOf(q)}"]`, m)?.value || '');
+        await Parceria.aplicar(proc, $(`[data-djrep="${pend.indexOf(q)}"]`, m)?.value || '');
         if (!proc.clienteIds.length) { semCli++; proc.obs += ' Indicar o cliente.'; }
         const [p] = await DB.save('processos', proc);
         await DB.save('movimentos', q.intimacoes.map(i => ({ processoId: p.id, data: i.data, titulo: `${i.tipo}${i.tipoDoc ? ' — ' + i.tipoDoc : ''} (DJEN)`, descricao: i.texto, origem: 'djen', chave: 'djen:' + i.id, visivelCliente: false, link: i.link || '' })));
