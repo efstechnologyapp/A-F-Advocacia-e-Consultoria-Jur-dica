@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.6';
+const APP_VERSAO = '1.13.7';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.7', data: '11/11/2026', itens: ['Visão geral: o quadro “Últimas movimentações” passou a ser o último da página.'] },
   { numero: '1.13.6', data: '11/11/2026', itens: ['Ficha do contrato: o quadro “postos contratados” mostra o salário-base × quantidade de cada posto e a linha “Total mensal” com o total de postos, de salários-base e do custo previsto.'] },
   { numero: '1.13.5', data: '11/11/2026', itens: ['Ficha do contrato: ao abrir um item (posto, linha mensal do DP, obrigação, achado, documento, custo superveniente) ou “Editar contrato”, a janela tem o botão “Voltar”, que retorna à ficha do contrato; salvar ou excluir também retornam à ficha.'] },
   { numero: '1.13.4', data: '11/11/2026', itens: ['Ficha do contrato: Mão de obra separada em dois quadros — “postos contratados” e “custo mês a mês (Departamento Pessoal)”, este com competência, postos contratados, empregados na folha, folha bruta, benefícios, férias, salários previstos e divergência, em ordem de mês. Corrigido: a coluna de custo apurado (folha bruta) não recebe mais, por engano, o valor dos benefícios nos meses em que o relatório da folha não traz o bruto — basta juntar de novo a planilha da folha para corrigir os meses já importados.'] },
@@ -1437,17 +1438,15 @@ const Views = {
       ${kpi('Contratos vencendo (90 dias)', venc90.length, 'renovação ou encerramento', venc90.length ? 'warn' : '')}
       ${kpi('Achados de risco alto', achAlt.length, achAlt.length ? 'em aberto · <u>ver e resolver</u>' : 'em aberto nos planos de ação', achAlt.length ? 'bad' : '', '#/achados')}
     </div>
-    <div class="grid2">
       <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
         ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
-      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
-        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>
-    </div>
     <div class="grid2">
       <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a], i) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
       <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>
     </div>
-    ${DJEN.cardHtml()}`;
+    ${DJEN.cardHtml()}
+      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
+        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>`;
     DJEN.bindCard(v);
     $('#nProc').onclick = () => Judicial.edit(null, 'civil');
     $('#nProcDocs').onclick = () => JudDocs.open();

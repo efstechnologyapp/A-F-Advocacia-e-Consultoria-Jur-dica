@@ -1,5 +1,5 @@
 // Funcionamento sem internet: guarda os arquivos do app; servidor, login e fontes vão direto à rede.
-const CACHE = 'amorim-firmo-v1.13.6';
+const CACHE = 'amorim-firmo-v1.13.7';
 const ARQUIVOS = ['./', 'index.html', 'app.js', 'config.js', 'manifest.json', 'brasao.png', 'brasao-claro.png', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
