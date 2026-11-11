@@ -9,7 +9,7 @@
 const APP_VERSAO = '1.10.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.10.1', data: '11/11/2026', itens: ['Juntar documentos (empresas, processos e atendimentos): o arquivo é guardado no Drive primeiro e lido pela IA em seguida — se a IA demorar ou estiver ocupada, o arquivo não se perde e aparece o botão “Ler de novo com a IA”', 'A IA desiste com aviso claro antes de estourar o tempo (em vez de “o servidor demorou demais”)'] },
+  { numero: '1.10.1', data: '11/11/2026', itens: ['Juntar documentos (empresas, processos e atendimentos): o arquivo é guardado no Drive primeiro e lido pela IA em seguida — se a IA demorar ou estiver ocupada, o arquivo não se perde e aparece o botão “Ler de novo com a IA”', 'A IA desiste com aviso claro antes de estourar o tempo (em vez de “o servidor demorou demais”)', 'Tabelas da consultoria (contratos, obrigações, mão de obra, achados…) sempre em ordem pelo código (JSP-001, JSP-002…); clicar no título da coluna continua reordenando', 'Ficha do contrato: botões para abrir no Drive o contrato, os aditivos e os demais arquivos juntados (ou “Juntar o contrato”, se ainda não houver)'] },
   { numero: '1.10.0', data: '10/11/2026', itens: ['Link de consulta para os clientes (…/#/consulta), para o Instagram, Linktree e WhatsApp: o cliente informa CPF/CNPJ, telefone ou e-mail do cadastro, recebe um código no e-mail cadastrado e vê só os próprios processos — sem precisar de conta Google nem de liberação manual', 'Link pronto para copiar em Gestão do App › Sistema', 'Celular: os botões do topo das telas quebram a linha em vez de passar da largura da tela (sem precisar arrastar para o lado)'] },
   { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)', 'Achados de auditoria: painel próprio (clique no cartão da Visão geral ou no menu) com o que cada achado significa — critério, causa, risco, contrato, valor e o que fazer — e ações para resolver: em andamento, responsável e prazo, concluir com evidência', 'Cabeçalhos com o nome curto do escritório (a legenda já diz “Advocacia e Consultoria Jurídica”) e OAB no formato “OAB/PB 33.255”', 'Botão Voltar também no celular'] },
   { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte', 'Botão “é o cliente” em cada parte: troca o cliente do processo com um clique (acerta polo e parte contrária; o cliente criado por engano sai do cadastro) — e o cartão Partes passa a refletir o cliente escolhido em Editar', 'Impressão da relação de processos (ícone ao lado do filtro de situação): todos ou por área, respeitando filtro e busca — cabeçalho com brasão, dados do escritório, indicadores, agrupamento por área, paginação e aviso de sigilo; pronto para imprimir ou salvar em PDF', 'Cadastro de cliente: ao digitar um CNPJ válido, os dados da Receita entram sozinhos (razão social, endereço, telefone, e-mail)', 'E-mail do cliente direto na página do processo: informar/alterar, ligar o aviso automático de andamento e convidar para o portal'] },
@@ -1048,8 +1048,8 @@ function pill(v) {
 
 /* ---------- Tabela de dados (busca, filtros, ordenação, paginação) ---------- */
 const TableState = {};
-function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', tools = '', emptyMsg = 'Nenhum registro.', cols }) {
-  const st = TableState[id] = TableState[id] || { q: '', sort: null, dir: 1, page: 0, f: {} };
+function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', tools = '', sortDefault = null, emptyMsg = 'Nenhum registro.', cols }) {
+  const st = TableState[id] = TableState[id] || { q: '', sort: sortDefault, dir: 1, page: 0, f: {} };
   const fields = cols ? cols.map(k => schema.fields.find(f => f.k === k)) : schema.fields.filter(f => f.list);
   const draw = () => {
     let list = rows.slice();
@@ -1898,7 +1898,7 @@ const Consult = {
       ${gaps ? `<div class="notice warn">${icon('alert')}<div><b>${gaps} campo(s) “não identificado no contrato”</b> nesta aba — lacunas documentais que reduzem o índice de completude. Clique no registro para completar quando o documento for obtido.</div></div>` : ''}
       <section class="card flush" id="dt"></section>`;
     const open = r => coll === 'contratos' ? Consult.contrato360(e, r) : UI.editRecord(coll, r, { ctx });
-    dataTable($('#dt'), { id: coll + e.id, rows, schema: sc, filters, onOpen: open, actions: `<button class="btn primary sm" id="dtNew">${icon('plus')} Novo</button>`, emptyMsg: `Nenhum registro em ${sc.titulo}. Use “Novo” ou importe a planilha.` });
+    dataTable($('#dt'), { id: coll + e.id, rows, schema: sc, filters, sortDefault: sc.key || (sc.fields.some(f => f.k === 'contrato') ? 'contrato' : null), onOpen: open, actions: `<button class="btn primary sm" id="dtNew">${icon('plus')} Novo</button>`, emptyMsg: `Nenhum registro em ${sc.titulo}. Use “Novo” ou importe a planilha.` });
     $('#dtNew').onclick = () => {
       const base = {}; if (coll === 'contratos' && e.sigla) { const n = rows.map(r => +(String(r.codigo).match(/(\d+)$/) || [0, 0])[1]).reduce((a, b) => Math.max(a, b), 0) + 1; base.codigo = `${e.sigla}-${String(n).padStart(3, '0')}`; }
       if (coll === 'achados') base.status = 'Pendente';
@@ -1909,6 +1909,16 @@ const Consult = {
   },
 
   /* visão 360º do contrato: tudo que se relaciona a ele */
+  /** arquivos do contrato no Drive do escritório (contrato, aditivos, termos…) */
+  arquivosHtml(e, c, dc) {
+    const ord = d => /aditivo/i.test(d.tipo || d.arquivo || '') ? 1 : /contrato/i.test(d.tipo || '') ? 0 : 2;
+    const l = dc.slice().sort((a, b) => ord(a) - ord(b) || String(a.arquivo || '').localeCompare(String(b.arquivo || ''), 'pt-BR', { numeric: true }));
+    const comLink = l.filter(d => d.link), sem = l.filter(d => !d.link);
+    return `<div class="arq-bar"><span class="lbl">${icon('file')} Arquivos no Drive</span>
+      ${comLink.map(d => `<a class="arq" href="${esc(d.link)}" target="_blank" rel="noopener" title="${esc(d.arquivo || '')}">${icon('link')}<span><b>${esc(d.tipo || 'Documento')}${d.numero ? ' ' + esc(d.numero) : ''}</b><small>${esc(d.arquivo || 'abrir no Drive')}</small></span></a>`).join('')}
+      ${!comLink.length ? `<span class="muted small">${sem.length ? `${sem.length} documento(s) no inventário, ainda sem arquivo no Drive.` : 'Nenhum arquivo juntado a este contrato.'}</span> <button class="btn ghost xs" id="cJunt">${icon('upload')} Juntar o contrato</button>` : ''}
+      ${comLink.length && sem.length ? `<span class="muted small">+ ${sem.length} sem arquivo no Drive</span>` : ''}</div>`;
+  },
   contrato360(e, c) {
     const rel = coll => DB.where(coll, r => r.empresaId === e.id && r.contrato === c.codigo);
     const ob = rel('obrigacoes'), mo = rel('maoDeObra'), fi = rel('financeiro'), ac = rel('achados'), dc = rel('documentos'), ad = rel('aditivos'), me = rel('medicoes'), ma = rel('materiais');
@@ -1920,6 +1930,7 @@ const Consult = {
     const m = UI.modal({
       title: `${c.codigo} · ${c.unidade || c.grupo || ''}`, sub: esc(c.tomador || ''), wide: true,
       body: `<div class="kpis xs">${kpi('Vigência', c.fim ? fmtDate(c.fim) : '—', d === null ? '' : d < 0 ? `expirada há ${-d} dias` : `${d} dias restantes`, d !== null && d < 0 ? 'bad' : d !== null && d <= 90 ? 'warn' : '')}${kpi('Valor mensal', num(c.valorMensal) !== null ? fmtMoneyShort(c.valorMensal) : '—', num(c.valorMensal) === null ? 'não identificado' : '')}${kpi('Postos contratados', postos || '—', custoPrev ? 'custo previsto ' + fmtMoneyShort(custoPrev) : '')}${kpi('Completude do cadastro', fmtPct(compl), filled + ' de ' + SCHEMAS.contratos.fields.length + ' campos', compl < .6 ? 'warn' : '')}</div>
+      ${Consult.arquivosHtml(e, c, dc)}
       <div class="detail-grid">${SCHEMAS.contratos.fields.filter(f => !['codigo'].includes(f.k)).map(f => `<div class="${f.type === 'long' ? 'full' : ''}"><span class="lbl">${esc(f.label)}</span>${f.type === 'long' && c[f.k] && !isGap(c[f.k]) ? esc(c[f.k]) : UI.cell(f, c[f.k])}</div>`).join('')}</div>
       ${mini('Achados e plano de ação', 'achados', ac, ['codigo', 'area', 'achado', 'risco', 'status'])}
       ${mini('Obrigações', 'obrigacoes', ob, ['clausula', 'grupo', 'obrigacao', 'status'])}
@@ -1932,6 +1943,7 @@ const Consult = {
       foot: `<button class="btn ghost danger-text" id="cDel">${icon('trash')} Excluir</button><span class="sp"></span><button class="btn ghost" id="cAch">${icon('alert')} Registrar achado</button><button class="btn primary" id="cEd">${icon('edit')} Editar contrato</button>`
     });
     $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id } });
+    $('#cJunt', m)?.addEventListener('click', () => { UI.closeModal(); Docs.open(e); });
     $('#cAch', m).onclick = () => UI.editRecord('achados', { contrato: c.codigo, status: 'Pendente' }, { ctx: { empresaId: e.id }, extraBase: { empresaId: e.id } });
     $('#cDel', m).onclick = async () => { if (!await UI.confirm(`Excluir o contrato ${c.codigo}? Os registros das outras abas são mantidos.`, 'Excluir')) return; await DB.remove('contratos', c.id); UI.closeModal(); App.render(); };
     $$('[data-rel]', m).forEach(tr => tr.onclick = () => { const [coll, id] = tr.dataset.rel.split(':'); UI.editRecord(coll, DB.get(coll, id), { ctx: { empresaId: e.id } }); });
