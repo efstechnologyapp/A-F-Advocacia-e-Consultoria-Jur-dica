@@ -6,10 +6,11 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.10.1';
+const APP_VERSAO = '1.10.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.10.1', data: '11/11/2026', itens: ['Juntar documentos (empresas, processos e atendimentos): o arquivo é guardado no Drive primeiro e lido pela IA em seguida — se a IA demorar ou estiver ocupada, o arquivo não se perde e aparece o botão “Ler de novo com a IA”', 'A IA desiste com aviso claro antes de estourar o tempo (em vez de “o servidor demorou demais”)', 'Tabelas da consultoria (contratos, obrigações, mão de obra, achados…) sempre em ordem pelo código (JSP-001, JSP-002…); clicar no título da coluna continua reordenando', 'Ficha do contrato: botões para abrir no Drive o contrato, os aditivos e os demais arquivos juntados (ou “Juntar o contrato”, se ainda não houver), com uma legenda do que falta (ex.: “Falta o contrato principal — só há termo aditivo”)'] },
+  { numero: '1.10.2', data: '11/11/2026', itens: ['PDF compilado (ex.: aditivo + contrato original + termo de referência + anexos no mesmo arquivo): a IA lista cada peça com as páginas, e na ficha do contrato o lápis ao lado do arquivo permite marcar o que ele contém', 'A legenda da documentação passa a reconhecer o contrato principal dentro do compilado e lembra de concluir o achado correspondente', 'Documento do inventário sem arquivo: botão para escolher o PDF e anexá-lo ao Drive ali mesmo'] },
+  { numero: '1.10.1', data: '11/11/2026', itens: ['Juntar documentos (empresas, processos e atendimentos): o arquivo é guardado no Drive primeiro e lido pela IA em seguida — se a IA demorar ou estiver ocupada, o arquivo não se perde e aparece o botão “Ler de novo com a IA”', 'A IA desiste com aviso claro antes de estourar o tempo (em vez de “o servidor demorou demais”)', 'Tabelas da consultoria (contratos, obrigações, mão de obra, achados…) sempre em ordem pelo código (JSP-001, JSP-002…); clicar no título da coluna continua reordenando', 'Ficha do contrato: botões para abrir no Drive o contrato, os aditivos e os demais arquivos juntados (ou “Juntar o contrato”, se ainda não houver), com uma legenda do que falta (ex.: “Falta o contrato principal — só há termo aditivo”)', 'Documento do inventário sem arquivo: botão para escolher o PDF e anexá-lo ao Drive ali mesmo, ficando disponível para abrir na ficha do contrato'] },
   { numero: '1.10.0', data: '10/11/2026', itens: ['Link de consulta para os clientes (…/#/consulta), para o Instagram, Linktree e WhatsApp: o cliente informa CPF/CNPJ, telefone ou e-mail do cadastro, recebe um código no e-mail cadastrado e vê só os próprios processos — sem precisar de conta Google nem de liberação manual', 'Link pronto para copiar em Gestão do App › Sistema', 'Celular: os botões do topo das telas quebram a linha em vez de passar da largura da tela (sem precisar arrastar para o lado)'] },
   { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)', 'Achados de auditoria: painel próprio (clique no cartão da Visão geral ou no menu) com o que cada achado significa — critério, causa, risco, contrato, valor e o que fazer — e ações para resolver: em andamento, responsável e prazo, concluir com evidência', 'Cabeçalhos com o nome curto do escritório (a legenda já diz “Advocacia e Consultoria Jurídica”) e OAB no formato “OAB/PB 33.255”', 'Botão Voltar também no celular'] },
   { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte', 'Botão “é o cliente” em cada parte: troca o cliente do processo com um clique (acerta polo e parte contrária; o cliente criado por engano sai do cadastro) — e o cartão Partes passa a refletir o cliente escolhido em Editar', 'Impressão da relação de processos (ícone ao lado do filtro de situação): todos ou por área, respeitando filtro e busca — cabeçalho com brasão, dados do escritório, indicadores, agrupamento por área, paginação e aviso de sigilo; pronto para imprimir ou salvar em PDF', 'Cadastro de cliente: ao digitar um CNPJ válido, os dados da Receita entram sozinhos (razão social, endereço, telefone, e-mail)', 'E-mail do cliente direto na página do processo: informar/alterar, ligar o aviso automático de andamento e convidar para o portal'] },
@@ -1909,19 +1910,37 @@ const Consult = {
   },
 
   /* visão 360º do contrato: tudo que se relaciona a ele */
+  /** o que um PDF contém: várias peças num arquivo só (aditivo + contrato + TR + anexos) */
+  conteudoDoc(e, c, d) {
+    const T = ['Termo aditivo', 'Contrato', 'Termo de referência', 'Edital', 'Planilha de custos', 'Anexo', 'Outro'];
+    const at = d.pecas || [], pega = t => at.find(x => x.tipo === t);
+    const m = UI.modal({ title: 'O que este PDF contém?', sub: esc(d.arquivo || ''), body: `<p class="muted small">Marque as peças que estão neste arquivo e, se souber, a página em que cada uma começa. Assim o app sabe, por exemplo, que o contrato principal está aqui mesmo que o PDF comece pelo aditivo.</p>
+      <table class="mini pecas-t"><thead><tr><th></th><th>Peça</th><th>Página inicial</th><th>Página final</th></tr></thead><tbody>${T.map((t, i) => { const x = pega(t) || {}; return `<tr><td><input type="checkbox" data-pc="${i}" ${pega(t) ? 'checked' : ''}></td><td>${t}</td><td><input class="input sm" type="number" min="1" data-pi="${i}" value="${esc(x.paginaInicial || '')}"></td><td><input class="input sm" type="number" min="1" data-pf="${i}" value="${esc(x.paginaFinal || '')}"></td></tr>`; }).join('')}</tbody></table>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="pcOk">${icon('check')} Salvar</button>` });
+    $$('[data-pi],[data-pf]', m).forEach(x => x.oninput = () => { const i = x.dataset.pi ?? x.dataset.pf; if (x.value) $(`[data-pc="${i}"]`, m).checked = true; });
+    $('#pcOk', m).onclick = async () => {
+      const pecas = T.map((t, i) => $(`[data-pc="${i}"]`, m).checked ? { tipo: t, paginaInicial: +$(`[data-pi="${i}"]`, m).value || null, paginaFinal: +$(`[data-pf="${i}"]`, m).value || null } : null).filter(Boolean)
+        .sort((a, b) => (a.paginaInicial || 999) - (b.paginaInicial || 999));
+      await DB.save('documentos', { ...d, pecas, tipo: pecas.length > 1 ? 'PDF compilado' : (pecas[0]?.tipo || d.tipo) });
+      UI.toast('Conteúdo do PDF registrado.'); Consult.contrato360(e, DB.get('contratos', c.id) || c);
+    };
+  },
   /** legenda discreta: o que falta na documentação deste contrato */
   diagArquivos(e, c, l) {
-    const eAd = d => /aditivo|apostil/i.test((d.tipo || '') + ' ' + (d.arquivo || ''));
-    const eCt = d => !eAd(d) && /contrato/i.test(d.tipo || '');
+    const eAd = d => (d.pecas || []).length ? (d.pecas || []).some(x => /aditivo|apostil/i.test(x.tipo || '')) : /aditivo|apostil/i.test((d.tipo || '') + ' ' + (d.arquivo || ''));
+    const temPeca = (d, re) => (d.pecas || []).some(x => re.test(x.tipo || ''));
+    const eCt = d => temPeca(d, /^contrato/i) || (!eAd(d) && /contrato/i.test(d.tipo || ''));
     const lk = l.filter(d => d.link), ctOk = lk.some(eCt), adOk = lk.some(eAd), semLink = l.filter(d => !d.link);
     const temAditivo = adOk || l.some(eAd) || (c.aditivos && !isGap(c.aditivos) && /aditivo/i.test(c.aditivos));
     const msgs = [];
     if (!l.length) msgs.push('Nenhum documento deste contrato no app: junte o contrato principal e, se houver, os aditivos.');
     else if (!ctOk) msgs.push(lk.length ? `<b>Falta o contrato principal</b> no Drive — ${adOk ? 'só há termo(s) aditivo(s)' : 'os arquivos juntados não foram reconhecidos como contrato'}. Sem ele não dá para conferir objeto, cláusulas e valores originais: obtenha o PDF com o tomador e junte aqui.` : '<b>Falta o contrato principal</b> no Drive: junte o PDF do contrato original.');
     if (ctOk && temAditivo && !adOk) msgs.push('O cadastro registra aditivo, mas o PDF do aditivo não está no Drive.');
-    if (semLink.length) msgs.push(`${semLink.length} documento(s) listado(s) no inventário da auditoria ainda sem arquivo no Drive (${esc(semLink.map(d => d.arquivo || d.tipo || 'sem nome').join('; ').slice(0, 140))}).`);
+    if (semLink.length) msgs.push(`${semLink.length} documento(s) do inventário da auditoria ainda sem arquivo no Drive — clique no botão tracejado para escolher o PDF (do RAR descompactado) e anexá-lo.`);
     const ach = DB.where('achados', a => a.empresaId === e.id && a.contrato === c.codigo && achadoAberto(a) && /documental|contrato-base|pdf|document/i.test((a.area || '') + ' ' + (a.achado || '')));
     if (ach.length && msgs.length) msgs.push(`Relacionado ao(s) achado(s) em aberto ${esc(ach.map(a => a.codigo).join(', '))}.`);
+    const pgCt = lk.flatMap(d => (d.pecas || []).filter(x => /^contrato/i.test(x.tipo || '')).map(x => x.paginaInicial)).filter(Boolean)[0];
+    if (ctOk && ach.length) msgs.push(`O contrato principal está no Drive${pgCt ? ` (a partir da pág. ${pgCt})` : ''}: depois de conferir, conclua o(s) achado(s) ${esc(ach.map(a => a.codigo).join(', '))} na tela de Achados.`);
     if (!msgs.length) msgs.push('Documentação completa no Drive: contrato principal' + (adOk ? ' e aditivo(s).' : '.'));
     return `<p class="arq-leg">${icon(msgs.length === 1 && /completa/.test(msgs[0]) ? 'check' : 'alert')}<span>${msgs.join(' ')}</span></p>`;
   },
@@ -1931,9 +1950,9 @@ const Consult = {
     const l = dc.slice().sort((a, b) => ord(a) - ord(b) || String(a.arquivo || '').localeCompare(String(b.arquivo || ''), 'pt-BR', { numeric: true }));
     const comLink = l.filter(d => d.link), sem = l.filter(d => !d.link);
     return `<div class="arq-bar"><span class="lbl">${icon('file')} Arquivos no Drive</span>
-      ${comLink.map(d => `<a class="arq" href="${esc(d.link)}" target="_blank" rel="noopener" title="${esc(d.arquivo || '')}">${icon('link')}<span><b>${esc(d.tipo || 'Documento')}${d.numero ? ' ' + esc(d.numero) : ''}</b><small>${esc(d.arquivo || 'abrir no Drive')}</small></span></a>`).join('')}
+      ${comLink.map(d => `<span class="arq-w"><a class="arq" href="${esc(d.link)}" target="_blank" rel="noopener" title="${esc(d.arquivo || '')}">${icon('link')}<span><b>${(d.pecas || []).length > 1 ? 'PDF compilado' : esc((d.pecas || [])[0]?.tipo || d.tipo || 'Documento')}${d.numero ? ' ' + esc(d.numero) : ''}</b><small>${(d.pecas || []).length > 1 ? esc(d.pecas.map(x => x.tipo + (x.paginaInicial ? ' (p. ' + x.paginaInicial + (x.paginaFinal && x.paginaFinal !== x.paginaInicial ? '–' + x.paginaFinal : '') + ')' : '')).join(' · ')) : esc(d.arquivo || 'abrir no Drive')}</small></span></a><button type="button" class="arq-ed" data-dcont="${d.id}" title="Dizer o que este PDF contém (contrato, aditivo, termo de referência, anexos…)">${icon('edit')}</button></span>`).join('')}
       ${!comLink.length ? `<span class="muted small">${sem.length ? `${sem.length} documento(s) no inventário, ainda sem arquivo no Drive.` : 'Nenhum arquivo juntado a este contrato.'}</span> <button class="btn ghost xs" id="cJunt">${icon('upload')} Juntar o contrato</button>` : ''}
-      ${comLink.length && sem.length ? `<a class="muted small arq-sem" href="#/empresa/${e.id}/documentos" data-close>+ ${sem.length} sem arquivo</a>` : ''}</div>${Consult.diagArquivos(e, c, l)}`;
+      ${sem.map(d => `<button type="button" class="arq falta" data-djunt="${d.id}" title="Este documento está no inventário da auditoria, mas o arquivo não está no Drive. Clique para escolher o PDF e anexá-lo.">${icon('upload')}<span><b>${esc(d.tipo || 'Documento')} — sem arquivo</b><small>${esc(d.arquivo || 'escolher o PDF')}</small></span></button>`).join('')}<input type="file" id="cDocF" hidden accept=".pdf,image/*"></div>${Consult.diagArquivos(e, c, l)}`;
   },
   contrato360(e, c) {
     const rel = coll => DB.where(coll, r => r.empresaId === e.id && r.contrato === c.codigo);
@@ -1960,6 +1979,20 @@ const Consult = {
     });
     $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id } });
     $('#cJunt', m)?.addEventListener('click', () => { UI.closeModal(); Docs.open(e); });
+    $$('[data-dcont]', m).forEach(b => b.onclick = () => Consult.conteudoDoc(e, c, DB.get('documentos', b.dataset.dcont)));
+    // anexar o arquivo a um documento do inventário que ainda não está no Drive
+    let alvo = null; const fArq = $('#cDocF', m);
+    $$('[data-djunt]', m).forEach(b => b.onclick = () => { alvo = DB.get('documentos', b.dataset.djunt); fArq.value = ''; fArq.click(); });
+    fArq && (fArq.onchange = async () => {
+      const f = fArq.files[0]; if (!f || !alvo) return;
+      if (!Session.remote) return UI.toast('Anexar arquivos exige o servidor conectado.', 'warn');
+      const b = $(`[data-djunt="${alvo.id}"]`, m); b.disabled = true; b.querySelector('b').textContent = 'Enviando ao Drive…';
+      try {
+        const up = await juntarELer({ empresaKey: e.id, empresa: e.fantasia || e.razao, nome: f.name, mime: f.type || 'application/pdf', base64: await Docs.b64(f), ler: false });
+        await DB.save('documentos', { ...alvo, link: up.url, arquivo: alvo.arquivo || f.name, arquivoDrive: f.name });
+        UI.toast('Arquivo anexado. Já pode abrir pelo botão.'); Consult.contrato360(e, DB.get('contratos', c.id) || c);
+      } catch (err) { UI.toast('Não consegui anexar: ' + err.message, 'bad', 7000); b.disabled = false; b.querySelector('b').textContent = (alvo.tipo || 'Documento') + ' — sem arquivo'; }
+    });
     $('#cAch', m).onclick = () => UI.editRecord('achados', { contrato: c.codigo, status: 'Pendente' }, { ctx: { empresaId: e.id }, extraBase: { empresaId: e.id } });
     $('#cDel', m).onclick = async () => { if (!await UI.confirm(`Excluir o contrato ${c.codigo}? Os registros das outras abas são mantidos.`, 'Excluir')) return; await DB.remove('contratos', c.id); UI.closeModal(); App.render(); };
     $$('[data-rel]', m).forEach(tr => tr.onclick = () => { const [coll, id] = tr.dataset.rel.split(':'); UI.editRecord(coll, DB.get(coll, id), { ctx: { empresaId: e.id } }); });
@@ -2719,7 +2752,7 @@ const Docs = {
           if ($(`[data-obr="${i}"]`, m)?.checked) (ia.obrigacoes || []).filter(o => o && o.obrigacao).forEach(o => saves.obrigacoes.push({ empresaId: e.id, contrato: c.codigo, clausula: o.clausula || '', grupo: o.grupo || '', obrigacao: o.obrigacao, frequencia: o.frequencia || '', responsavel: o.responsavel || 'Contratada', evidencia: r.nome, status: 'Não verificado', origem: 'ia' }));
         }
         const docAnt = empRecs('documentos', e.id).find(d => norm(String(d.arquivo || '').replace(/\(\d+\)/g, '')) === norm(r.nome.replace(/\(\d+\)/g, '')));
-        saves.documentos.push(Object.assign(docAnt ? clone(docAnt) : { empresaId: e.id }, { contrato: c?.codigo || docAnt?.contrato || '', tomador: c?.tomador || ia.tomador || '', tipo: ia.tipo || (/aditivo/i.test(r.nome) ? 'Termo aditivo' : 'Documento'), numero: ia.numeroContrato || docAnt?.numero || '', arquivo: r.nome, link: r.link || docAnt?.link || '', caminho: r.path, paginas: ia.paginas || docAnt?.paginas || null, legibilidade: r.ia ? 'Lido por IA (' + (ia.legibilidade || 'ok') + ')' : (docAnt?.legibilidade || 'Não lido'), limitacao: r.ia ? 'Dados extraídos por IA — conferir no documento' : (docAnt?.limitacao || '') }));
+        saves.documentos.push(Object.assign(docAnt ? clone(docAnt) : { empresaId: e.id }, { contrato: c?.codigo || docAnt?.contrato || '', tomador: c?.tomador || ia.tomador || '', tipo: ia.tipo || (/aditivo/i.test(r.nome) ? 'Termo aditivo' : 'Documento'), numero: ia.numeroContrato || docAnt?.numero || '', arquivo: r.nome, link: r.link || docAnt?.link || '', caminho: r.path, paginas: ia.paginas || docAnt?.paginas || null, pecas: (ia.pecas || []).filter(x => x && x.tipo).length ? ia.pecas.filter(x => x && x.tipo) : (docAnt?.pecas || []), legibilidade: r.ia ? 'Lido por IA (' + (ia.legibilidade || 'ok') + ')' : (docAnt?.legibilidade || 'Não lido'), limitacao: r.ia ? 'Dados extraídos por IA — conferir no documento' : (docAnt?.limitacao || '') }));
       });
       const uniq = {}; saves.contratos.forEach(c => uniq[c.id] = c); saves.contratos = Object.values(uniq);
       const rmBy = {}; remover.forEach(([coll, id]) => (rmBy[coll] = rmBy[coll] || []).push(id));
