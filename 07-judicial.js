@@ -6,10 +6,11 @@ const Judicial = {
     const all = area === 'todos';
     const A = AREAS[area];
     App.crumbs([{ t: 'Judicial', href: '/judicial/todos' }, { t: all ? 'Todos os processos' : A?.nome || area }]);
-    const procs = DB.where('processos', p => all || p.area === area);
+    const procs = DB.where('processos', p => all || p.area === area), procsT = procs;
     const lastMov = id => DB.where('movimentos', m => m.processoId === id).sort((a, b) => String(b.data).localeCompare(String(a.data)))[0];
-    const rows = procs.map(p => { const m = lastMov(p.id); return { ...p, _cli: clienteNomes(p) || '⚠ cliente a definir', _area: AREAS[p.area]?.nome, _ult: m?.data || null, _ultT: m?.titulo || '', _prox: DB.where('prazos', x => x.processoId === p.id && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data))[0]?.data || null }; });
-    const sc = { fields: [F('numero', 'Número', 'cnj'), F('_cli', 'Cliente(s)'), F('_area', 'Área'), F('classe', 'Classe'), F('orgao', 'Órgão julgador'), F('status', 'Situação', 'select', { opts: [] }), F('_ult', 'Última movimentação', 'date'), F('_prox', 'Próximo compromisso', 'date'), F('parteContraria', 'Parte contrária'), F('assunto', 'Assunto')] };
+    const rowsT = procs.map(p => { const m = lastMov(p.id), pa = Parceria.de(p); return { ...p, _parc: pa ? Parceria.rotulo(pa) : '', _cli: clienteNomes(p) || '⚠ cliente a definir', _area: AREAS[p.area]?.nome, _ult: m?.data || null, _ultT: m?.titulo || '', _prox: DB.where('prazos', x => x.processoId === p.id && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data))[0]?.data || null }; });
+    const sc = { fields: [F('numero', 'Número', 'cnj'), F('_cli', 'Cliente(s)'), F('_area', 'Área'), F('classe', 'Classe'), F('orgao', 'Órgão julgador'), F('status', 'Situação', 'select', { opts: [] }), F('_ult', 'Última movimentação', 'date'), F('_prox', 'Próximo compromisso', 'date'), F('parteContraria', 'Parte contrária'), F('assunto', 'Assunto'), F('_parc', 'Parceiro')] };
+    const rows = rowsT.filter(r => !r._parc), rowsP = rowsT.filter(r => r._parc);
     const ativos = procs.filter(p => p.status !== 'Encerrado' && p.status !== 'Arquivado provisoriamente');
     const valor = procs.reduce((s, p) => s + (num(p.valorCausa) || 0), 0), comValor = procs.filter(p => num(p.valorCausa) > 0).length;
     const semMov30 = ativos.filter(p => { const m = lastMov(p.id); return !m || daysUntil(m.data) < -30; }).length;
@@ -18,7 +19,9 @@ const Judicial = {
       <div class="kpis sm">${kpi('Em andamento', ativos.length)}${kpi('Total cadastrados', procs.length)}${kpi('Valor das causas', fmtMoneyShort(valor), comValor < procs.length ? `em ${comValor} de ${procs.length} processos · <button class="link" id="kVal">informar os demais</button>` : '')}${kpi('Sem movimentação há 30+ dias', semMov30, 'merecem consulta', semMov30 ? 'warn' : '')}</div>
       ${DJEN.pendentes().length ? `<div class="notice">${icon('mail')}<div><b>${DJEN.pendentes().length} processo(s) com intimação no DJEN em nome dos advogados do escritório ainda não cadastrados.</b> <button class="link" id="djPendJ">Revisar e cadastrar</button></div></div>` : ''}
       ${DJEN.cadastrados().length ? `<p class="muted small right"><button class="link" id="djDesfJ">${icon('list')} Processos cadastrados pela OAB (${DJEN.cadastrados().length}) — devolver para a revisão</button></p>` : ''}
-      <section class="card flush" id="tbl"></section>`;
+      <section class="card flush" id="tbl"></section>
+      <div class="parc-h"><h2>${icon('users')} Processos em parceria <small class="muted">${rowsP.length}</small></h2><button class="btn ghost sm" id="pParc">${icon('users')} Parceiros</button></div>
+      ${rowsP.length ? '<section class="card flush" id="tblP"></section>' : `<p class="muted small">${Parceria.lista().length ? 'Nenhum processo desta relação tem advogado parceiro intimado junto com os nossos.' : 'Toque em “Parceiros” e marque os advogados/escritórios parceiros (pela OAB intimada junto com os nossos): os processos deles passam a aparecer aqui.'}</p>`}`;
     $('#djPendJ')?.addEventListener('click', () => DJEN.revisarPendentes());
     $('#djDesfJ')?.addEventListener('click', () => DJEN.gerenciarCadastrados());
     $('#kVal')?.addEventListener('click', () => Judicial.completarValores(procs));
@@ -28,6 +31,11 @@ const Judicial = {
       tools: `<button class="icon-btn tool-print" id="pRel" title="Imprimir a relação de processos (com os filtros e a busca aplicados)">${icon('printer')}</button>`,
       onOpen: p => location.hash = '#/processo/' + p.id, emptyMsg: 'Nenhum processo cadastrado nesta área.'
     });
+    if (rowsP.length) dataTable($('#tblP'), {
+      id: 'procP-' + area, rows: rowsP, schema: sc, cols: all ? ['numero', '_cli', '_parc', '_area', 'status', '_ult', '_prox'] : ['numero', '_cli', '_parc', 'classe', 'status', '_ult', '_prox'],
+      filters: [{ k: '_parc', label: 'Parceiro', opts: [...new Set(rowsP.map(r => r._parc))].sort() }], onOpen: p => location.hash = '#/processo/' + p.id, emptyMsg: 'Nenhum processo em parceria.'
+    });
+    $('#pParc').onclick = () => Parceria.gerenciar();
     $('#pRel').onclick = () => { const st = TableState['proc-' + area] || {}; Report.processos($('#tbl')._list || rows, { area: all ? null : area, situacao: st.f?.status || '', busca: st.q || '' }); };
     $('#nProc').onclick = () => Judicial.edit(null, all ? 'civil' : area);
     $('#nProcDocs').onclick = () => JudDocs.open();
@@ -58,7 +66,7 @@ const Judicial = {
     v.innerHTML = `
     <div class="proc-h">
       <div>
-        <div class="proc-tags">${pill(A.nome)} ${pill(p.status || 'Ativo')} ${p.fase ? `<span class="tag">${esc(p.fase)}</span>` : ''} ${p.transito ? `<span class="pill tj">${icon('scale')} Transitado em julgado em ${esc(fmtDate(p.transito))}</span>` : ''} ${p.segredo ? '<span class="pill critical">Segredo de justiça</span>' : ''} ${p.tribunal ? `<span class="tag">${esc(p.tribunal)}</span>` : ''}</div>
+        <div class="proc-tags">${pill(A.nome)} ${pill(p.status || 'Ativo')} ${p.fase ? `<span class="tag">${esc(p.fase)}</span>` : ''} ${p.transito ? `<span class="pill tj">${icon('scale')} Transitado em julgado em ${esc(fmtDate(p.transito))}</span>` : ''} ${p.segredo ? '<span class="pill critical">Segredo de justiça</span>' : ''} ${p.tribunal ? `<span class="tag">${esc(p.tribunal)}</span>` : ''} ${Parceria.de(p) ? `<span class="pill info">${icon('users')} Em parceria com ${esc(Parceria.rotulo(Parceria.de(p)))}</span> <button class="link small" id="pParcNao">não é parceria</button>` : p.parceria === 'nao' && Parceria.de(p, true) ? `<button class="link small" id="pParcSim">${icon('users')} considerar parceria com ${esc(Parceria.rotulo(Parceria.de(p, true)))}</button>` : ''}</div>
         <h1 class="mono proc-num">${esc(fmtCNJ(p.numero))} ${validCNJ(p.numero) ? '' : `<span class="pill serious" title="Dígito verificador não confere">verificar número</span>`}</h1>
         <p class="proc-sub">${esc(p.classe || 'Classe não informada')}${p.assunto ? ' · ' + esc(p.assunto) : ''}</p>
         <p class="proc-parts"><b>${esc(clientes.map(c => c.nome).join(', ') || 'Cliente não vinculado')}</b> <span class="muted">(${esc(p.polo || 'polo não informado')})</span> <span class="vs">×</span> ${esc(p.parteContraria || '—')}</p>
@@ -97,6 +105,8 @@ const Judicial = {
       </div>
     </div>`;
     $('#pEdit').onclick = () => Judicial.edit(p);
+    $('#pParcNao')?.addEventListener('click', async () => { await DB.save('processos', { ...p, parceria: 'nao' }); App.render(true); });
+    $('#pParcSim')?.addEventListener('click', async () => { await DB.save('processos', { ...p, parceria: '' }); App.render(true); });
     ['#pMail', '#pMail2'].forEach(k => $(k)?.addEventListener('click', () => Judicial.emailCliente(p)));
     $$('[data-ptcli]', v).forEach(b => b.onclick = () => Judicial.tornarCliente(p, +b.dataset.ptcli));
     $('#pPrev').onclick = () => { if (!clientes.length) return UI.toast('Vincule um cliente ao processo.', 'warn'); Portal.preview(clientes[0].id, p.id); };
@@ -220,5 +230,58 @@ const Judicial = {
       novos.push({ id: uid('mo'), processoId: p.id, data: m.data, titulo: m.titulo, descricao: m.descricao || '', origem: 'datajud', chave: k, visivelCliente: vis });
     });
     return novos;
+  }
+};
+
+/* =====================================================================
+   PARCERIAS — processos em que um advogado parceiro é intimado junto com os nossos
+   ===================================================================== */
+const Parceria = {
+  lista: () => escritorio().parceiros || [],
+  uf: u => String(u || '').toUpperCase(),
+  igual(x, a) { return (onlyDigits(x.oab) && onlyDigits(x.oab) === onlyDigits(a.oab) && (!x.uf || !a.uf || Parceria.uf(x.uf) === Parceria.uf(a.uf))) || (!onlyDigits(a.oab) && x.nome && a.nome && norm(x.nome) === norm(a.nome)); },
+  /** advogados que representam a mesma parte que os nossos (não os nossos) */
+  coAdvs(p) { return (p.partes || []).flatMap(pt => (pt.advogados || []).some(a => DJEN.meuAdv(a)) ? (pt.advogados || []).filter(a => !DJEN.meuAdv(a)) : []); },
+  /** parceiro do processo (ou null); ignorarNao = mesmo se marcado "não é parceria" */
+  de(p, ignorarNao) {
+    if (!p || (!ignorarNao && p.parceria === 'nao')) return null;
+    const L = Parceria.lista(); if (!L.length) return null;
+    for (const a of Parceria.coAdvs(p)) { const x = L.find(x => Parceria.igual(x, a)); if (x) return x; }
+    return null;
+  },
+  rotulo: x => x.escritorio || x.nome || `OAB ${x.oab}/${Parceria.uf(x.uf)}`,
+  candidatos() {
+    const m = {};
+    DB.all('processos').forEach(p => Parceria.coAdvs(p).forEach(a => {
+      const k = onlyDigits(a.oab) ? onlyDigits(a.oab) + '/' + Parceria.uf(a.uf) : 'n:' + norm(a.nome);
+      const c = m[k] = m[k] || { nome: a.nome || '', oab: onlyDigits(a.oab), uf: Parceria.uf(a.uf), procs: new Set() };
+      c.procs.add(p.id); if (!c.nome && a.nome) c.nome = a.nome;
+    }));
+    return Object.values(m).filter(c => !Parceria.lista().some(x => Parceria.igual(x, c))).sort((a, b) => b.procs.size - a.procs.size || a.nome.localeCompare(b.nome));
+  },
+  async salvar(lista) { await DB.save('config', { ...escritorio(), id: 'escritorio', parceiros: lista }); App.render(true); Parceria.gerenciar(); },
+  gerenciar() {
+    const L = Parceria.lista(), cand = Parceria.candidatos();
+    const n = x => DB.all('processos').filter(p => Parceria.de(p) === x || (Parceria.de(p) && Parceria.igual(Parceria.de(p), x))).length;
+    const ufs = UF_TR.slice(1).map(u => u === 'dft' ? 'DF' : u.toUpperCase()).sort();
+    const m = UI.modal({ title: 'Advogados e escritórios parceiros', wide: true,
+      sub: 'Processo em que um parceiro é intimado junto com os nossos advogados (na mesma parte) vai para a relação “Processos em parceria”.',
+      body: `<h4 class="sec">Parceiros (${L.length})</h4>
+        ${L.length ? `<div class="parc-l">${L.map((x, i) => `<div class="parc-i"><div><b>${esc(x.nome || 'Advogado(a)')}</b><small class="muted">OAB ${esc(x.oab || '—')}/${esc(Parceria.uf(x.uf) || '—')} · ${n(x)} processo(s)</small></div><input class="input sm" data-pe="${i}" placeholder="Nome do escritório (opcional)" value="${esc(x.escritorio || '')}"><button class="icon-btn" data-pr="${i}" title="Deixar de ser parceiro">${icon('x')}</button></div>`).join('')}</div>` : '<p class="muted small">Nenhum parceiro marcado ainda.</p>'}
+        <h4 class="sec">Intimados junto com os nossos advogados</h4>
+        ${cand.length ? `<div class="parc-l">${cand.map((c, i) => `<div class="parc-i"><div><b>${esc(c.nome || 'Sem nome')}</b><small class="muted">OAB ${esc(c.oab || '—')}/${esc(c.uf || '—')} · ${c.procs.size} processo(s) com vocês</small></div><span></span><button class="btn ghost sm" data-pc="${i}">${icon('check')} É parceiro</button></div>`).join('')}</div>` : '<p class="muted small">Nenhum outro advogado aparece na mesma parte que os nossos nas intimações já recebidas.</p>'}
+        <h4 class="sec">Incluir pela OAB</h4>
+        <form class="adv-form" id="parcF"><input name="oab" placeholder="Nº da OAB" inputmode="numeric"><select name="uf">${ufs.map(u => `<option ${u === 'PB' ? 'selected' : ''}>${u}</option>`).join('')}</select><input name="esc" placeholder="Escritório (opcional)"><button class="btn primary sm">${icon('plus')} Incluir</button></form>`
+    });
+    $$('[data-pc]', m).forEach(b => b.onclick = () => { const c = cand[+b.dataset.pc]; Parceria.salvar([...L, { id: uid('pa'), nome: DJEN.titulo ? DJEN.titulo(c.nome) : c.nome, oab: c.oab, uf: c.uf, escritorio: '' }]); });
+    $$('[data-pr]', m).forEach(b => b.onclick = () => Parceria.salvar(L.filter((_, i) => i !== +b.dataset.pr)));
+    $$('[data-pe]', m).forEach(inp => inp.onchange = () => Parceria.salvar(L.map((x, i) => i === +inp.dataset.pe ? { ...x, escritorio: inp.value.trim() } : x)));
+    $('#parcF', m).onsubmit = ev => {
+      ev.preventDefault(); const f = ev.target, oab = onlyDigits(f.oab.value);
+      if (!oab) return UI.toast('Informe o número da OAB.', 'bad');
+      if (L.some(x => Parceria.igual(x, { oab, uf: f.uf.value }))) return UI.toast('Essa OAB já é parceira.', 'warn');
+      const c = Parceria.candidatos().find(c => c.oab === oab && c.uf === f.uf.value);
+      Parceria.salvar([...L, { id: uid('pa'), nome: c ? c.nome : '', oab, uf: f.uf.value, escritorio: f.esc.value.trim() }]);
+    };
   }
 };

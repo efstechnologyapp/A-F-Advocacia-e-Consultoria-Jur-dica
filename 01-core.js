@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.7';
+const APP_VERSAO = '1.14.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.14.0', data: '11/11/2026', itens: ['Judicial: processos em parceria com outros advogados/escritórios ficam numa relação própria, abaixo dos processos do escritório, em cada área e em “Todos os processos”.', 'Botão “Parceiros”: lista os advogados intimados junto com os nossos (na mesma parte) para marcar quem é parceiro, com o nome do escritório; também dá para incluir pela OAB.', 'Ficha do processo: etiqueta “Em parceria com …” e a opção “não é parceria” para casos isolados.'] },
   { numero: '1.13.8', data: '11/11/2026', itens: ['Painel da empresa: “+ outros” em Contratos por tomador expande e recolhe a lista.', 'Achados em aberto: tocar num risco ou numa área abre a página de achados já filtrada para resolver.', 'Vencimentos: tocar num mês (gráfico ou tabela) lista os contratos que vencem nele; “Ver todos” mostra os 12 meses, e cada contrato abre a ficha.'] },
   { numero: '1.13.7', data: '11/11/2026', itens: ['Visão geral: o quadro “Últimas movimentações” passou a ser o último da página.'] },
   { numero: '1.13.6', data: '11/11/2026', itens: ['Ficha do contrato: o quadro “postos contratados” mostra o salário-base × quantidade de cada posto e a linha “Total mensal” com o total de postos, de salários-base e do custo previsto.'] },
