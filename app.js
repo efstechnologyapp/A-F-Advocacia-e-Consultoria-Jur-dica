@@ -2005,7 +2005,7 @@ const Consult = {
       ${ma.length ? mini('Materiais', 'materiais', ma, ['item', 'qtdPrevista', 'qtdEntregue', 'valorTotal']) : ''}
       ${mini('Documentos', 'documentos', dc, ['tipo', 'arquivo', 'paginas', 'legibilidade'])}
       ${ad.length ? mini('Aditivos', 'aditivos', ad, ['nome', 'datas', 'valor']) : ''}`,
-      foot: `<button class="btn ghost danger-text" id="cDel">${icon('trash')} Excluir</button><span class="sp"></span><button class="btn ghost" id="cAch">${icon('alert')} Registrar achado</button><button class="btn primary" id="cEd">${icon('edit')} Editar contrato</button>`
+      foot: `<button class="btn ghost danger-text" id="cDel">${icon('trash')} Excluir</button><span class="sp"></span><button class="btn ghost" id="svRel">${icon('printer')} Relatório do contrato</button><button class="btn ghost" id="cAch">${icon('alert')} Registrar achado</button><button class="btn primary" id="cEd">${icon('edit')} Editar contrato</button>`
     });
     $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id } });
     $('#cJunt', m)?.addEventListener('click', () => { UI.closeModal(); Docs.open(e); });
@@ -4186,7 +4186,7 @@ const Superv = {
   /** seção na ficha do contrato */
   html(e, c) {
     const l = Superv.lista(e, c), T = Superv.totais(l);
-    return `<h4 class="sec">Custos supervenientes <span class="count">${l.length}</span><span class="sp"></span><button type="button" class="btn ghost xs" id="svRel">${icon('printer')} Relatório do contrato</button><button type="button" class="btn primary xs" id="svAdd">${icon('upload')} Juntar notas fiscais</button></h4>
+    return `<h4 class="sec">Custos supervenientes <span class="count">${l.length}</span><span class="sp"></span><button type="button" class="btn primary xs" id="svAdd">${icon('upload')} Juntar notas fiscais</button></h4>
       <p class="muted small">Notas fiscais e comprovantes de gastos extraordinários ou imprevisíveis, não cobertos pelo contrato, para pedir reembolso, reequilíbrio ou repactuação à Administração.</p>
       ${l.length ? `<div class="sv-tot"><span>Documentos <b>${l.length}</b></span><span>Valor total <b>${esc(fmtMoney(T.pedido))}</b></span><span class="x">Pedido <b>${esc(fmtMoney(T.pedido))}</b></span><span>Em análise <b>${esc(fmtMoney(T.analise))}</b></span><span>Deferido <b>${esc(fmtMoney(T.deferido))}</b></span><span>Pago <b>${esc(fmtMoney(T.pago))}</b></span></div>
       <div class="table-wrap"><table class="mini sv-t"><thead><tr><th>Data</th><th>Documento</th><th>Emitente</th><th>Anotação / conferência</th><th class="r">Valor</th><th>Natureza</th><th>Situação</th><th></th></tr></thead><tbody>
@@ -4360,7 +4360,7 @@ const Superv = {
     const porNat = {}; sv.forEach(r => { const k = (r.natureza || 'Outro'); porNat[k] = (porNat[k] || 0) + (num(r.valor) || 0); });
     const corpo = `
       <div class="capa"><div class="tipo">Relatório de auditoria contratual</div><h1>Contrato ${esc(c.numero && !isGap(c.numero) ? c.numero : c.codigo)}</h1>
-        <p class="sub">${esc(c.tomador || '')}${c.unidade && !isGap(c.unidade) ? ' — ' + esc(c.unidade) : ''}</p>
+        <p class="sub">${esc(c.tomador || '')}${c.unidade && !isGap(c.unidade) && !norm(c.tomador).includes(norm(c.unidade)) ? ' — ' + esc(c.unidade) : ''}</p>
         <p class="meta">Contratada: <b>${esc(e.razao || '')}</b>${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}<br>Identificação interna: ${esc(c.codigo)} · Emitido em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
       <div class="kp"><div><b>${c.fim ? esc(fmtDate(c.fim)) : '—'}</b><span>fim da vigência${d !== null ? (d < 0 ? ` · expirada há ${-d} dias` : ` · ${d} dias restantes`) : ''}</span></div><div><b>${num(c.valorMensal) ? esc(fmtMoneyShort(c.valorMensal)) : '—'}</b><span>valor mensal</span></div><div><b>${ac.filter(achadoAberto).length}</b><span>achados em aberto</span></div><div><b>${esc(fmtMoneyShort(T.pedido) || 'R$ 0')}</b><span>custos supervenientes pedidos</span></div></div>
       ${H('Identificação do contrato')}<dl class="dl">${dt('Nº do contrato / processo', v(c.numero))}${dt('Tomador', v(c.tomador))}${dt('CNPJ do tomador', v(c.cnpjTomador && fmtDoc(c.cnpjTomador)))}${dt('Unidade / local', v(c.unidade))}${dt('Início', v(fmtDate(c.inicio)))}${dt('Fim da vigência', v(fmtDate(c.fim)))}${dt('Prazo / prorrogação', v(c.prazo))}${dt('Valor mensal', v(fmtMoney(c.valorMensal)))}${dt('Valor anual estimado', v(fmtMoney(c.valorAnual)))}${dt('Reajuste', v(c.reajuste))}${dt('Convenção coletiva', v(c.cct))}${dt('Fiscal / gestor', v(c.fiscal))}</dl>
@@ -4392,8 +4392,8 @@ const Superv = {
   CSS: `@page{size:A4;margin:12mm 14mm 16mm;@bottom-right{content:"Página " counter(page) " de " counter(pages);font:7.5pt Manrope,Arial,sans-serif;color:#8a8e98}}
   *{box-sizing:border-box}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;font:9pt/1.5 Manrope,'Helvetica Neue',Arial,sans-serif;color:#1d2433}
   table.pg{width:100%;border-collapse:collapse}table.pg>thead td{padding:0 0 5mm}
-  .tb{display:flex;align-items:center;gap:4mm;border-bottom:1.2pt solid #b08a4e;padding-bottom:3mm}.tb img{width:12mm}.tb .n{font:600 14pt/1 'Cormorant Garamond',Georgia,serif;letter-spacing:.2em;color:#121c33}.tb .l{font:600 6pt Manrope,Arial,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:#a07c43;margin-top:1.2mm}
-  .capa{margin:4mm 0 5mm}.capa .tipo{font:700 7pt Manrope,Arial,sans-serif;letter-spacing:.3em;text-transform:uppercase;color:#a07c43}.capa h1{font:600 22pt/1.1 'Cormorant Garamond',Georgia,serif;color:#121c33;margin:1.5mm 0}.capa .sub{font-size:11pt;margin:0 0 2mm;color:#121c33}.capa .meta{font-size:8.5pt;color:#5d6270;margin:0}
+  .tb{display:flex;flex-direction:column;align-items:center;text-align:center;gap:1.5mm;border-bottom:1.2pt solid #b08a4e;padding-bottom:3mm}.tb img{width:13mm}.tb .n{font:600 14pt/1 'Cormorant Garamond',Georgia,serif;letter-spacing:.2em;color:#121c33}.tb .l{font:600 6pt Manrope,Arial,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:#a07c43;margin-top:1.2mm}
+  .capa{margin:5mm 0 5mm;text-align:center}.capa .tipo{font:700 7pt Manrope,Arial,sans-serif;letter-spacing:.3em;text-transform:uppercase;color:#a07c43}.capa h1{font:600 22pt/1.1 'Cormorant Garamond',Georgia,serif;color:#121c33;margin:1.5mm 0}.capa .sub{font-size:11pt;margin:0 0 2mm;color:#121c33}.capa .meta{font-size:8.5pt;color:#5d6270;margin:0}
   .kp{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:4mm}.kp div{border:1px solid #e7e0d2;border-left:2.5pt solid #b08a4e;border-radius:1.6mm;padding:2.4mm 3mm;background:#fcfaf5}.kp b{display:block;font:600 14pt/1.1 'Cormorant Garamond',Georgia,serif;color:#121c33}.kp span{font-size:7.4pt;color:#6b6f7b}
   h2{font:600 13pt 'Cormorant Garamond',Georgia,serif;color:#121c33;border-bottom:.6pt solid #d9c49a;padding-bottom:1.2mm;margin:6mm 0 2.5mm;page-break-after:avoid}h2 span{color:#b08a4e;margin-right:1.5mm}
   .dl{display:grid;grid-template-columns:repeat(3,1fr);gap:2mm 5mm;margin:0 0 3mm}.dl dt{font-size:7pt;letter-spacing:.06em;text-transform:uppercase;color:#8a8e98}.dl dd{margin:0;font-weight:500}
