@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.14.2';
+const APP_VERSAO = '1.14.3';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.14.3', data: '11/11/2026', itens: ['Judicial: botão “Alterar representação” nas relações de processos do escritório e em parceria, para corrigir em lote se o processo é próprio ou em parceria (e com quem).', 'Ficha do processo: campo “Representação” para trocar entre próprio e os parceiros.'] },
   { numero: '1.14.2', data: '11/11/2026', itens: ['Processos encontrados pela OAB: a tabela rola dentro da janela, com a barra de rolagem lateral sempre visível embaixo e o cabeçalho fixo no topo.'] },
   { numero: '1.14.1', data: '11/11/2026', itens: ['Processos encontrados pela OAB: nova coluna “Representação” para indicar se o processo é próprio ou em parceria (com parceiro já cadastrado ou com o advogado intimado junto, que passa a ser parceiro). Quando um parceiro cadastrado aparece na intimação, a opção já vem marcada.'] },
   { numero: '1.14.0', data: '11/11/2026', itens: ['Judicial: processos em parceria com outros advogados/escritórios ficam numa relação própria, abaixo dos processos do escritório, em cada área e em “Todos os processos”.', 'Botão “Parceiros”: lista os advogados intimados junto com os nossos (na mesma parte) para marcar quem é parceiro, com o nome do escritório; também dá para incluir pela OAB.', 'Ficha do processo: etiqueta “Em parceria com …” e a opção “não é parceria” para casos isolados.'] },
