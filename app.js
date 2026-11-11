@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.5';
+const APP_VERSAO = '1.13.6';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.6', data: '11/11/2026', itens: ['Ficha do contrato: o quadro “postos contratados” mostra o salário-base × quantidade de cada posto e a linha “Total mensal” com o total de postos, de salários-base e do custo previsto.'] },
   { numero: '1.13.5', data: '11/11/2026', itens: ['Ficha do contrato: ao abrir um item (posto, linha mensal do DP, obrigação, achado, documento, custo superveniente) ou “Editar contrato”, a janela tem o botão “Voltar”, que retorna à ficha do contrato; salvar ou excluir também retornam à ficha.'] },
   { numero: '1.13.4', data: '11/11/2026', itens: ['Ficha do contrato: Mão de obra separada em dois quadros — “postos contratados” e “custo mês a mês (Departamento Pessoal)”, este com competência, postos contratados, empregados na folha, folha bruta, benefícios, férias, salários previstos e divergência, em ordem de mês. Corrigido: a coluna de custo apurado (folha bruta) não recebe mais, por engano, o valor dos benefícios nos meses em que o relatório da folha não traz o bruto — basta juntar de novo a planilha da folha para corrigir os meses já importados.'] },
   { numero: '1.13.3', data: '11/11/2026', itens: ['Juntada de várias planilhas: terminada a última conferência, a tela se encerra. Se você sair de uma conferência para outra janela (ex.: abrir um contrato) ou começar nova juntada, as conferências pendentes da juntada anterior não reaparecem depois.'] },
@@ -1997,6 +1998,14 @@ const Consult = {
       ${!comLink.length ? `<span class="muted small">${sem.length ? `${sem.length} documento(s) no inventário, ainda sem arquivo no Drive.` : 'Nenhum arquivo juntado a este contrato.'}</span> <button class="btn ghost xs" id="cJunt">${icon('upload')} Juntar o contrato</button>` : ''}
       ${sem.map(d => `<button type="button" class="arq falta" data-djunt="${d.id}" title="Este documento está no inventário da auditoria, mas o arquivo não está no Drive. Clique para escolher o PDF e anexá-lo.">${icon('upload')}<span><b>${esc(d.tipo || 'Documento')} — sem arquivo</b><small>${esc(d.arquivo || 'escolher o PDF')}</small></span></button>`).join('')}<input type="file" id="cDocF" hidden accept=".pdf,image/*"></div>${Consult.diagArquivos(e, c, l)}`;
   },
+  /** postos contratados, com o total mensal (salário-base × quantidade e custo previsto) */
+  moPostos(L) {
+    const m = v => num(v) !== null ? fmtMoney(v) : '—', n = v => num(v) !== null ? fmtNum(v) : '—';
+    const q = L.reduce((s, r) => s + (num(r.qtdContratada) || 0), 0), sal = L.reduce((s, r) => s + (num(r.salario) || 0) * (num(r.qtdContratada) || 0), 0), prev = L.reduce((s, r) => s + (num(r.custoPrevisto) || 0), 0);
+    return `<h4 class="sec">Mão de obra — postos contratados <span class="count">${L.length}</span></h4>${L.length ? `<div class="table-wrap"><table class="mini"><thead><tr><th>Posto/função</th><th class="r">Qtd. contratada</th><th class="r">Salário-base (unitário)</th><th class="r">Salário-base × qtd.</th><th class="r">Custo previsto</th><th>Divergência/risco</th></tr></thead><tbody>
+      ${L.map(r => `<tr data-rel="maoDeObra:${r.id}"><td>${esc(r.posto || '')}</td><td class="r">${n(r.qtdContratada)}</td><td class="r">${m(r.salario)}</td><td class="r">${num(r.salario) !== null && num(r.qtdContratada) !== null ? fmtMoney(num(r.salario) * num(r.qtdContratada)) : '—'}</td><td class="r">${m(r.custoPrevisto)}</td><td>${r.divergencia && !isGap(r.divergencia) ? esc(r.divergencia) : '—'}</td></tr>`).join('')}
+      </tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--line-strong)"><td>Total mensal</td><td class="r">${fmtNum(q)}</td><td class="r"></td><td class="r">${sal ? fmtMoney(sal) : '—'}</td><td class="r">${prev ? fmtMoney(prev) : '—'}</td><td></td></tr></tfoot></table></div>` : '<p class="muted small">Nenhum posto cadastrado.</p>'}`;
+  },
   /** linhas mensais vindas dos relatórios do DP (folha e benefícios), em ordem de competência */
   moMensal(L) {
     if (!L.length) return '';
@@ -2025,7 +2034,7 @@ const Consult = {
       ${mini('Achados e plano de ação', 'achados', ac, ['codigo', 'area', 'achado', 'risco', 'status'])}
       ${Superv.html(e, c)}
       ${mini('Obrigações', 'obrigacoes', ob, ['clausula', 'grupo', 'obrigacao', 'status'])}
-      ${mini('Mão de obra — postos contratados', 'maoDeObra', mo.filter(r => r.origem !== 'folhaDP'), ['posto', 'qtdContratada', 'salario', 'custoPrevisto', 'divergencia'])}
+      ${Consult.moPostos(mo.filter(r => r.origem !== 'folhaDP'))}
       ${Consult.moMensal(mo.filter(r => r.origem === 'folhaDP'))}
       ${mini('Financeiro', 'financeiro', fi, ['tipo', 'grupo', 'descricao', 'previsto', 'realizado'])}
       ${me.length ? mini('Medições', 'medicoes', me, ['competencia', 'numero', 'valorMedido', 'valorFaturado', 'glosa']) : ''}
