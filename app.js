@@ -9,7 +9,7 @@
 const APP_VERSAO = '1.8.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar'] },
+  { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte'] },
   { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca começa na hora e traz todo o histórico de intimações do advogado no DJEN (depois, só as novas)', 'Consulta ao DJEN mais robusta: quando a API responde “sistema muito ocupado”, o app espera e tenta de novo, respeitando o limite de consultas por minuto', 'Consulta testada com a OAB real: a API do DJEN às vezes falha em páginas com registros defeituosos (“sistema muito ocupado”) — o app agora tenta de novo e, se preciso, lê a página em partes e pula só o trecho defeituoso', 'Cliente: vinculado sozinho quando uma parte já é cliente cadastrado; nos demais casos, a revisão mostra as partes de cada processo para escolher o cliente (com sugestão quando as intimações dão sinal claro) — testes com os processos reais mostraram que o lado do escritório não dá para deduzir com segurança só pelo DJEN'] },
   { numero: '1.8.0', data: '10/11/2026', itens: ['Partes em campos próprios: polo ativo e polo passivo, cada parte com seus advogados (OAB/UF) e o selo “escritório” nos advogados da casa', 'Cliente automático: a parte do lado em que atua o advogado do escritório vira o cliente — vinculada se já existir, criada se não existir', 'Na revisão dos processos encontrados pela OAB, a coluna “Cliente do escritório” mostra o lado detectado e permite corrigir', 'Processos já cadastrados sem cliente recebem partes e cliente a cada nova intimação'] },
   { numero: '1.7.0', data: '10/11/2026', itens: ['Cadastro dos advogados do escritório (nome, OAB, UF) em Gestão do App › Sistema', 'Consulta automática diária às intimações do DJEN (API pública do CNJ) em nome desses advogados: cada intimação é lançada no processo, com o texto publicado', 'Processos com intimação ainda não cadastrados aparecem para revisar e cadastrar com um clique (com os andamentos do DataJud) ou ignorar'] },
@@ -39,6 +39,7 @@ function num(v) {
   let s = String(v).replace(/R\$|\s/g, '');
   if (!/^-?[\d.,]+$/.test(s)) return null;
   if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); // 50.000 = cinquenta mil
   else if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g, '');
   const n = parseFloat(s);
   return isFinite(n) ? n : null;
@@ -1586,16 +1587,17 @@ const Judicial = {
     const rows = procs.map(p => { const m = lastMov(p.id); return { ...p, _cli: clienteNomes(p) || '⚠ cliente a definir', _area: AREAS[p.area]?.nome, _ult: m?.data || null, _ultT: m?.titulo || '', _prox: DB.where('prazos', x => x.processoId === p.id && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data))[0]?.data || null }; });
     const sc = { fields: [F('numero', 'Número', 'cnj'), F('_cli', 'Cliente(s)'), F('_area', 'Área'), F('classe', 'Classe'), F('orgao', 'Órgão julgador'), F('status', 'Situação', 'select', { opts: [] }), F('_ult', 'Última movimentação', 'date'), F('_prox', 'Próximo compromisso', 'date'), F('parteContraria', 'Parte contrária'), F('assunto', 'Assunto')] };
     const ativos = procs.filter(p => p.status !== 'Encerrado' && p.status !== 'Arquivado provisoriamente');
-    const valor = procs.reduce((s, p) => s + (num(p.valorCausa) || 0), 0);
+    const valor = procs.reduce((s, p) => s + (num(p.valorCausa) || 0), 0), comValor = procs.filter(p => num(p.valorCausa) > 0).length;
     const semMov30 = ativos.filter(p => { const m = lastMov(p.id); return !m || daysUntil(m.data) < -30; }).length;
     v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Judicial</span><h1>${icon(A?.icon || 'layers', 'h-ic')} ${all ? 'Todos os processos' : 'Direito ' + (A.nome === 'Cível' ? 'Civil' : A.nome)}</h1><p class="muted">Processos próprios do escritório, com movimentações e acesso do cliente pelo portal.</p></div>
       <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn primary" id="nProcDocs">${icon('upload')} Cadastrar pelos arquivos</button></div></div>
-      <div class="kpis sm">${kpi('Em andamento', ativos.length)}${kpi('Total cadastrados', procs.length)}${kpi('Valor das causas', fmtMoneyShort(valor))}${kpi('Sem movimentação há 30+ dias', semMov30, 'merecem consulta', semMov30 ? 'warn' : '')}</div>
+      <div class="kpis sm">${kpi('Em andamento', ativos.length)}${kpi('Total cadastrados', procs.length)}${kpi('Valor das causas', fmtMoneyShort(valor), comValor < procs.length ? `em ${comValor} de ${procs.length} processos · <button class="link" id="kVal">informar os demais</button>` : '')}${kpi('Sem movimentação há 30+ dias', semMov30, 'merecem consulta', semMov30 ? 'warn' : '')}</div>
       ${DJEN.pendentes().length ? `<div class="notice">${icon('mail')}<div><b>${DJEN.pendentes().length} processo(s) com intimação no DJEN em nome dos advogados do escritório ainda não cadastrados.</b> <button class="link" id="djPendJ">Revisar e cadastrar</button></div></div>` : ''}
       ${DJEN.cadastrados().length ? `<p class="muted small right"><button class="link" id="djDesfJ">${icon('list')} Processos cadastrados pela OAB (${DJEN.cadastrados().length}) — devolver para a revisão</button></p>` : ''}
       <section class="card flush" id="tbl"></section>`;
     $('#djPendJ')?.addEventListener('click', () => DJEN.revisarPendentes());
     $('#djDesfJ')?.addEventListener('click', () => DJEN.gerenciarCadastrados());
+    $('#kVal')?.addEventListener('click', () => Judicial.completarValores(procs));
     dataTable($('#tbl'), {
       id: 'proc-' + area, rows, schema: sc, cols: all ? ['numero', '_cli', '_area', 'classe', 'status', '_ult', '_prox'] : ['numero', '_cli', 'classe', 'orgao', 'status', '_ult', '_prox'],
       filters: [{ k: 'status', label: 'Situação', opts: SCHEMAS.processos.fields.find(f => f.k === 'status').opts }],
@@ -1643,15 +1645,8 @@ const Judicial = {
       </div>
     </div>
     ${Judicial.partesHtml(p)}
-    <div class="grid-main">
-      <section class="card">
-        <header><h2>${icon('history')} Movimentações</h2><div class="hdr-actions"><span class="muted small">${visiveis} de ${movs.length} visíveis ao cliente</span><button class="btn ghost sm" id="mAdd">${icon('plus')} Lançar</button></div></header>
-        ${p.ultimaSync ? `<p class="muted small">Última consulta ao DataJud: ${esc(fmtDateTime(p.ultimaSync))}</p>` : ''}
-        ${movs.length ? `<ol class="timeline">${movs.map(m => `<li class="${m.visivelCliente ? '' : 'hidden-mov'}"><span class="tl-dot"></span><div class="tl-head"><time>${esc(fmtDate(m.data))}</time>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : m.origem === 'djen' ? '<span class="badge djen">DJEN</span>' : m.origem === 'documento' ? '<span class="badge soft">Documento</span>' : '<span class="badge soft">Escritório</span>'}<span class="sp"></span><button class="icon-btn sm" data-vis="${m.id}" title="${m.visivelCliente ? 'Visível ao cliente — clique para ocultar' : 'Oculto do cliente — clique para mostrar'}">${icon(m.visivelCliente ? 'eye' : 'eyeOff')}</button><button class="icon-btn sm" data-mov="${m.id}" title="Editar">${icon('edit')}</button></div><b class="tl-t">${esc(m.titulo)}</b>${Judicial.textoMov(m)}${m.link ? `<a class="link small" href="${esc(m.link)}" target="_blank" rel="noopener">${icon('link')} abrir publicação</a>` : ''}${m.explicacao ? `<p class="explain">${icon('user')} <span>${esc(m.explicacao)}</span></p>` : ''}</li>`).join('')}</ol>` : `<div class="empty sm">${icon('history')}<p>Nenhuma movimentação. Lance manualmente ou busque no DataJud.</p></div>`}
-      </section>
-      <div class="col">
-        <section class="card"><header><h2>${icon('file')} Dados do processo</h2></header>
-          <dl class="dl">
+<section class="card dados-card"><header><h2>${icon('file')} Dados do processo</h2></header>
+          <dl class="dl cols">
             <dt>Cliente(s)</dt><dd>${clientes.map(c => `<a href="#/clientes?c=${c.id}">${esc(c.nome)}</a>`).join(', ') || '—'}</dd>
             <dt>Órgão julgador</dt><dd>${esc(p.orgao || '—')}</dd><dt>Comarca</dt><dd>${esc(p.comarca || '—')}</dd>
             <dt>Distribuição</dt><dd>${esc(fmtDate(p.distribuicao) || '—')}</dd><dt>Valor da causa</dt><dd>${esc(fmtMoney(p.valorCausa) || '—')}</dd>
@@ -1660,6 +1655,14 @@ const Judicial = {
           </dl>
           ${p.obs ? `<div class="note-box"><span class="lbl">Anotações internas</span>${esc(p.obs)}</div>` : ''}
         </section>
+    <div class="grid-main">
+      <section class="card">
+        <header><h2>${icon('history')} Movimentações</h2><div class="hdr-actions"><span class="muted small">${visiveis} de ${movs.length} visíveis ao cliente</span><button class="btn ghost sm" id="mAdd">${icon('plus')} Lançar</button></div></header>
+        ${p.ultimaSync ? `<p class="muted small">Última consulta ao DataJud: ${esc(fmtDateTime(p.ultimaSync))}</p>` : ''}
+        ${movs.length ? `<ol class="timeline">${movs.map(m => `<li class="${m.visivelCliente ? '' : 'hidden-mov'}"><span class="tl-dot"></span><div class="tl-head"><time>${esc(fmtDate(m.data))}</time>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : m.origem === 'djen' ? '<span class="badge djen">DJEN</span>' : m.origem === 'documento' ? '<span class="badge soft">Documento</span>' : '<span class="badge soft">Escritório</span>'}<span class="sp"></span><button class="icon-btn sm" data-vis="${m.id}" title="${m.visivelCliente ? 'Visível ao cliente — clique para ocultar' : 'Oculto do cliente — clique para mostrar'}">${icon(m.visivelCliente ? 'eye' : 'eyeOff')}</button><button class="icon-btn sm" data-mov="${m.id}" title="Editar">${icon('edit')}</button></div><b class="tl-t">${esc(m.titulo)}</b>${Judicial.textoMov(m)}${m.link ? `<a class="link small" href="${esc(m.link)}" target="_blank" rel="noopener">${icon('link')} abrir publicação</a>` : ''}${m.explicacao ? `<p class="explain">${icon('user')} <span>${esc(m.explicacao)}</span></p>` : ''}</li>`).join('')}</ol>` : `<div class="empty sm">${icon('history')}<p>Nenhuma movimentação. Lance manualmente ou busque no DataJud.</p></div>`}
+      </section>
+      <div class="col">
+
         <section class="card"><header><h2>${icon('file')} Arquivos</h2>${p.pastaLink ? `<a class="link small" href="${esc(p.pastaLink)}" target="_blank" rel="noopener">${icon('link')} Pasta no Drive</a>` : ''}</header>
           ${(p.arquivos || []).length ? `<ul class="plain files">${p.arquivos.map(a => `<li>${icon('file')} ${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>` : esc(a.nome)}${a.tipo ? ` <span class="muted small">· ${esc(a.tipo)}</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Nenhum arquivo. Use “Juntar arquivos” para guardar petições, decisões e documentos na pasta do processo no Drive do escritório.</p>'}</section>
         <section class="card"><header><h2>${icon('calendar')} Agenda</h2><button class="btn ghost sm" id="aAdd">${icon('plus')} Novo</button></header>
@@ -1697,16 +1700,31 @@ const Judicial = {
     } catch (e) { UI.toast(e.message, 'bad'); b.disabled = false; b.innerHTML = icon('sync') + ' Buscar movimentações (DataJud)'; }
   },
   /** texto da movimentação: nas decisões publicadas, só a parte dispositiva (a íntegra fica em "ler inteiro teor") */
+  recolher: `<button type="button" class="link small tl-rec" onclick="const d=this.closest('details');d.open=false;d.scrollIntoView({block:'nearest',behavior:'smooth'})">▲ recolher</button>`,
+  /** completar o valor da causa dos processos que não têm (o DJEN e o DataJud não informam esse dado) */
+  completarValores(procs) {
+    const l = procs.filter(p => !(num(p.valorCausa) > 0));
+    const m = UI.modal({ title: 'Valor da causa', sub: `${l.length} processo(s) sem valor informado`, wide: true,
+      body: `<p class="muted small">O DJEN e o DataJud não informam o valor da causa. Digite os valores que souber (os vazios ficam como estão) — ou use “Juntar arquivos” com a petição inicial no processo, que a IA preenche sozinha.</p>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>Processo</th><th>Cliente</th><th>Classe</th><th style="width:170px">Valor da causa (R$)</th></tr></thead><tbody>
+        ${l.map((p, i) => `<tr><td class="mono">${esc(fmtCNJ(p.numero))}</td><td>${esc(clienteNomes(p) || '—')}</td><td>${esc(p.classe || '')}</td><td><input class="input sm" data-vc="${i}" inputmode="decimal" placeholder="0,00"></td></tr>`).join('')}</tbody></table></div>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="vcOk">${icon('check')} Salvar valores</button>` });
+    $('#vcOk', m).onclick = async () => {
+      const mud = $$('[data-vc]', m).map(x => [l[+x.dataset.vc], num(x.value)]).filter(([, v]) => v > 0).map(([p, v]) => ({ ...p, valorCausa: v }));
+      if (mud.length) await DB.save('processos', mud);
+      UI.closeModal(); UI.toast(`${mud.length} valor(es) salvo(s).`); App.render(true);
+    };
+  },
   textoMov(m) {
     const t = m.descricao || ''; if (!t) return '';
     if (DJEN.ehDecisao(m.titulo)) {
       const d = DJEN.dispositivo(t);
-      if (d.resumido) return `<p class="dispositivo"><span class="disp-tag">Dispositivo</span>${esc(d.texto)}</p><details class="tl-more"><summary><span class="link small">ler inteiro teor</span></summary><p class="pre">${esc(t)}</p></details>`;
+      if (d.resumido) return `<p class="dispositivo"><span class="disp-tag">Dispositivo</span>${esc(d.texto)}</p><details class="tl-more full"><summary><span class="link small">ler inteiro teor</span></summary><p class="pre">${esc(t)}</p>${Judicial.recolher}</details>`;
     }
-    return t.length > 420 ? `<details class="tl-more"><summary>${esc(t.slice(0, 300))}… <span class="link small">ler tudo</span></summary><p class="pre">${esc(t)}</p></details>` : `<p>${esc(t)}</p>`;
+    return t.length > 420 ? `<details class="tl-more"><summary><span class="tl-prev">${esc(t.slice(0, 300))}… </span><span class="link small">ler tudo</span></summary><p class="pre">${esc(t)}</p>${Judicial.recolher}</details>` : `<p>${esc(t)}</p>`;
   },
   partesHtml(p) {
-    const ps = p.partes || []; if (!ps.length) return '';
+    const ps = (p.partes || []).map(x => ({ ...x, papel: x.papel || DJEN.papelDe(x.nome), nome: DJEN.limparNome(x.nome) })).filter(x => !DJEN.ehAdvDoEscritorio(x.nome)); if (!ps.length) return '';
     const grupo = (pl, tit) => { const l = ps.filter(x => (x.polo || '') === pl); return l.length ? `<div class="pt-grupo"><h4>${tit}</h4>${l.map(x => `<div class="pt-item"><div><b>${esc(x.nome)}</b>${x.cliente ? ' <span class="pill good">cliente</span>' : ''}${x.papel ? ` <small class="muted">${esc(x.papel)}</small>` : ''}${x.doc ? ` <small class="muted mono">${esc(fmtDoc(x.doc))}</small>` : ''}</div>${(x.advogados || []).length ? `<small class="pt-adv">${icon('user')} ${x.advogados.map(a => esc(a.nome) + (a.oab ? ` <span class="muted">(OAB ${esc(a.oab)}${a.uf ? '/' + esc(a.uf) : ''})</span>` : '') + (a.escritorio ? ' <span class="badge soft">escritório</span>' : '')).join(' · ')}</small>` : ''}</div>`).join('')}</div>` : ''; };
     return `<section class="card partes-card"><header><h2>${icon('users')} Partes</h2></header><div class="pt-cols">${grupo('Ativo', 'Polo ativo')}${grupo('Passivo', 'Polo passivo')}${grupo('Terceiro', 'Terceiros interessados')}${grupo('', 'Polo não informado')}</div></section>`;
   },
@@ -2989,6 +3007,10 @@ function apiT(action, payload, ms = 300000) {
 const DJEN = {
   API: 'https://comunicaapi.pje.jus.br/api/v1/comunicacao',
   rodando: false,
+  /** "1. HAPVIDA ASSISTENCIA MEDICA S.A. (AGRAVANTE)" → nome "HAPVIDA ASSISTENCIA MEDICA S.A.", papel "Agravante" */
+  limparNome: n => String(n || '').replace(/^\s*\d+\s*[.)-]\s*/, '').replace(/\s*\(([^()]{3,40})\)\s*$/, '').trim(),
+  papelDe: n => { const m = String(n || '').match(/\(([^()]{3,40})\)\s*$/); return m ? m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() : ''; },
+  ehAdvDoEscritorio: nome => (escritorio().advogados || []).some(a => a.nome && norm(a.nome) === norm(nome)),
   estado() { return DB.get('config', 'djen') || { id: 'djen', pendentes: [], ignorados: [] }; },
   pendentes() { const existe = new Set(DB.all('processos').map(p => onlyDigits(p.numero))); return (DJEN.estado().pendentes || []).filter(q => !existe.has(q.numero)); },
   advogados() { return (escritorio().advogados || []).filter(a => a.ativo !== false && onlyDigits(a.oab) && a.uf).map(a => ({ ...a })); },
@@ -2999,7 +3021,7 @@ const DJEN = {
   norm(it) {
     const g = (...ks) => { for (const k of ks) if (it[k] !== undefined && it[k] !== null && it[k] !== '') return it[k]; return ''; };
     const num = onlyDigits(g('numero_processo', 'numeroProcesso', 'numeroprocessocommascara', 'numero_processo_com_mascara'));
-    const dest = (it.destinatarios || []).map(d => ({ nome: d.nome || '', polo: d.polo === 'A' ? 'Ativo' : d.polo === 'P' ? 'Passivo' : d.polo === 'T' ? 'Terceiro' : (d.polo || '') }));
+    const dest = (it.destinatarios || []).map(d => ({ nome: DJEN.limparNome(d.nome), papel: DJEN.papelDe(d.nome), polo: d.polo === 'A' ? 'Ativo' : d.polo === 'P' ? 'Passivo' : d.polo === 'T' ? 'Terceiro' : (d.polo || '') }));
     const advs = (it.destinatarioadvogados || it.destinatarioAdvogados || []).map(d => { const a = d.advogado || d; return { nome: a.nome || '', oab: onlyDigits(a.numero_oab || a.numeroOab || ''), uf: a.uf_oab || a.ufOab || '' }; });
     return {
       id: String(g('id', 'hash')), hash: g('hash'), numero: num.length === 20 ? num : '', data: parseDate(g('data_disponibilizacao', 'datadisponibilizacao', 'dataDisponibilizacao')) || '',
@@ -3168,6 +3190,12 @@ const DJEN = {
       DB.all('processos').forEach(p => {
         if (removerP.includes(p.id)) return;
         let mudou = false; const n = DJEN.nomeAdv(p.responsavel); if (n !== (p.responsavel || '')) { p.responsavel = n; mudou = true; }
+        if ((p.partes || []).length) {
+          const limpas = p.partes.filter(x => !DJEN.ehAdvDoEscritorio(DJEN.limparNome(x.nome))).map(x => ({ ...x, papel: x.papel || DJEN.papelDe(x.nome), nome: DJEN.limparNome(x.nome) }));
+          if (JSON.stringify(limpas) !== JSON.stringify(p.partes)) { p.partes = limpas; mudou = true; }
+          const lc = (p.parteContraria || '').split(/;\s*/).filter(n => n && !DJEN.ehAdvDoEscritorio(DJEN.limparNome(n))).map(DJEN.limparNome).join('; ');
+          if (lc !== (p.parteContraria || '')) { p.parteContraria = lc; mudou = true; }
+        }
         const pc = (p.partes || []).find(x => x.cliente);
         if (pc && pc.polo) {
           if (!p.polo) { p.polo = DJEN.poloCliente(pc.polo, p.area); mudou = true; }
@@ -3229,7 +3257,7 @@ const DJEN = {
     const achar = nome => partes.find(p => norm(p.nome) === norm(nome));
     for (const i of ints) {
       const dest = (i.dest || []).filter(d => d.nome);
-      dest.forEach(d => { const p = achar(d.nome); if (!p) partes.push({ nome: d.nome, polo: d.polo || '', advogados: [] }); else if (!p.polo && d.polo) p.polo = d.polo; });
+      dest.forEach(d => { const p = achar(d.nome); if (!p) partes.push({ nome: d.nome, polo: d.polo || '', papel: d.papel || '', advogados: [] }); else if (!p.polo && d.polo) p.polo = d.polo; });
       const polos = [...new Set(dest.map(d => d.polo || '?'))];
       if (polos.length !== 1 || !['Ativo', 'Passivo'].includes(polos[0])) continue;
       votos[polos[0]]++;
