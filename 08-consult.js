@@ -5,7 +5,7 @@
 const TABS = [
   ['painel', 'Painel', 'chart'], ['contratos', 'Contratos', 'file'], ['obrigacoes', 'Obrigações', 'check'], ['maoDeObra', 'Mão de obra', 'users'],
   ['materiais', 'Materiais', 'layers'], ['financeiro', 'Financeiro', 'briefcase'], ['medicoes', 'Medições', 'list'], ['indicadores', 'Indicadores', 'chart'],
-  ['achados', 'Achados e plano de ação', 'alert'], ['documentos', 'Documentos', 'file'], ['aditivos', 'Aditivos', 'edit'], ['relatorios', 'Relatórios', 'printer']
+  ['achados', 'Achados e plano de ação', 'alert'], ['supervenientes', 'Custos supervenientes', 'briefcase'], ['documentos', 'Documentos', 'file'], ['aditivos', 'Aditivos', 'edit'], ['relatorios', 'Relatórios', 'printer']
 ];
 const empRecs = (c, eid) => DB.where(c, r => r.empresaId === eid);
 const tomadorBase = c => String(c.tomador || '').split(/ [–-] /)[0].replace(/\(ver unidade\)/i, '').trim() || 'Não informado';
@@ -14,15 +14,17 @@ const Consult = {
   list(v) {
     App.crumbs([{ t: 'Consultoria jurídica' }, { t: 'Empresas' }]);
     const emps = DB.all('empresas').sort((a, b) => (a.fantasia || a.razao).localeCompare(b.fantasia || b.razao));
-    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Consultoria jurídica</span><h1>Empresas</h1><p class="muted">Empresas atendidas na gestão e auditoria de contratos.</p></div><div class="actions"><button class="btn primary" id="nEmp">${icon('plus')} Nova empresa</button></div></div>
+    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Consultoria jurídica</span><h1>Empresas</h1><p class="muted">Empresas atendidas na gestão e auditoria de contratos.</p></div><div class="actions"><button class="btn ghost" id="nEmp">${icon('plus')} Nova empresa</button><button class="btn primary" id="nEmpDocs">${icon('upload')} Cadastrar pelos documentos</button></div></div>
     ${emps.length ? `<div class="emp-grid">${emps.map(e => {
       const cs = empRecs('contratos', e.id), at = cs.filter(contratoAtivo), ach = empRecs('achados', e.id).filter(achadoAberto);
       const cart = at.reduce((s, c) => s + (num(c.valorMensal) || 0), 0);
       return `<a class="emp-card" href="#/empresa/${e.id}"><div class="emp-ini">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div class="emp-body"><b>${esc(e.fantasia || e.razao)}</b><small>${esc(e.razao)}${e.cnpj ? ' · ' + esc(fmtDoc(e.cnpj)) : ''}</small>
         <div class="emp-stats"><span><b>${cs.length}</b> contratos</span><span><b>${at.length}</b> vigentes</span><span><b>${ach.length}</b> achados abertos</span>${cart ? `<span><b>${fmtMoneyShort(cart)}</b>/mês</span>` : ''}</div></div>${icon('chevR')}</a>`;
-    }).join('')}</div>` : `<div class="empty big">${icon('building')}<h3>Nenhuma empresa cadastrada</h3><p>Cadastre a primeira empresa e importe a planilha de auditoria dos contratos.</p><button class="btn primary" id="nEmp2">${icon('plus')} Cadastrar empresa</button></div>`}`;
+    }).join('')}</div>` : `<div class="empty big">${icon('building')}<h3>Nenhuma empresa cadastrada</h3><p>Digite o CNPJ (os dados vêm da Receita Federal) ou simplesmente arraste a pasta com os contratos e a planilha — o app identifica a empresa e cadastra tudo.</p><div class="btn-row center"><button class="btn ghost" id="nEmp2">${icon('plus')} Cadastrar pelo CNPJ</button><button class="btn primary" id="nEmpDocs2">${icon('upload')} Cadastrar pelos documentos</button></div></div>`}`;
     $('#nEmp').onclick = () => Consult.editEmpresa(null);
     $('#nEmp2') && ($('#nEmp2').onclick = () => Consult.editEmpresa(null));
+    $('#nEmpDocs').onclick = () => Docs.open(null);
+    $('#nEmpDocs2') && ($('#nEmpDocs2').onclick = () => Docs.open(null));
   },
   editEmpresa(e) { UI.editRecord('empresas', e, { onSaved: s => { location.hash = '#/empresa/' + s.id; App.render(); } }); },
 
@@ -33,11 +35,11 @@ const Consult = {
     App.crumbs([{ t: 'Consultoria', href: '/empresas' }, { t: e.fantasia || e.razao, href: '/empresa/' + eid }, { t: T[1] }]);
     const count = c => empRecs(c, eid).length;
     v.innerHTML = `<div class="ws-h"><div class="emp-ini lg">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div><span class="eyebrow">Consultoria jurídica</span><h1>${esc(e.fantasia || e.razao)}</h1><p class="muted">${esc(e.razao)}${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${e.segmento ? ' · ' + esc(e.segmento) : ''}</p></div>
-      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button><label class="btn ghost">${icon('upload')} Importar planilha<input type="file" id="wImp" accept=".xlsx" hidden></label><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn primary" id="wRep">${icon('printer')} Relatório</button></div></div>
+      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
-    $('#wImp').onchange = ev => ev.target.files[0] && Consult.importar(e, ev.target.files[0]);
+    $('#wDocs').onclick = () => Docs.open(e);
     $('#wExp').onclick = () => Consult.exportar(e);
     $('#wRep').onclick = () => Report.dialog(e);
     const body = $('#wsBody');
@@ -57,7 +59,7 @@ const Consult = {
       ${gaps ? `<div class="notice warn">${icon('alert')}<div><b>${gaps} campo(s) “não identificado no contrato”</b> nesta aba — lacunas documentais que reduzem o índice de completude. Clique no registro para completar quando o documento for obtido.</div></div>` : ''}
       <section class="card flush" id="dt"></section>`;
     const open = r => coll === 'contratos' ? Consult.contrato360(e, r) : UI.editRecord(coll, r, { ctx });
-    dataTable($('#dt'), { id: coll + e.id, rows, schema: sc, filters, onOpen: open, actions: `<button class="btn primary sm" id="dtNew">${icon('plus')} Novo</button>`, emptyMsg: `Nenhum registro em ${sc.titulo}. Use “Novo” ou importe a planilha.` });
+    dataTable($('#dt'), { id: coll + e.id, rows, schema: sc, filters, sortDefault: sc.key || (sc.fields.some(f => f.k === 'contrato') ? 'contrato' : null), onOpen: open, actions: `<button class="btn primary sm" id="dtNew">${icon('plus')} Novo</button>`, emptyMsg: `Nenhum registro em ${sc.titulo}. Use “Novo” ou importe a planilha.` });
     $('#dtNew').onclick = () => {
       const base = {}; if (coll === 'contratos' && e.sigla) { const n = rows.map(r => +(String(r.codigo).match(/(\d+)$/) || [0, 0])[1]).reduce((a, b) => Math.max(a, b), 0) + 1; base.codigo = `${e.sigla}-${String(n).padStart(3, '0')}`; }
       if (coll === 'achados') base.status = 'Pendente';
@@ -68,7 +70,77 @@ const Consult = {
   },
 
   /* visão 360º do contrato: tudo que se relaciona a ele */
+  /** tipo "canônico" de um documento, para casar inventário × peças do compilado */
+  tipoDoc: t => /aditivo|apostil/i.test(t || '') ? 'aditivo' : /refer[eê]ncia|\bTR\b/i.test(t || '') ? 'tr' : /edital/i.test(t || '') ? 'edital' : /planilha/i.test(t || '') ? 'planilha' : /anexo/i.test(t || '') ? 'anexo' : /contrato/i.test(t || '') ? 'contrato' : 'outro',
+  /** compilado (com link) que já contém a peça deste documento do inventário */
+  cobertoPor(d, l) { if (d.link) return null; const k = Consult.tipoDoc(d.tipo || d.arquivo); return l.find(x => x.link && (x.pecas || []).some(p => Consult.tipoDoc(p.tipo) === k)) || null; },
+  /** o que um PDF contém: várias peças num arquivo só (aditivo + contrato + TR + anexos) */
+  conteudoDoc(e, c, d) {
+    const T = ['Termo aditivo', 'Contrato', 'Termo de referência', 'Edital', 'Planilha de custos', 'Anexo', 'Outro'];
+    const at = d.pecas || [], pega = t => at.find(x => x.tipo === t);
+    const m = UI.modal({ title: 'O que este PDF contém?', sub: esc(d.arquivo || ''), body: `<p class="muted small">Marque as peças que estão neste arquivo e, se souber, a página em que cada uma começa. Assim o app sabe, por exemplo, que o contrato principal está aqui mesmo que o PDF comece pelo aditivo.</p>
+      <table class="mini pecas-t"><thead><tr><th></th><th>Peça</th><th>Página inicial</th><th>Página final</th></tr></thead><tbody>${T.map((t, i) => { const x = pega(t) || {}; return `<tr><td><input type="checkbox" data-pc="${i}" ${pega(t) ? 'checked' : ''}></td><td>${t}</td><td><input class="input sm" type="number" min="1" data-pi="${i}" value="${esc(x.paginaInicial || '')}"></td><td><input class="input sm" type="number" min="1" data-pf="${i}" value="${esc(x.paginaFinal || '')}"></td></tr>`; }).join('')}</tbody></table>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="pcOk">${icon('check')} Salvar</button>` });
+    $$('[data-pi],[data-pf]', m).forEach(x => x.oninput = () => { const i = x.dataset.pi ?? x.dataset.pf; if (x.value) $(`[data-pc="${i}"]`, m).checked = true; });
+    $('#pcOk', m).onclick = async () => {
+      const pecas = T.map((t, i) => $(`[data-pc="${i}"]`, m).checked ? { tipo: t, paginaInicial: +$(`[data-pi="${i}"]`, m).value || null, paginaFinal: +$(`[data-pf="${i}"]`, m).value || null } : null).filter(Boolean)
+        .sort((a, b) => (a.paginaInicial || 999) - (b.paginaInicial || 999));
+      await DB.save('documentos', { ...d, pecas, tipo: pecas.length > 1 ? 'PDF compilado' : (pecas[0]?.tipo || d.tipo) });
+      UI.toast('Conteúdo do PDF registrado.'); Consult.contrato360(e, DB.get('contratos', c.id) || c);
+    };
+  },
+  /** legenda discreta: o que falta na documentação deste contrato */
+  diagArquivos(e, c, l) {
+    const eAd = d => (d.pecas || []).length ? (d.pecas || []).some(x => /aditivo|apostil/i.test(x.tipo || '')) : /aditivo|apostil/i.test((d.tipo || '') + ' ' + (d.arquivo || ''));
+    const temPeca = (d, re) => (d.pecas || []).some(x => re.test(x.tipo || ''));
+    const eCt = d => temPeca(d, /^contrato/i) || (!eAd(d) && /contrato/i.test(d.tipo || ''));
+    const lk = l.filter(d => d.link), ctOk = lk.some(eCt), adOk = lk.some(eAd), semLink = l.filter(d => !d.link && !Consult.cobertoPor(d, l)), cobertos = l.filter(d => Consult.cobertoPor(d, l));
+    const temAditivo = adOk || l.some(eAd) || (c.aditivos && !isGap(c.aditivos) && /aditivo/i.test(c.aditivos));
+    const msgs = [];
+    if (!l.length) msgs.push('Nenhum documento deste contrato no app: junte o contrato principal e, se houver, os aditivos.');
+    else if (!ctOk) msgs.push(lk.length ? `<b>Falta o contrato principal</b> no Drive — ${adOk ? 'só há termo(s) aditivo(s)' : 'os arquivos juntados não foram reconhecidos como contrato'}. Sem ele não dá para conferir objeto, cláusulas e valores originais: obtenha o PDF com o tomador e junte aqui.` : '<b>Falta o contrato principal</b> no Drive: junte o PDF do contrato original.');
+    if (ctOk && temAditivo && !adOk) msgs.push('O cadastro registra aditivo, mas o PDF do aditivo não está no Drive.');
+    if (semLink.length) msgs.push(`${semLink.length} documento(s) do inventário da auditoria ainda sem arquivo no Drive — clique no botão tracejado para escolher o PDF (do RAR descompactado) e anexá-lo.`);
+    const ach = DB.where('achados', a => a.empresaId === e.id && a.contrato === c.codigo && achadoAberto(a) && /contrato[- ]base|contrato (principal|original)|n[aã]o (foi )?identificad[oa] (o )?contrato|pdf leg[ií]vel/i.test(a.achado || ''));
+    if (cobertos.length) msgs.push(`${cobertos.length} documento(s) do inventário (${esc(cobertos.map(d => d.arquivo || d.tipo).join('; ').slice(0, 120))}) estão dentro do PDF compilado.`);
+    if (ach.length && !ctOk && msgs.length) msgs.push(`Relacionado ao(s) achado(s) em aberto ${esc(ach.map(a => a.codigo).join(', '))}.`);
+    const pgCt = lk.flatMap(d => (d.pecas || []).filter(x => /^contrato/i.test(x.tipo || '')).map(x => x.paginaInicial)).filter(Boolean)[0];
+    if (ctOk && ach.length) msgs.push(`O contrato principal está no Drive${pgCt ? ` (a partir da pág. ${pgCt})` : ''}, então o achado ${esc(ach.map(a => a.codigo).join(', '))} pode ser concluído: <button type="button" class="link small" data-achok="${ach.map(a => a.id).join(',')}">concluir com esta evidência</button>.`);
+    if (ctOk && !semLink.length) msgs.unshift('Documentação no Drive: contrato principal' + (adOk ? ' e aditivo(s)' : '') + ' presentes.');
+    if (!msgs.length) msgs.push('Sem pendências de documentação.');
+    return `<p class="arq-leg">${icon(ctOk && !semLink.length ? 'check' : 'alert')}<span>${msgs.join(' ')}</span></p>`;
+  },
+  /** arquivos do contrato no Drive do escritório (contrato, aditivos, termos…) */
+  arquivosHtml(e, c, dc) {
+    const ord = d => /aditivo/i.test(d.tipo || d.arquivo || '') ? 1 : /contrato/i.test(d.tipo || '') ? 0 : 2;
+    const l = dc.slice().sort((a, b) => ord(a) - ord(b) || String(a.arquivo || '').localeCompare(String(b.arquivo || ''), 'pt-BR', { numeric: true }));
+    const comLink = l.filter(d => d.link), sem = l.filter(d => !d.link && !Consult.cobertoPor(d, l));
+    return `<div class="arq-bar"><span class="lbl">${icon('file')} Arquivos no Drive</span>
+      ${comLink.map(d => `<span class="arq-w"><a class="arq" href="${esc(d.link)}" target="_blank" rel="noopener" title="${esc(d.arquivo || '')}">${icon('link')}<span><b>${(d.pecas || []).length > 1 ? 'PDF compilado' : esc((d.pecas || [])[0]?.tipo || d.tipo || 'Documento')}${d.numero ? ' ' + esc(d.numero) : ''}</b><small>${(d.pecas || []).length > 1 ? esc(d.pecas.map(x => x.tipo + (x.paginaInicial ? ' (p. ' + x.paginaInicial + (x.paginaFinal && x.paginaFinal !== x.paginaInicial ? '–' + x.paginaFinal : '') + ')' : '')).join(' · ')) : esc(d.arquivo || 'abrir no Drive')}</small></span></a><button type="button" class="arq-ed" data-dcont="${d.id}" title="Dizer o que este PDF contém (contrato, aditivo, termo de referência, anexos…)">${icon('edit')}</button></span>`).join('')}
+      ${!comLink.length ? `<span class="muted small">${sem.length ? `${sem.length} documento(s) no inventário, ainda sem arquivo no Drive.` : 'Nenhum arquivo juntado a este contrato.'}</span> <button class="btn ghost xs" id="cJunt">${icon('upload')} Juntar o contrato</button>` : ''}
+      ${sem.map(d => `<button type="button" class="arq falta" data-djunt="${d.id}" title="Este documento está no inventário da auditoria, mas o arquivo não está no Drive. Clique para escolher o PDF e anexá-lo.">${icon('upload')}<span><b>${esc(d.tipo || 'Documento')} — sem arquivo</b><small>${esc(d.arquivo || 'escolher o PDF')}</small></span></button>`).join('')}<input type="file" id="cDocF" hidden accept=".pdf,image/*"></div>${Consult.diagArquivos(e, c, l)}`;
+  },
+  /** postos contratados, com o total mensal (salário-base × quantidade e custo previsto) */
+  moPostos(L) {
+    const m = v => num(v) !== null ? fmtMoney(v) : '—', n = v => num(v) !== null ? fmtNum(v) : '—';
+    const q = L.reduce((s, r) => s + (num(r.qtdContratada) || 0), 0), sal = L.reduce((s, r) => s + (num(r.salario) || 0) * (num(r.qtdContratada) || 0), 0), prev = L.reduce((s, r) => s + (num(r.custoPrevisto) || 0), 0);
+    return `<h4 class="sec">Mão de obra — postos contratados <span class="count">${L.length}</span></h4>${L.length ? `<div class="table-wrap"><table class="mini"><thead><tr><th>Posto/função</th><th class="r">Qtd. contratada</th><th class="r">Salário-base (unitário)</th><th class="r">Salário-base × qtd.</th><th class="r">Custo previsto</th><th>Divergência/risco</th></tr></thead><tbody>
+      ${L.map(r => `<tr data-rel="maoDeObra:${r.id}"><td>${esc(r.posto || '')}</td><td class="r">${n(r.qtdContratada)}</td><td class="r">${m(r.salario)}</td><td class="r">${num(r.salario) !== null && num(r.qtdContratada) !== null ? fmtMoney(num(r.salario) * num(r.qtdContratada)) : '—'}</td><td class="r">${m(r.custoPrevisto)}</td><td>${r.divergencia && !isGap(r.divergencia) ? esc(r.divergencia) : '—'}</td></tr>`).join('')}
+      </tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--line-strong)"><td>Total mensal</td><td class="r">${fmtNum(q)}</td><td class="r"></td><td class="r">${sal ? fmtMoney(sal) : '—'}</td><td class="r">${prev ? fmtMoney(prev) : '—'}</td><td></td></tr></tfoot></table></div>` : '<p class="muted small">Nenhum posto cadastrado.</p>'}`;
+  },
+  /** linhas mensais vindas dos relatórios do DP (folha e benefícios), em ordem de competência */
+  moMensal(L) {
+    if (!L.length) return '';
+    L = L.slice().sort((a, b) => String(a.competencia).localeCompare(String(b.competencia)));
+    const m = v => num(v) !== null ? fmtMoney(v) : '—', n = v => num(v) !== null ? fmtNum(v) : '—';
+    return `<h4 class="sec">Mão de obra — custo mês a mês (Departamento Pessoal) <span class="count">${L.length}</span></h4>
+      <p class="muted small" style="margin:-4px 0 8px">Uma linha por competência, com os dados dos relatórios do DP (folha de pagamento, vale-alimentação, cesta básica, vale-transporte e férias). A folha bruta só aparece nos meses em que o relatório da folha a informa. Clique na linha para ver a evidência completa.</p>
+      <div class="table-wrap"><table class="mini"><thead><tr><th>Competência</th><th class="r">Postos contratados</th><th class="r">Empregados na folha</th><th class="r">Folha bruta</th><th class="r">Folha líquida</th><th class="r">Benefícios</th><th class="r">Férias</th><th class="r">Salários previstos</th><th>Divergência</th></tr></thead><tbody>
+      ${L.map(r => `<tr data-rel="maoDeObra:${r.id}"><td><b>${esc(fmtComp(r.competencia))}</b></td><td class="r">${n(r.qtdContratada)}</td><td class="r">${n(r.qtdAlocada)}</td><td class="r">${m(r.custoApurado)}</td><td class="r">${m(r.liquido)}</td><td class="r">${m(r.beneficios)}</td><td class="r">${m(r.encargos)}</td><td class="r">${m(r.custoPrevisto)}</td><td>${r.divergencia ? esc(r.divergencia) : '—'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  },
   contrato360(e, c) {
+    const volta = () => Consult.contrato360(e, DB.get('contratos', c.id) || c);
     const rel = coll => DB.where(coll, r => r.empresaId === e.id && r.contrato === c.codigo);
     const ob = rel('obrigacoes'), mo = rel('maoDeObra'), fi = rel('financeiro'), ac = rel('achados'), dc = rel('documentos'), ad = rel('aditivos'), me = rel('medicoes'), ma = rel('materiais');
     const d = isISO(c.fim) ? daysUntil(c.fim) : null;
@@ -79,21 +151,49 @@ const Consult = {
     const m = UI.modal({
       title: `${c.codigo} · ${c.unidade || c.grupo || ''}`, sub: esc(c.tomador || ''), wide: true,
       body: `<div class="kpis xs">${kpi('Vigência', c.fim ? fmtDate(c.fim) : '—', d === null ? '' : d < 0 ? `expirada há ${-d} dias` : `${d} dias restantes`, d !== null && d < 0 ? 'bad' : d !== null && d <= 90 ? 'warn' : '')}${kpi('Valor mensal', num(c.valorMensal) !== null ? fmtMoneyShort(c.valorMensal) : '—', num(c.valorMensal) === null ? 'não identificado' : '')}${kpi('Postos contratados', postos || '—', custoPrev ? 'custo previsto ' + fmtMoneyShort(custoPrev) : '')}${kpi('Completude do cadastro', fmtPct(compl), filled + ' de ' + SCHEMAS.contratos.fields.length + ' campos', compl < .6 ? 'warn' : '')}</div>
+      ${Consult.arquivosHtml(e, c, dc)}
       <div class="detail-grid">${SCHEMAS.contratos.fields.filter(f => !['codigo'].includes(f.k)).map(f => `<div class="${f.type === 'long' ? 'full' : ''}"><span class="lbl">${esc(f.label)}</span>${f.type === 'long' && c[f.k] && !isGap(c[f.k]) ? esc(c[f.k]) : UI.cell(f, c[f.k])}</div>`).join('')}</div>
       ${mini('Achados e plano de ação', 'achados', ac, ['codigo', 'area', 'achado', 'risco', 'status'])}
+      ${Superv.html(e, c)}
       ${mini('Obrigações', 'obrigacoes', ob, ['clausula', 'grupo', 'obrigacao', 'status'])}
-      ${mini('Mão de obra', 'maoDeObra', mo, ['posto', 'qtdContratada', 'salario', 'custoPrevisto', 'divergencia'])}
+      ${Consult.moPostos(mo.filter(r => r.origem !== 'folhaDP'))}
+      ${Consult.moMensal(mo.filter(r => r.origem === 'folhaDP'))}
       ${mini('Financeiro', 'financeiro', fi, ['tipo', 'grupo', 'descricao', 'previsto', 'realizado'])}
       ${me.length ? mini('Medições', 'medicoes', me, ['competencia', 'numero', 'valorMedido', 'valorFaturado', 'glosa']) : ''}
       ${ma.length ? mini('Materiais', 'materiais', ma, ['item', 'qtdPrevista', 'qtdEntregue', 'valorTotal']) : ''}
       ${mini('Documentos', 'documentos', dc, ['tipo', 'arquivo', 'paginas', 'legibilidade'])}
       ${ad.length ? mini('Aditivos', 'aditivos', ad, ['nome', 'datas', 'valor']) : ''}`,
-      foot: `<button class="btn ghost danger-text" id="cDel">${icon('trash')} Excluir</button><span class="sp"></span><button class="btn ghost" id="cAch">${icon('alert')} Registrar achado</button><button class="btn primary" id="cEd">${icon('edit')} Editar contrato</button>`
+      foot: `<button class="btn ghost danger-text" id="cDel">${icon('trash')} Excluir</button><span class="sp"></span><button class="btn ghost" id="svRel">${icon('printer')} Relatório do contrato</button><button class="btn ghost" id="cAch">${icon('alert')} Registrar achado</button><button class="btn primary" id="cEd">${icon('edit')} Editar contrato</button>`
     });
-    $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id } });
-    $('#cAch', m).onclick = () => UI.editRecord('achados', { contrato: c.codigo, status: 'Pendente' }, { ctx: { empresaId: e.id }, extraBase: { empresaId: e.id } });
+    $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id }, voltar: volta });
+    $('#cJunt', m)?.addEventListener('click', () => { UI.closeModal(); Docs.open(e); });
+    $$('[data-dcont]', m).forEach(b => b.onclick = () => Consult.conteudoDoc(e, c, DB.get('documentos', b.dataset.dcont)));
+    Superv.bind(m, e, c);
+    $$('[data-achok]', m).forEach(b => b.onclick = async () => {
+      const dcs = DB.where('documentos', d => d.empresaId === e.id && d.contrato === c.codigo && d.link);
+      const ct = dcs.find(d => (d.pecas || []).some(p => Consult.tipoDoc(p.tipo) === 'contrato')) || dcs.find(d => Consult.tipoDoc(d.tipo) === 'contrato');
+      const pc = (ct?.pecas || []).find(p => Consult.tipoDoc(p.tipo) === 'contrato');
+      const ev = `Contrato-base localizado no Drive do escritório: ${ct?.arquivo || 'arquivo do contrato'}${pc?.paginaInicial ? `, págs. ${pc.paginaInicial}${pc.paginaFinal ? '–' + pc.paginaFinal : ''}` : ''}.`;
+      if (!await UI.confirm(`Concluir ${b.dataset.achok.split(',').length} achado(s) com a evidência:<br><i>${esc(ev)}</i>`, 'Concluir', false)) return;
+      await DB.save('achados', b.dataset.achok.split(',').map(id => ({ ...DB.get('achados', id), status: 'Concluído', evidenciaConclusao: ev, dataValidacao: todayISO() })));
+      UI.toast('Achado concluído.'); Consult.contrato360(e, DB.get('contratos', c.id) || c);
+    });
+    // anexar o arquivo a um documento do inventário que ainda não está no Drive
+    let alvo = null; const fArq = $('#cDocF', m);
+    $$('[data-djunt]', m).forEach(b => b.onclick = () => { alvo = DB.get('documentos', b.dataset.djunt); fArq.value = ''; fArq.click(); });
+    fArq && (fArq.onchange = async () => {
+      const f = fArq.files[0]; if (!f || !alvo) return;
+      if (!Session.remote) return UI.toast('Anexar arquivos exige o servidor conectado.', 'warn');
+      const b = $(`[data-djunt="${alvo.id}"]`, m); b.disabled = true; b.querySelector('b').textContent = 'Enviando ao Drive…';
+      try {
+        const up = await juntarELer({ empresaKey: e.id, empresa: e.fantasia || e.razao, nome: f.name, mime: f.type || 'application/pdf', base64: await Docs.b64(f), ler: false });
+        await DB.save('documentos', { ...alvo, link: up.url, arquivo: alvo.arquivo || f.name, arquivoDrive: f.name });
+        UI.toast('Arquivo anexado. Já pode abrir pelo botão.'); Consult.contrato360(e, DB.get('contratos', c.id) || c);
+      } catch (err) { UI.toast('Não consegui anexar: ' + err.message, 'bad', 7000); b.disabled = false; b.querySelector('b').textContent = (alvo.tipo || 'Documento') + ' — sem arquivo'; }
+    });
+    $('#cAch', m).onclick = () => UI.editRecord('achados', { contrato: c.codigo, status: 'Pendente' }, { ctx: { empresaId: e.id }, extraBase: { empresaId: e.id }, voltar: volta });
     $('#cDel', m).onclick = async () => { if (!await UI.confirm(`Excluir o contrato ${c.codigo}? Os registros das outras abas são mantidos.`, 'Excluir')) return; await DB.remove('contratos', c.id); UI.closeModal(); App.render(); };
-    $$('[data-rel]', m).forEach(tr => tr.onclick = () => { const [coll, id] = tr.dataset.rel.split(':'); UI.editRecord(coll, DB.get(coll, id), { ctx: { empresaId: e.id } }); });
+    $$('[data-rel]', m).forEach(tr => tr.onclick = () => { const [coll, id] = tr.dataset.rel.split(':'); UI.editRecord(coll, DB.get(coll, id), { ctx: { empresaId: e.id }, voltar: volta }); });
   },
 
   /* ---------------- PAINEL / DASHBOARD ---------------- */
@@ -145,10 +245,11 @@ const Consult = {
     const S = Consult.stats(e, de);
     const porTom = {}; S.cs.forEach(c => { const t = tomadorBase(c); porTom[t] = (porTom[t] || 0) + 1; });
     const venc12 = []; for (let i = 0; i < 12; i++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + i); const k = d.toISOString().slice(0, 7); venc12.push({ k, n: S.cs.filter(c => isISO(c.fim) && c.fim.slice(0, 7) === k).length }); }
-    const achRisco = RISCOS.map((r, i) => ({ label: r, value: S.achAbertos.filter(a => norm(a.risco) === norm(r)).length, color: ['var(--info)', 'var(--warning)', 'var(--serious)', 'var(--critical)'][i] }));
-    const achArea = {}; S.achAbertos.forEach(a => achArea[a.area || 'Outros'] = (achArea[a.area || 'Outros'] || 0) + 1);
+    const achRisco = RISCOS.map((r, i) => ({ label: r, attr: `data-ach-r="${esc(r)}"`, value: S.achAbertos.filter(a => norm(a.risco) === norm(r)).length, color: ['var(--info)', 'var(--warning)', 'var(--serious)', 'var(--critical)'][i] }));
+    const achArea = {}; S.achAbertos.forEach(a => achArea[a.area || 'Sem área'] = (achArea[a.area || 'Sem área'] || 0) + 1);
     const ins = Consult.insights(S);
-    host.innerHTML = `
+    const vazia = !S.cs.length && !empRecs('documentos', e.id).length;
+    host.innerHTML = `${vazia ? `<div class="drop-hero">${icon('upload')}<div><b>Comece juntando os documentos da empresa</b><span>Arraste a pasta com os contratos, aditivos e a planilha de auditoria: o app guarda no Drive, lê com IA, liga cada arquivo ao contrato e monta o painel.</span></div><button class="btn primary" id="heroDocs">${icon('upload')} Juntar documentos</button></div>` : ''}
     <div class="kpis">
       ${kpi('Contratos vigentes', `${S.at.length}<small>/${S.cs.length}</small>`, `${S.venc.length} vencem em 90 dias · ${S.cs.filter(semVigencia).length} sem data de término`, S.venc.length ? 'warn' : '', `#/empresa/${e.id}/contratos`)}
       ${kpi('Carteira mensal', S.carteira ? fmtMoneyShort(S.carteira) : '—', S.at.length ? `valor conhecido em ${S.comVal.length} de ${S.at.length} vigentes` : '')}
@@ -169,10 +270,16 @@ const Consult = {
     </div>
     <div class="grid2">
       <section class="card"><header><h2>Contratos por tomador</h2></header>${hbarHtml(Object.entries(porTom).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value), v => v + (v > 1 ? ' contratos' : ' contrato'), 8)}</section>
-      <section class="card"><header><h2>Vencimentos nos próximos 12 meses</h2></header><div data-chart="vc"></div></section>
-      <section class="card"><header><h2>Achados em aberto por risco</h2></header>${segBar(achRisco)}<h4 class="sec">Por área</h4>${hbarHtml(Object.entries(achArea).map(([label, value]) => ({ label, value, color: 'var(--s2)' })).sort((a, b) => b.value - a.value), v => String(v), 6)}</section>
+      <section class="card"><header><h2>Vencimentos nos próximos 12 meses</h2><button class="link small" type="button" id="vcTodos">Ver todos</button></header><div data-chart="vc"></div></section>
+      <section class="card"><header><h2>Achados em aberto por risco</h2><a class="link small" href="#/achados" id="achTodos">Resolver</a></header><p class="muted small">Toque num risco ou numa área para ver a lista.</p>${segBar(achRisco)}<h4 class="sec">Por área</h4>${hbarHtml(Object.entries(achArea).map(([label, value]) => ({ label, value, color: 'var(--s2)', attr: `data-ach-a="${esc(label)}"` })).sort((a, b) => b.value - a.value), v => String(v), 6)}</section>
       <section class="card"><header><h2>Situação das obrigações</h2></header>${segBar(S.obDist)}<h4 class="sec">Alertas</h4>${Views.alertasConsultoria(e.id)}</section>
     </div>`;
+    $('#heroDocs', host)?.addEventListener('click', () => Docs.open(e));
+    const verAch = f => { Achados.st = { risco: 'todos', status: 'abertos', emp: e.id, area: '', busca: '', ...f }; Achados._rolar = 1; location.hash = '#/achados'; };
+    $$('[data-ach-r]', host).forEach(x => x.onclick = () => verAch({ risco: x.dataset.achR }));
+    $$('[data-ach-a]', host).forEach(x => x.onclick = () => verAch({ area: x.dataset.achA }));
+    $('#achTodos', host).onclick = ev => { ev.preventDefault(); verAch({}); };
+    $('#vcTodos', host).onclick = () => Consult.vencLista(e, S.cs, null);
     $$('[data-per]', host).forEach(b => b.onclick = () => { st.p = b.dataset.per; App.render(true); });
     const I = S.ind, L = I.map(i => fmtCompShort(i.competencia)), FL = I.map(i => fmtComp(i.competencia));
     const g = k => I.map(i => num(i[k]));
@@ -185,12 +292,25 @@ const Consult = {
     const pct = v => fmtPct(v), ax = v => NUM.format(Math.round(v * 100)) + '%';
     mountChart(C('mg'), { labels: L, fullLabels: FL, kind: 'line', series: [{ name: 'Margem bruta', values: I.map(i => num(i.receita) ? (num(i.receita) - (num(i.custo) || 0)) / num(i.receita) : null), color: 'var(--s3)' }], fmt: pct, axisFmt: ax, empty });
     mountChart(C('ct'), { labels: L, fullLabels: FL, kind: 'line', series: [{ name: 'Carga tributária', values: I.map(i => num(i.receita) ? ['inss', 'fgts', 'iss', 'federais', 'outrosTributos'].reduce((s, k) => s + (num(i[k]) || 0), 0) / num(i.receita) : null), color: 'var(--s4)' }], fmt: pct, axisFmt: ax, empty });
-    mountChart(C('vc'), { labels: venc12.map(x => fmtCompShort(x.k)), fullLabels: venc12.map(x => fmtComp(x.k)), kind: 'bar', series: [{ name: 'Contratos vencendo', values: venc12.some(x => x.n) ? venc12.map(x => x.n) : venc12.map(() => null) }], fmt: v => fmtNum(v) + ' contrato(s)', axisFmt: v => fmtNum(v), empty: 'Nenhum contrato com data de término cadastrada nos próximos 12 meses.' });
+    mountChart(C('vc'), { labels: venc12.map(x => fmtCompShort(x.k)), fullLabels: venc12.map(x => fmtComp(x.k)), kind: 'bar', series: [{ name: 'Contratos vencendo', values: venc12.some(x => x.n) ? venc12.map(x => x.n) : venc12.map(() => null) }], fmt: v => fmtNum(v) + ' contrato(s)', axisFmt: v => fmtNum(v), empty: 'Nenhum contrato com data de término cadastrada nos próximos 12 meses.', onPick: i => Consult.vencLista(e, S.cs, venc12[i].k) });
+  },
+
+  /** lista dos contratos que vencem num mês (k = 'AAAA-MM') ou nos próximos 12 meses (k = null) */
+  vencLista(e, cs, k) {
+    const ini = todayISO().slice(0, 7), d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 11); const fimP = d.toISOString().slice(0, 7);
+    const l = cs.filter(c => isISO(c.fim) && (k ? c.fim.slice(0, 7) === k : c.fim.slice(0, 7) >= ini && c.fim.slice(0, 7) <= fimP)).sort((a, b) => a.fim.localeCompare(b.fim));
+    const dias = c => { const n = daysUntil(c.fim); return n < 0 ? `<span class="bad">venceu há ${-n} dia(s)</span>` : n === 0 ? '<b>vence hoje</b>' : `faltam ${n} dia(s)`; };
+    const m = UI.modal({ title: k ? 'Contratos que vencem em ' + fmtComp(k) : 'Vencimentos nos próximos 12 meses', sub: `${l.length} contrato(s) · toque para abrir a ficha`, wide: true,
+      body: l.length ? `<div class="venc-l">${l.map(c => `<button type="button" class="venc-i" data-vc="${c.id}"><span><b>${esc(c.codigo || '')}</b> ${esc(c.tomador || '')}<small class="muted">${esc([c.unidade, c.numero && 'nº ' + c.numero].filter(Boolean).join(' · '))}</small></span><span class="r">${fmtDate(c.fim)}<small>${dias(c)}</small></span></button>`).join('')}</div>` : '<div class="empty"><p>Nenhum contrato.</p></div>' });
+    $$('[data-vc]', m).forEach(b => b.onclick = () => { UI.closeModal(); Consult.contrato360(e, DB.get('contratos', b.dataset.vc)); });
   },
 
   /* ---------------- IMPORTAÇÃO DA PLANILHA ---------------- */
-  async importar(e, file) {
+  async importar(e, file, quieto) {
+    e = DB.get('empresas', e.id) || e; // pode ter mudado na planilha anterior (vínculos do DP)
     let book; try { book = await XLSX.read(await file.arrayBuffer()); } catch (err) { UI.toast('Não consegui ler a planilha: ' + err.message, 'bad'); return; }
+    const tdp = BenefDP.tipo(book); if (tdp) return BenefDP.importar(e, book, file, tdp);
+    if (FolhaDP.reconhece(book)) return FolhaDP.importar(e, book, file);
     const plan = [];
     for (const coll of AUDIT) {
       const sc = SCHEMAS[coll];
@@ -218,7 +338,7 @@ const Consult = {
       plan.push({ coll, sheetName, rows: recs, matched: map.filter(Boolean).length });
     }
     const found = plan.filter(p => p.rows.length);
-    if (!found.length) { UI.toast('Nenhuma aba reconhecida. Os nomes das colunas devem seguir o modelo da planilha de auditoria.', 'bad', 6000); return; }
+    if (!found.length) { if (quieto) return 'nao'; UI.toast('Nenhuma aba reconhecida. Os nomes das colunas devem seguir o modelo da planilha de auditoria.', 'bad', 6000); return; }
     const m = UI.modal({
       title: 'Importar planilha', sub: esc(file.name), wide: true,
       body: `<p class="muted">Abas reconhecidas e quantidade de linhas. Escolha, para cada aba, se os dados substituem os já cadastrados nesta empresa ou se são acrescentados.</p>
@@ -248,6 +368,7 @@ const Consult = {
       }
       UI.closeModal(); UI.toast(`Importação concluída: ${fmtNum(total)} registros.`); App.render();
     };
+    return UI.aguardar(m);
   },
   /* ---------------- EXPORTAÇÃO ---------------- */
   exportar(e) {
@@ -261,5 +382,90 @@ const Consult = {
     });
     download(XLSX.write(sheets), `Auditoria_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.xlsx`);
     UI.toast('Planilha gerada.');
+  }
+};
+
+/* =====================================================================
+   PAINEL DE ACHADOS — o que cada achado significa e como resolver
+   ===================================================================== */
+const Achados = {
+  view(v, q = {}) {
+    App.crumbs([{ t: 'Consultoria jurídica' }, { t: 'Achados de auditoria' }]);
+    const st = Achados.st = Achados.st || { risco: 'alto', status: 'abertos', emp: '', area: '', busca: '' };
+    if (q.risco) st.risco = q.risco;
+    const emps = DB.all('empresas'), nomeE = id => { const e = DB.get('empresas', id); return e ? (e.fantasia || e.razao) : '—'; };
+    const todos = DB.all('achados');
+    const filtra = a => (st.risco === 'todos' || (st.risco === 'alto' ? /alto|cr[ií]tico/i.test(a.risco || '') : norm(a.risco) === norm(st.risco)))
+      && (st.status === 'todos' || (st.status === 'abertos' ? achadoAberto(a) : !achadoAberto(a)))
+      && (!st.emp || a.empresaId === st.emp) && (!st.area || (a.area || 'Sem área') === st.area)
+      && (!st.busca || norm([a.codigo, a.contrato, a.achado, a.criterio, a.causa, a.recomendacao, a.responsavel].join(' ')).includes(norm(st.busca)));
+    const l = todos.filter(filtra).sort((a, b) => Achados.peso(b) - Achados.peso(a) || String(a.prazo || '9').localeCompare(String(b.prazo || '9')));
+    const abertosAlto = todos.filter(a => achadoAberto(a) && /alto|cr[ií]tico/i.test(a.risco || ''));
+    const venc = abertosAlto.filter(a => a.prazo && daysUntil(a.prazo) < 0).length, semResp = abertosAlto.filter(a => !a.responsavel).length;
+    const valor = abertosAlto.reduce((s, a) => s + (num(a.valor) || 0), 0);
+    const areas = [...new Set(todos.map(a => a.area || 'Sem área'))].sort();
+    const porArea = {}; l.forEach(a => { const k = a.area || 'Sem área'; porArea[k] = (porArea[k] || 0) + 1; });
+    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Consultoria jurídica</span><h1>${icon('alert', 'h-ic')} Achados de auditoria</h1>
+        <p class="muted">Achado é uma irregularidade ou risco encontrado na auditoria dos contratos — por exemplo, obrigação trabalhista ou fiscal sem comprovação, contrato vencido, valor divergente. Cada um traz o critério violado, a causa, o risco e a ação corretiva recomendada. Resolver é: executar a recomendação, guardar a evidência e marcar como concluído.</p></div></div>
+      <div class="kpis sm">${kpi('Alto/crítico em aberto', abertosAlto.length, 'exigem ação', abertosAlto.length ? 'bad' : '')}${kpi('Com prazo vencido', venc, 'entre os de risco alto', venc ? 'warn' : '')}${kpi('Sem responsável', semResp, 'defina quem resolve', semResp ? 'warn' : '')}${kpi('Valor envolvido', valor ? fmtMoneyShort(valor) : '—', 'nos de risco alto em aberto')}</div>
+      <section class="card ach-guia"><header><h2>${icon('list')} Como resolver, em 4 passos</h2></header><ol>
+        <li><b>Entenda</b> — leia a constatação e o critério (cláusula, lei ou norma que não foi cumprida).</li>
+        <li><b>Atribua</b> — defina o responsável na empresa e um prazo realista; marque “Em andamento”.</li>
+        <li><b>Corrija</b> — execute a recomendação (cobrar documento, regularizar recolhimento, aditar contrato, notificar o tomador…).</li>
+        <li><b>Comprove e conclua</b> — registre a evidência (guia paga, certidão, aditivo assinado) e conclua. O achado sai do painel e entra no relatório como resolvido.</li></ol></section>
+      <div class="dt-tools ach-f"><div class="search">${icon('search')}<input id="acB" type="search" placeholder="Buscar no achado, contrato, recomendação…" value="${esc(st.busca)}"></div>
+        <select id="acR"><option value="alto" ${st.risco === 'alto' ? 'selected' : ''}>Risco alto e crítico</option>${RISCOS.map(r => `<option value="${r}" ${st.risco === r ? 'selected' : ''}>Risco ${r.toLowerCase()}</option>`).join('')}<option value="todos" ${st.risco === 'todos' ? 'selected' : ''}>Todos os riscos</option></select>
+        <select id="acS"><option value="abertos" ${st.status === 'abertos' ? 'selected' : ''}>Em aberto</option><option value="fechados" ${st.status === 'fechados' ? 'selected' : ''}>Resolvidos</option><option value="todos" ${st.status === 'todos' ? 'selected' : ''}>Todos</option></select>
+        ${emps.length > 1 ? `<select id="acE"><option value="">Todas as empresas</option>${emps.map(e => `<option value="${e.id}" ${st.emp === e.id ? 'selected' : ''}>${esc(e.fantasia || e.razao)}</option>`).join('')}</select>` : ''}
+        <select id="acA"><option value="">Todas as áreas</option>${areas.map(x => `<option ${st.area === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+      ${Object.keys(porArea).length > 1 ? `<div class="ach-areas">${Object.entries(porArea).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<button class="chip ${st.area === k ? 'on' : ''}" data-ar="${esc(k)}">${esc(k)} <b>${n}</b></button>`).join('')}</div>` : ''}
+      <p class="muted small">${l.length} achado(s)</p>
+      <div class="ach-list">${l.map(a => Achados.card(a, nomeE(a.empresaId), emps.length > 1)).join('') || `<div class="empty">${icon('check')}<p>Nenhum achado com estes filtros.</p></div>`}</div>`;
+    if (Achados._rolar) { Achados._rolar = 0; setTimeout(() => $('.ach-f', v)?.scrollIntoView({ block: 'start' }), 60); }
+    const re = () => Achados.view(v);
+    $('#acB').oninput = e => { st.busca = e.target.value; clearTimeout(Achados._t); Achados._t = setTimeout(() => { re(); const i = $('#acB'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 350); };
+    $('#acR').onchange = e => { st.risco = e.target.value; re(); }; $('#acS').onchange = e => { st.status = e.target.value; re(); };
+    $('#acE')?.addEventListener('change', e => { st.emp = e.target.value; re(); }); $('#acA').onchange = e => { st.area = e.target.value; re(); };
+    $$('[data-ar]').forEach(b => b.onclick = () => { st.area = st.area === b.dataset.ar ? '' : b.dataset.ar; re(); });
+    $$('[data-ac]').forEach(b => b.onclick = () => Achados.acao(b.dataset.ac, b.dataset.id, re));
+  },
+  peso: a => ({ 'crítico': 4, critico: 4, alto: 3, 'médio': 2, medio: 2, baixo: 1 }[norm(a.risco)] || 0),
+  card(a, emp, mostraEmp) {
+    const d = a.prazo ? daysUntil(a.prazo) : null, aberto = achadoAberto(a);
+    const c = a.contrato && DB.where('contratos', x => x.empresaId === a.empresaId && x.codigo === a.contrato)[0];
+    return `<article class="ach ${norm(a.risco)} ${aberto ? '' : 'fechado'}">
+      <header><span class="pill ${/cr[ií]t/i.test(a.risco) ? 'critical' : /alto/i.test(a.risco) ? 'serious' : /m[eé]dio/i.test(a.risco) ? 'warn' : 'neutral'}">Risco ${esc((a.risco || '—').toLowerCase())}</span>
+        <b class="mono">${esc(a.codigo || '')}</b>${a.area ? `<span class="tag">${esc(a.area)}</span>` : ''}${mostraEmp ? `<span class="muted small">${esc(emp)}</span>` : ''}
+        <span class="sp"></span><span class="pill ${aberto ? (/andamento/i.test(a.status) ? 'info' : 'neutral') : 'good'}">${esc(a.status || 'Pendente')}</span></header>
+      <p class="ach-t">${esc(a.achado || '')}</p>
+      <dl class="dl cols ach-dl">
+        ${a.criterio ? `<dt>Critério</dt><dd>${esc(a.criterio)}</dd>` : ''}${a.causa ? `<dt>Causa provável</dt><dd>${esc(a.causa)}</dd>` : ''}
+        ${c || a.contrato ? `<dt>Contrato</dt><dd>${c ? `<button class="link" data-ac="contrato" data-id="${a.id}">${esc(a.contrato)} · ${esc(tomadorBase(c) || c.objeto || '')}</button>` : esc(a.contrato)}</dd>` : ''}${a.periodo ? `<dt>Período</dt><dd>${esc(a.periodo)}</dd>` : ''}
+        ${num(a.valor) ? `<dt>Valor envolvido</dt><dd>${esc(fmtMoney(a.valor))}</dd>` : ''}
+        <dt>Responsável</dt><dd>${a.responsavel ? esc(a.responsavel) : '<span class="t-warn">não definido</span>'}</dd>
+        <dt>Prazo</dt><dd>${a.prazo ? `${esc(fmtDate(a.prazo))}${aberto && d !== null ? (d < 0 ? ` <b class="t-bad">vencido há ${-d} dia(s)</b>` : d <= 7 ? ` <b class="t-warn">em ${d} dia(s)</b>` : '') : ''}` : '<span class="t-warn">sem prazo</span>'}</dd>
+        ${a.evidenciaConclusao ? `<dt>Evidência</dt><dd>${esc(a.evidenciaConclusao)}${a.dataValidacao ? ' · ' + esc(fmtDate(a.dataValidacao)) : ''}</dd>` : ''}</dl>
+      ${a.recomendacao ? `<div class="ach-rec">${icon('check')}<div><span>O que fazer</span>${esc(a.recomendacao)}</div></div>` : ''}
+      <footer>${aberto ? `${/andamento/i.test(a.status) ? '' : `<button class="btn ghost sm" data-ac="andamento" data-id="${a.id}">${icon('clock')} Em andamento</button>`}<button class="btn ghost sm" data-ac="atribuir" data-id="${a.id}">${icon('user')} Responsável e prazo</button><button class="btn primary sm" data-ac="concluir" data-id="${a.id}">${icon('check')} Concluir com evidência</button>` : `<button class="btn ghost sm" data-ac="reabrir" data-id="${a.id}">Reabrir</button>`}<span class="sp"></span><button class="btn ghost sm" data-ac="editar" data-id="${a.id}">${icon('edit')} Editar</button></footer></article>`;
+  },
+  acao(tipo, id, re) {
+    const a = DB.get('achados', id); if (!a) return;
+    const e = DB.get('empresas', a.empresaId);
+    const salvar = async (campos, msg) => { await DB.save('achados', { ...a, ...campos }); UI.toast(msg); re(); };
+    if (tipo === 'andamento') return salvar({ status: 'Em andamento' }, 'Achado em andamento.');
+    if (tipo === 'reabrir') return salvar({ status: 'Pendente', dataValidacao: '' }, 'Achado reaberto.');
+    if (tipo === 'editar') return UI.editRecord('achados', a, { ctx: { empresaId: a.empresaId }, onSaved: re });
+    if (tipo === 'contrato') { const c = DB.where('contratos', x => x.empresaId === a.empresaId && x.codigo === a.contrato)[0]; return c && e && Consult.contrato360(e, c); }
+    if (tipo === 'atribuir') {
+      const m = UI.modal({ title: 'Responsável e prazo', sub: esc(a.codigo || ''), body: `<form class="grid-form" id="atf"><div class="fld full"><label>Responsável (na empresa ou no escritório)</label><input name="r" value="${esc(a.responsavel || '')}" placeholder="Ex.: Setor de RH da JSP — Maria"></div><div class="fld"><label>Prazo</label><input type="date" name="p" value="${esc(a.prazo || '')}"></div></form>`,
+        foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="atOk">${icon('check')} Salvar</button>` });
+      $('#atOk', m).onclick = () => { const f = $('#atf', m); UI.closeModal(); salvar({ responsavel: f.r.value.trim(), prazo: f.p.value, status: achadoAberto(a) && !/andamento/i.test(a.status) ? 'Em andamento' : a.status }, 'Responsável e prazo definidos.'); };
+      return;
+    }
+    if (tipo === 'concluir') {
+      const m = UI.modal({ title: 'Concluir achado', sub: esc(a.codigo || ''), body: `<p class="muted small">${esc(a.achado || '')}</p><form class="grid-form" id="cof"><div class="fld full"><label>Evidência de conclusão *</label><input name="ev" value="${esc(a.evidenciaConclusao || '')}" placeholder="Ex.: guia do FGTS de 03/2025 paga em 10/04 (anexada); aditivo nº 2 assinado"></div><div class="fld"><label>Data</label><input type="date" name="dt" value="${todayISO()}"></div></form>`,
+        foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="coOk">${icon('check')} Concluir</button>` });
+      $('#coOk', m).onclick = () => { const f = $('#cof', m); if (!f.ev.value.trim()) return UI.toast('Registre a evidência — é o que comprova a correção no relatório.', 'bad'); UI.closeModal(); salvar({ status: 'Concluído', evidenciaConclusao: f.ev.value.trim(), dataValidacao: f.dt.value }, 'Achado concluído.'); };
+    }
   }
 };

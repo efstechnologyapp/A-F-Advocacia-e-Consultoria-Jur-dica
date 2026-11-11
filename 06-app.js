@@ -3,10 +3,14 @@
    acessos e configurações
    ===================================================================== */
 const BRAND = {
-  logoDark: 'assets/brasao.png', logoLight: 'assets/brasao-claro.png',
+  logoDark: 'brasao.png', logoLight: 'brasao-claro.png',
   caption: 'Advocacia e Consultoria Jurídica'
 };
 const escritorio = () => DB.get('config', 'escritorio') || { id: 'escritorio', nome: 'Amorim Firmo', subtitulo: BRAND.caption };
+/** nome para cabeçalhos: sem "Advocacia e Consultoria Jurídica", que já vai na legenda */
+const nomeMarca = () => String(escritorio().nome || 'Amorim Firmo').replace(/[\s,–—-]*(sociedade de advogados|advocacia)(\s*(e|&)\s*consultoria(\s+jur[ií]dica)?)?\s*$/i, '').trim() || 'Amorim Firmo';
+/** OAB sempre no formato "OAB/PB 33.255" */
+const oabFmt = (v = escritorio().oab) => { v = String(v || '').trim(); if (!v || /oab/i.test(v)) return v; const d = onlyDigits(v), uf = (v.match(/\b([A-Z]{2})\b/) || [])[1] || ((escritorio().advogados || [])[0]?.uf || 'PB').toUpperCase(); return d ? `OAB/${uf} ${d.length > 3 ? d.slice(0, -3) + '.' + d.slice(-3) : d}` : v; };
 
 const App = {
   pendentes: 0,
@@ -20,8 +24,14 @@ const App = {
   boot() {
     document.body.className = Session.isStaff ? 'staff' : 'client';
     if (!Session.isStaff) { Portal.shell(); return; }
-    App.shell(); window.onhashchange = () => App.render(); App.render();
+    App.shell(); App._nav = 0; window.onhashchange = () => { App._nav++; App.render(); }; App.render();
     App.checkPendentes();
+    Escritorio.check().then(() => {
+      const pend = ls.get('escPend'); if (pend && Session.isAdmin) { ls.del('escPend'); if (pend.error) UI.toast('Conexão cancelada.', 'warn'); else return Escritorio.receber(pend.code, pend.state); }
+      App.render(true);
+      DJEN.auto();
+    });
+    if (!Session.remote) DJEN.auto();
   },
   async checkPendentes() {
     if (!Session.isAdmin || !Session.remote) return;
@@ -53,14 +63,15 @@ const App = {
             <p class="muted">Entre com sua conta Google. No primeiro acesso em cada aparelho, enviamos um código ao seu e-mail para confirmar que ele é seu.</p>
             <div id="gbtn" class="gbtn"></div>
             <p class="note" id="lgStatus">${pronto ? 'Carregando o login do Google…' : 'O login ainda não foi configurado: preencha o ID do cliente Google e a URL do Apps Script no arquivo <b>config.js</b> (veja CONFIGURAR-LOGIN.md).'}</p>
-            ${apiUrl() ? `<button class="link small" id="lgSemGoogle">Sou cliente e não tenho conta Google</button>` : ''}
+            ${apiUrl() ? `<button class="btn ghost block lg-cli" id="lgSemGoogle">${icon('search')} Sou cliente — consultar meus processos</button>` : ''}
           </div>
           <form id="lgStepEmail" class="stack" hidden>
-            <h1>Acesso do cliente</h1>
-            <p class="muted">Informe o e-mail cadastrado pelo escritório. Enviaremos um código de acesso.</p>
-            <div class="fld"><label for="lgMail">E-mail</label><input type="email" id="lgMail" required autocomplete="email" placeholder="seu@email.com"></div>
-            <button class="btn primary block">${icon('mail')} Receber código</button>
-            <button type="button" class="link small" data-lgback>Voltar ao login com Google</button>
+            <h1>Consulte seus processos</h1>
+            <p class="muted">Informe o <b>CPF</b> (ou CNPJ), o <b>telefone com DDD</b> ou o <b>e-mail</b> que você informou ao escritório. Para proteger seus dados, enviamos um código de acesso ao e-mail do seu cadastro.</p>
+            <div class="fld"><label for="lgMail">CPF, telefone ou e-mail</label><input id="lgMail" required autocomplete="username" placeholder="000.000.000-00 · (83) 99999-9999 · seu@email.com"></div>
+            <button class="btn primary block">${icon('mail')} Receber código no e-mail</button>
+            <p class="note" id="lgCliSt"></p>
+            <button type="button" class="link small" data-lgback>Sou do escritório — entrar com Google</button>
           </form>
           <form id="lgStepCode" class="stack" hidden>
             <h1 id="lgCodTit">Confirme seu e-mail</h1>
@@ -75,7 +86,7 @@ const App = {
         </div>
       </section>
     </div>`;
-    const L = { email: '', nome: '', foto: '', idToken: null, viaGoogle: true };
+    const L = { email: '', nome: '', foto: '', idToken: null, viaGoogle: true, ref: '', ident: '' };
     const step = s => ['Google', 'Email', 'Code'].forEach(k => $('#lgStep' + k).hidden = k !== s);
     const aparelho = () => ls.get('aparelho', {});
     const entrar = async r => {
@@ -83,7 +94,18 @@ const App = {
       const a = aparelho(); a[Session.user.email] = r.token; ls.set('aparelho', a);
       await DB.init(); try { await DB.pull(); } catch (e) { UI.toast(e.message, 'bad'); } App.boot(); UI.toast('Bem-vindo(a)!');
     };
+    const pedirConsulta = async () => {
+      const st = $('#lgCliSt'); st.textContent = 'Procurando seu cadastro…';
+      try {
+        const r = await api('consultaPedir', { ident: L.ident });
+        L.ref = r.ref; L.email = r.destino;
+        $('#lgCodTit').textContent = r.nome ? `Olá, ${r.nome}!` : 'Confirme seu acesso';
+        $('#lgCodTxt').innerHTML = `Enviamos um código de 6 dígitos para o e-mail do seu cadastro, <b>${esc(r.destino)}</b>. Digite-o abaixo para ver seus processos.`;
+        $('#lgCod').disabled = false; $('#lgCodOk').disabled = false; $('#lgCodSt').textContent = `O código vale por ${r.validadeMin || 10} minutos; confira também a caixa de spam.`; step('Code'); $('#lgCod').focus(); st.textContent = '';
+      } catch (e) { st.textContent = e.message; if (!$('#lgStepEmail').hidden) return; step('Email'); }
+    };
     const pedirCodigo = async () => {
+      if (L.ref) return pedirConsulta();
       const st = $('#lgCodSt'); st.textContent = 'Enviando o código para o seu e-mail…';
       $('#lgCodTxt').innerHTML = `Enviamos um código de 6 dígitos para <b>${esc(L.email)}</b>. Digite-o abaixo para liberar o acesso.`;
       $('#lgCodTit').textContent = 'Confirme seu e-mail'; $('#lgCod').disabled = false; $('#lgCodOk').disabled = false; step('Code');
@@ -114,12 +136,14 @@ const App = {
       e.preventDefault(); const st = $('#lgCodSt'), cod = $('#lgCod').value;
       if (cod.length !== 6) { st.textContent = 'Digite os 6 dígitos do código.'; return; }
       $('#lgCodOk').disabled = true; st.textContent = 'Conferindo…';
-      try { await entrar(await api('verifyCode', { email: L.email, code: cod })); } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
+      try { await entrar(L.ref ? await api('consultaVerificar', { ref: L.ref, code: cod }) : await api('verifyCode', { email: L.email, code: cod })); } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
     };
     $('#lgReenv').onclick = pedirCodigo;
-    $$('[data-lgback]').forEach(b => b.onclick = () => { try { google.accounts.id.disableAutoSelect(); } catch { } step('Google'); });
+    $$('[data-lgback]').forEach(b => b.onclick = () => { try { google.accounts.id.disableAutoSelect(); } catch { } L.ref = ''; step('Google'); });
     $('#lgSemGoogle') && ($('#lgSemGoogle').onclick = () => step('Email'));
-    $('#lgStepEmail').onsubmit = e => { e.preventDefault(); L.email = $('#lgMail').value.trim().toLowerCase(); L.viaGoogle = false; L.idToken = null; if (L.email) pedirCodigo(); };
+    $('#lgStepEmail').onsubmit = e => { e.preventDefault(); L.ident = $('#lgMail').value.trim(); L.viaGoogle = false; L.idToken = null; if (L.ident) pedirConsulta(); };
+    // link público (Instagram/Linktree): …/#/consulta abre direto a consulta do cliente
+    if (/^#\/?consulta/.test(location.hash) && apiUrl()) step('Email');
     $('#lgLocal') && ($('#lgLocal').onclick = async () => {
       Session.mode = 'local'; Session.token = null; Session.user = { email: 'local', nome: 'Administrador', papel: 'admin' }; Session.save();
       await DB.init(); App.boot();
@@ -138,6 +162,7 @@ const App = {
         <div class="side-profile">${foto}<div><b>${esc(u.nome || 'Usuário')}</b><small>${esc(u.email === 'local' ? 'modo local' : u.email)}</small><span class="role">${u.papel === 'admin' ? 'Administrador' : 'Equipe'}</span></div></div>
         <nav class="nav" id="nav"></nav>
         <div class="side-foot">
+          <div id="conexSlot"></div>
           ${Session.isAdmin ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
           <button class="side-btn danger" id="btnOut">${icon('logout')}<span>Sair</span></button>
           <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
@@ -161,7 +186,7 @@ const App = {
     $('#btnClose').onclick = $('#scrim').onclick = () => document.body.classList.remove('side-open');
     $('#btnSobre').onclick = () => App.sobre();
     $('#syncBadge').onclick = async () => { if (!Session.remote) return UI.toast('Modo local: os dados ficam apenas neste navegador. Use Gestão do App › Sistema › Backup para guardar uma cópia.', 'warn', 6000); try { await DB.flush(); await DB.pull(); App.render(true); UI.toast('Dados atualizados.'); } catch (e) { UI.toast(e.message, 'bad'); } };
-    App.globalSearch(); UI.syncBadge(); App.badge();
+    App.globalSearch(); UI.syncBadge(); App.badge(); Escritorio.badge();
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => $$('[data-chart]').length && App.render(true), 250); });
   },
   sobre() {
@@ -178,26 +203,43 @@ const App = {
       <div class="nav-h">Judicial</div>
       ${item('/judicial/todos', 'layers', 'Todos os processos', DB.where('processos', p => p.status !== 'Encerrado').length || '')}
       ${Object.entries(AREAS).map(([k, a]) => item('/judicial/' + k, a.icon, a.nome, cnt(k) || '')).join('')}
+      ${item('/atendimentos', 'briefcase', 'Atendimentos', DB.where('atendimentos', x => !/Ajuizado|Não prosseguiu/.test(x.status || '')).length || '')}
       ${item('/agenda', 'calendar', 'Agenda e prazos', DB.where('prazos', p => !p.concluido && daysUntil(p.data) !== null && daysUntil(p.data) <= 7).length || '')}
       <div class="nav-h">Consultoria jurídica</div>
       ${item('/empresas', 'building', 'Empresas', DB.all('empresas').length || '')}
+      ${DB.all('achados').length ? item('/achados', 'alert', 'Achados de auditoria', DB.where('achados', x => achadoAberto(x) && /alto|cr[ií]tico/i.test(x.risco || '')).length || '') : ''}
       ${DB.all('empresas').sort((a, b) => (a.fantasia || a.razao).localeCompare(b.fantasia || b.razao)).map(e => `<a href="#/empresa/${e.id}" class="sub ${route.startsWith('/empresa/' + e.id) ? 'on' : ''}"><span>${esc(e.fantasia || e.razao)}</span></a>`).join('')}
       <div class="nav-h">Cadastros</div>
       ${item('/clientes', 'users', 'Clientes', DB.all('clientes').length || '')}`;
     $('#lnkGestao')?.classList.toggle('on', route.startsWith('/gestao'));
   },
-  crumbs(parts) { $('#crumbs').innerHTML = parts.map((p, i) => i < parts.length - 1 && p.href ? `<a href="#${p.href}">${esc(p.t)}</a>` : `<b>${esc(p.t)}</b>`).join(`<span class="sep">/</span>`); },
+  /** páginas de primeiro nível (menu) não têm "Voltar"; as de detalhe têm */
+  TOPO: /^#?\/?(painel|judicial\/[a-z]+|agenda|atendimentos|clientes|empresas|achados|consulta|gestao(\/[a-z]+)?)?$/,
+  voltar(parts) {
+    if (App._nav > 0) { App._nav -= 2; history.back(); return; }
+    const pai = [...parts].reverse().slice(1).find(p => p.href); location.hash = '#' + (pai ? pai.href : '/painel');
+  },
+  crumbs(parts) {
+    const topo = App.TOPO.test(location.hash);
+    $('#crumbs').innerHTML = (topo ? '' : `<button class="back-btn" id="btnVoltar" title="Voltar à página anterior">${icon('chevL')}<span>Voltar</span></button>`) + parts.map((p, i) => i < parts.length - 1 && p.href ? `<a href="#${p.href}">${esc(p.t)}</a>` : `<b>${esc(p.t)}</b>`).join(`<span class="sep">/</span>`);
+    $('#btnVoltar')?.addEventListener('click', () => App.voltar(parts));
+  },
   render(keepScroll) {
     if (!Session.isStaff) return Portal.render();
     const route = (location.hash || '#/painel').slice(1).split('?')[0] || '/painel';
     const [, a, b, c] = route.split('/');
+    if (a === 'consulta') { history.replaceState(null, '', '#/painel'); return App.render(); } // link do cliente aberto por alguém da equipe
     App.nav(route); document.body.classList.remove('side-open'); Tip.hide();
     const v = $('#view'); const y = scrollY;
     try {
+      if (Session.remote && Escritorio.st && !Escritorio.st.conectado && a !== 'gestao') { Escritorio.gate(v); UI.syncBadge(); return; }
       if (a === 'painel' || !a) Views.painel(v);
       else if (a === 'judicial') Judicial.list(v, b || 'todos');
       else if (a === 'processo') Judicial.detail(v, b);
       else if (a === 'agenda') Views.agenda(v);
+      else if (a === 'atendimentos') Atend.list(v);
+      else if (a === 'atendimento') Atend.detail(v, b, c || 'caso');
+      else if (a === 'achados') Achados.view(v);
       else if (a === 'empresas') Consult.list(v);
       else if (a === 'empresa') Consult.workspace(v, b, c || 'painel');
       else if (a === 'clientes') Views.clientes(v);
@@ -226,11 +268,15 @@ const App = {
 const FUNCIONALIDADES = [
   'Processos judiciais por área (Cível, Penal, Administrativo, Previdenciário e Trabalhista)',
   'Validação do número CNJ e identificação automática do tribunal',
+  'Cadastro de processos pelos arquivos: a IA lê petições, decisões ou os autos, preenche o cadastro (partes, cliente, vara, classe, valor, movimentações, audiências e prazos) e guarda os arquivos no Drive do escritório por área',
   'Movimentações importadas do DataJud/CNJ, com sincronização diária automática',
   'Agenda de prazos, audiências e compromissos, com alertas',
   'Portal do cliente: acesso próprio e restrito, só aos próprios processos e às movimentações liberadas',
   'Aviso por e-mail ao cliente quando há nova movimentação (opcional por processo)',
   'Consultoria jurídica: empresas, contratos e auditoria em 10 abas (obrigações, mão de obra, materiais, financeiro, medições, indicadores, achados, documentos e aditivos)',
+  '“Juntar documentos”: arraste contratos, aditivos e planilhas — o app guarda no Drive, lê com IA, liga ao contrato certo e sugere o preenchimento',
+  'Intimações do DJEN pela OAB dos advogados do escritório, consultadas sozinhas todo dia: lançadas nos processos, e os processos ainda não cadastrados aparecem para cadastrar com um clique',
+  'Cadastro de empresas e clientes pelo CNPJ, com dados da Receita Federal, ou direto pelos documentos',
   'Importação e exportação no formato da planilha de auditoria (Excel)',
   'Painel com evolução de receitas, custos, tributos, previdência, admissões e desligamentos',
   'Visão 360º do contrato e índice de completude documental',
@@ -263,25 +309,26 @@ const Views = {
     const esc0 = escritorio();
     v.innerHTML = `
     <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${saudacao()}, ${esc((Session.user.nome || '').split(' ')[0] || 'Dr.')}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div>
-      <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn primary" id="nEmp">${icon('building')} Nova empresa</button></div></div>
+      <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn ghost" id="nProcDocs">${icon('upload')} Processo pelos arquivos</button><button class="btn primary" id="nEmp">${icon('building')} Nova empresa</button></div></div>
     <div class="kpis">
       ${kpi('Processos em andamento', procs.length, Object.entries(AREAS).map(([k, a]) => `${a.nome} ${procs.filter(p => p.area === k).length}`).join(' · '), '', '#/judicial/todos')}
       ${kpi('Compromissos em 7 dias', prox7.length, atras.length ? `<b class="t-bad">${atras.length} em atraso</b>` : 'nenhum em atraso', atras.length ? 'bad' : '', '#/agenda')}
       ${kpi('Empresas em consultoria', DB.all('empresas').length, `${DB.all('contratos').length} contratos auditados`, '', '#/empresas')}
       ${kpi('Contratos vencendo (90 dias)', venc90.length, 'renovação ou encerramento', venc90.length ? 'warn' : '')}
-      ${kpi('Achados de risco alto', achAlt.length, 'em aberto nos planos de ação', achAlt.length ? 'bad' : '')}
+      ${kpi('Achados de risco alto', achAlt.length, achAlt.length ? 'em aberto · <u>ver e resolver</u>' : 'em aberto nos planos de ação', achAlt.length ? 'bad' : '', '#/achados')}
     </div>
-    <div class="grid2">
       <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
         ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
-      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
-        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>
-    </div>
     <div class="grid2">
       <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a], i) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
       <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>
-    </div>`;
+    </div>
+    ${DJEN.cardHtml()}
+      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
+        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>`;
+    DJEN.bindCard(v);
     $('#nProc').onclick = () => Judicial.edit(null, 'civil');
+    $('#nProcDocs').onclick = () => JudDocs.open();
     $('#nEmp').onclick = () => Consult.editEmpresa(null);
     $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
   },
@@ -338,11 +385,12 @@ const Views = {
       <h4 class="sec">Processos (${procs.length})</h4>${procs.length ? `<ul class="plain">${procs.map(p => `<li><a href="#/processo/${p.id}" data-close>${icon(AREAS[p.area]?.icon || 'scale')} <span class="mono">${esc(fmtCNJ(p.numero))}</span> · ${esc(p.classe || AREAS[p.area]?.nome || '')} ${pill(p.status || 'Ativo')}</a></li>`).join('')}</ul>` : '<p class="muted small">Nenhum processo vinculado.</p>'}
       ${emps.length ? `<h4 class="sec">Consultoria</h4><ul class="plain">${emps.map(e => `<li><a href="#/empresa/${e.id}" data-close>${icon('building')} ${esc(e.razao)}</a></li>`).join('')}</ul>` : ''}
       <div class="notice soft">${icon('key')}<div><b>Portal do cliente.</b> ${c.email ? `Ao conceder acesso, ${esc(c.email)} poderá entrar com código enviado por e-mail e ver apenas os próprios processos (somente as movimentações marcadas como visíveis).` : 'Cadastre um e-mail para conceder acesso.'}</div></div>`,
-      foot: `<button class="btn ghost" id="cEdit">${icon('edit')} Editar</button><button class="btn ghost" id="cPrev">${icon('eye')} Ver como o cliente</button><span class="sp"></span>${c.email ? `<button class="btn primary" id="cAcc">${icon('key')} Conceder acesso ao portal</button>` : ''}`
+      foot: `<button class="btn ghost" id="cEdit">${icon('edit')} Editar</button><button class="btn ghost" id="cPrev">${icon('eye')} Ver como o cliente</button><button class="btn ghost" id="cAt">${icon('briefcase')} Novo atendimento</button><span class="sp"></span>${c.email ? `<button class="btn primary" id="cAcc">${icon('key')} Conceder acesso ao portal</button>` : ''}`
     });
     $('#cEdit', m).onclick = () => UI.editRecord('clientes', c);
     $('#cPrev', m).onclick = () => { UI.closeModal(); Portal.preview(id); };
     $('#cAcc', m)?.addEventListener('click', () => Views.grantAccess(c));
+    $('#cAt', m).onclick = () => Atend.novo(c.id);
   },
   async grantAccess(c) {
     if (!Session.remote) return UI.toast('Disponível após conectar o servidor (Apps Script). No modo local, use “Ver como o cliente”.', 'warn', 6000);
@@ -419,14 +467,22 @@ const Gestao = {
   },
   sistema(el) {
     const e = escritorio();
-    el.innerHTML = `<div class="grid2">
+    const linkCli = location.origin + location.pathname + '#/consulta';
+    el.innerHTML = `<section class="card link-cli"><header><h2>${icon('search')} Link de consulta para os clientes</h2></header>
+      <p class="muted small">Coloque este link no Instagram, no Linktree, no WhatsApp ou no cartão de visitas. O cliente informa o CPF, o telefone ou o e-mail do cadastro, recebe um código no e-mail cadastrado e vê só os próprios processos (apenas as movimentações marcadas como visíveis). O cadastro do cliente precisa ter e-mail.</p>
+      <div class="btn-row"><input class="input mono" id="lkCli" value="${esc(linkCli)}" readonly><button class="btn primary sm" id="lkCopy">${icon('link')} Copiar</button><a class="btn ghost sm" href="${esc(linkCli)}" target="_blank" rel="noopener">${icon('eye')} Abrir</a></div></section>
+      <div class="grid2">
       <section class="card"><header><h2>${icon('link')} Conexões</h2></header>
         <div class="conn"><span class="dot ${apiUrl() ? 'ok' : 'off'}"></span><div><b>Servidor (Google Apps Script)</b><small>${apiUrl() ? esc(apiUrl().slice(0, 60)) + '…' : 'não configurado — preencha APPS_SCRIPT_URL no config.js'}</small></div>${apiUrl() ? `<button class="btn ghost sm" id="tstSrv">Testar</button>` : ''}</div>
         <div class="conn"><span class="dot ${CONFIG.GOOGLE_CLIENT_ID ? 'ok' : 'off'}"></span><div><b>Login com Google</b><small>${CONFIG.GOOGLE_CLIENT_ID ? 'Client ID configurado' : 'não configurado — preencha GOOGLE_CLIENT_ID no config.js'}</small></div></div>
         <div class="conn"><span class="dot ${Session.remote ? 'ok' : 'off'}"></span><div><b>DataJud / CNJ (movimentações)</b><small>${Session.remote ? 'consulta pelo servidor; sincronização diária automática' : 'disponível com o servidor conectado'}</small></div></div>
+
         <div class="conn"><span class="dot ${Session.remote ? 'ok' : 'off'}"></span><div><b>E-mails (códigos, convites e avisos)</b><small>${Session.remote ? 'enviados pela conta Google dona do Apps Script' : 'disponível com o servidor conectado'}</small></div></div>
+
         ${CONFIG.APPS_SCRIPT_URL ? '' : `<p class="muted small">Para testar sem editar o config.js: <button class="link" id="cfgSrv">informar URL do servidor neste aparelho</button></p>`}
       </section>
+      <section class="card"><header><h2>${icon('briefcase')} Conexão com o escritório (Drive e IA)</h2></header>${Escritorio.cardHtml()}</section>
+      <section class="card"><header><h2>${icon('users')} Advogados do escritório (intimações no DJEN)</h2></header>${DJEN.advHtml()}</section>
       <section class="card"><header><h2>${icon('building')} Dados do escritório</h2></header>
         <p class="muted small">Usados no portal do cliente e no cabeçalho/assinatura dos relatórios.</p>
         <form id="cfgEsc" class="grid-form">
@@ -442,6 +498,7 @@ const Gestao = {
     <section class="card"><header><h2>${icon('layers')} Backup</h2></header>
       <p class="muted small">${Session.remote ? 'Os dados já ficam guardados na planilha do servidor. O backup em arquivo é uma cópia extra.' : 'No modo local, faça backups regulares: os dados existem só neste navegador.'}</p>
       <div class="btn-row"><button class="btn ghost" id="bkExp">${icon('download')} Baixar backup (.json)</button><label class="btn ghost">${icon('upload')} Restaurar backup<input type="file" accept=".json" id="bkImp" hidden></label></div></section>`;
+    Escritorio.bindCard(el); DJEN.bindAdv(el);
     $('#tstSrv') && ($('#tstSrv').onclick = async () => { try { const r = await api('ping'); UI.toast('Servidor respondeu: ' + (r.versao || 'ok')); } catch (err) { UI.toast(err.message, 'bad'); } });
     $('#cfgSrv') && ($('#cfgSrv').onclick = () => {
       const m = UI.modal({ title: 'Endereço do servidor', body: `<div class="fld full"><label>URL do Apps Script (termina em /exec)</label><input id="srvUrl" value="${esc(apiUrl())}"></div>`, foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="srvOk">Salvar</button>` });
@@ -462,6 +519,7 @@ const Gestao = {
         UI.toast('Backup restaurado.'); App.render();
       } catch (err) { UI.toast(err.message, 'bad'); }
     };
+    $('#lkCopy', el)?.addEventListener('click', async () => { try { await navigator.clipboard.writeText($('#lkCli', el).value); UI.toast('Link copiado.'); } catch { $('#lkCli', el).select(); UI.toast('Selecione e copie o link (Ctrl+C).', 'warn'); } });
   },
   async auditoria(el) {
     if (!Session.remote) { el.innerHTML = `<section class="card"><div class="empty">${icon('history')}<p>A trilha de auditoria é registrada no servidor. Conecte o Apps Script para ativá-la.</p></div></section>`; return; }

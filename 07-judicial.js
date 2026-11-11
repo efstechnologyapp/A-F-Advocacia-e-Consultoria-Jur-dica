@@ -8,21 +8,29 @@ const Judicial = {
     App.crumbs([{ t: 'Judicial', href: '/judicial/todos' }, { t: all ? 'Todos os processos' : A?.nome || area }]);
     const procs = DB.where('processos', p => all || p.area === area);
     const lastMov = id => DB.where('movimentos', m => m.processoId === id).sort((a, b) => String(b.data).localeCompare(String(a.data)))[0];
-    const rows = procs.map(p => { const m = lastMov(p.id); return { ...p, _cli: clienteNomes(p), _area: AREAS[p.area]?.nome, _ult: m?.data || null, _ultT: m?.titulo || '', _prox: DB.where('prazos', x => x.processoId === p.id && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data))[0]?.data || null }; });
+    const rows = procs.map(p => { const m = lastMov(p.id); return { ...p, _cli: clienteNomes(p) || '⚠ cliente a definir', _area: AREAS[p.area]?.nome, _ult: m?.data || null, _ultT: m?.titulo || '', _prox: DB.where('prazos', x => x.processoId === p.id && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data))[0]?.data || null }; });
     const sc = { fields: [F('numero', 'Número', 'cnj'), F('_cli', 'Cliente(s)'), F('_area', 'Área'), F('classe', 'Classe'), F('orgao', 'Órgão julgador'), F('status', 'Situação', 'select', { opts: [] }), F('_ult', 'Última movimentação', 'date'), F('_prox', 'Próximo compromisso', 'date'), F('parteContraria', 'Parte contrária'), F('assunto', 'Assunto')] };
     const ativos = procs.filter(p => p.status !== 'Encerrado' && p.status !== 'Arquivado provisoriamente');
-    const valor = procs.reduce((s, p) => s + (num(p.valorCausa) || 0), 0);
+    const valor = procs.reduce((s, p) => s + (num(p.valorCausa) || 0), 0), comValor = procs.filter(p => num(p.valorCausa) > 0).length;
     const semMov30 = ativos.filter(p => { const m = lastMov(p.id); return !m || daysUntil(m.data) < -30; }).length;
     v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Judicial</span><h1>${icon(A?.icon || 'layers', 'h-ic')} ${all ? 'Todos os processos' : 'Direito ' + (A.nome === 'Cível' ? 'Civil' : A.nome)}</h1><p class="muted">Processos próprios do escritório, com movimentações e acesso do cliente pelo portal.</p></div>
-      <div class="actions"><button class="btn primary" id="nProc">${icon('plus')} Novo processo</button></div></div>
-      <div class="kpis sm">${kpi('Em andamento', ativos.length)}${kpi('Total cadastrados', procs.length)}${kpi('Valor das causas', fmtMoneyShort(valor))}${kpi('Sem movimentação há 30+ dias', semMov30, 'merecem consulta', semMov30 ? 'warn' : '')}</div>
+      <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn primary" id="nProcDocs">${icon('upload')} Cadastrar pelos arquivos</button></div></div>
+      <div class="kpis sm">${kpi('Em andamento', ativos.length)}${kpi('Total cadastrados', procs.length)}${kpi('Valor das causas', fmtMoneyShort(valor), comValor < procs.length ? `em ${comValor} de ${procs.length} processos · <button class="link" id="kVal">informar os demais</button>` : '')}${kpi('Sem movimentação há 30+ dias', semMov30, 'merecem consulta', semMov30 ? 'warn' : '')}</div>
+      ${DJEN.pendentes().length ? `<div class="notice">${icon('mail')}<div><b>${DJEN.pendentes().length} processo(s) com intimação no DJEN em nome dos advogados do escritório ainda não cadastrados.</b> <button class="link" id="djPendJ">Revisar e cadastrar</button></div></div>` : ''}
+      ${DJEN.cadastrados().length ? `<p class="muted small right"><button class="link" id="djDesfJ">${icon('list')} Processos cadastrados pela OAB (${DJEN.cadastrados().length}) — devolver para a revisão</button></p>` : ''}
       <section class="card flush" id="tbl"></section>`;
+    $('#djPendJ')?.addEventListener('click', () => DJEN.revisarPendentes());
+    $('#djDesfJ')?.addEventListener('click', () => DJEN.gerenciarCadastrados());
+    $('#kVal')?.addEventListener('click', () => Judicial.completarValores(procs));
     dataTable($('#tbl'), {
       id: 'proc-' + area, rows, schema: sc, cols: all ? ['numero', '_cli', '_area', 'classe', 'status', '_ult', '_prox'] : ['numero', '_cli', 'classe', 'orgao', 'status', '_ult', '_prox'],
       filters: [{ k: 'status', label: 'Situação', opts: SCHEMAS.processos.fields.find(f => f.k === 'status').opts }],
+      tools: `<button class="icon-btn tool-print" id="pRel" title="Imprimir a relação de processos (com os filtros e a busca aplicados)">${icon('printer')}</button>`,
       onOpen: p => location.hash = '#/processo/' + p.id, emptyMsg: 'Nenhum processo cadastrado nesta área.'
     });
+    $('#pRel').onclick = () => { const st = TableState['proc-' + area] || {}; Report.processos($('#tbl')._list || rows, { area: all ? null : area, situacao: st.f?.status || '', busca: st.q || '' }); };
     $('#nProc').onclick = () => Judicial.edit(null, all ? 'civil' : area);
+    $('#nProcDocs').onclick = () => JudDocs.open();
   },
   edit(p, area) {
     p = p || { area, status: 'Ativo', clienteIds: [] };
@@ -50,7 +58,7 @@ const Judicial = {
     v.innerHTML = `
     <div class="proc-h">
       <div>
-        <div class="proc-tags">${pill(A.nome)} ${pill(p.status || 'Ativo')} ${p.segredo ? '<span class="pill critical">Segredo de justiça</span>' : ''} ${p.tribunal ? `<span class="tag">${esc(p.tribunal)}</span>` : ''}</div>
+        <div class="proc-tags">${pill(A.nome)} ${pill(p.status || 'Ativo')} ${p.fase ? `<span class="tag">${esc(p.fase)}</span>` : ''} ${p.transito ? `<span class="pill tj">${icon('scale')} Transitado em julgado em ${esc(fmtDate(p.transito))}</span>` : ''} ${p.segredo ? '<span class="pill critical">Segredo de justiça</span>' : ''} ${p.tribunal ? `<span class="tag">${esc(p.tribunal)}</span>` : ''}</div>
         <h1 class="mono proc-num">${esc(fmtCNJ(p.numero))} ${validCNJ(p.numero) ? '' : `<span class="pill serious" title="Dígito verificador não confere">verificar número</span>`}</h1>
         <p class="proc-sub">${esc(p.classe || 'Classe não informada')}${p.assunto ? ' · ' + esc(p.assunto) : ''}</p>
         <p class="proc-parts"><b>${esc(clientes.map(c => c.nome).join(', ') || 'Cliente não vinculado')}</b> <span class="muted">(${esc(p.polo || 'polo não informado')})</span> <span class="vs">×</span> ${esc(p.parteContraria || '—')}</p>
@@ -58,33 +66,42 @@ const Judicial = {
       <div class="actions wrap">
         <button class="btn ghost" id="pEdit">${icon('edit')} Editar</button>
         <button class="btn ghost" id="pPrev">${icon('eye')} Ver como o cliente</button>
+        <button class="btn ghost" id="pDocs">${icon('upload')} Juntar arquivos</button>
         <button class="btn primary" id="pSync">${icon('sync')} Buscar movimentações (DataJud)</button>
       </div>
     </div>
+    ${Judicial.partesHtml(p)}
+<section class="card dados-card"><header><h2>${icon('file')} Dados do processo</h2></header>
+          <dl class="dl cols">
+            <dt>Cliente(s)</dt><dd>${clientes.map(c => `<a href="#/clientes?c=${c.id}">${esc(c.nome)}</a>`).join(', ') || '—'}</dd>
+            <dt>Órgão julgador</dt><dd>${esc(p.orgao || '—')}</dd><dt>Comarca</dt><dd>${esc(p.comarca || '—')}</dd>
+            <dt>Distribuição</dt><dd>${esc(fmtDate(p.distribuicao) || '—')}</dd><dt>Valor da causa</dt><dd>${esc(fmtMoney(p.valorCausa) || '—')}</dd>
+            <dt>Fase</dt><dd>${esc(p.fase || '—')}</dd>${p.transito ? `<dt>Trânsito em julgado</dt><dd>${esc(fmtDate(p.transito))} (fase de conhecimento)</dd>` : ''}<dt>Responsável</dt><dd>${esc(p.responsavel || '—')}</dd><dt>Honorários</dt><dd>${esc(p.honorarios || '—')}</dd>
+            <dt>E-mail do cliente</dt><dd>${clientes.length ? clientes.map(c => c.email ? esc(c.email) : '<span class="t-warn">não informado</span>').join(', ') : '—'} ${clientes.length ? `<button class="link small" id="pMail">${clientes.some(c => c.email) ? 'alterar' : 'informar'}</button>` : ''}</dd>
+            <dt>Aviso ao cliente</dt><dd>${p.notificarCliente ? (clientes.some(c => c.email) ? 'por e-mail a cada movimentação' : '<span class="t-warn">ligado, mas sem e-mail do cliente</span>') : 'desativado'} ${clientes.length ? `<button class="link small" id="pMail2">${p.notificarCliente ? 'configurar' : 'ativar'}</button>` : ''}</dd>
+          </dl>
+          ${p.obs ? `<div class="note-box"><span class="lbl">Anotações internas</span>${esc(p.obs)}</div>` : ''}
+        </section>
     <div class="grid-main">
       <section class="card">
         <header><h2>${icon('history')} Movimentações</h2><div class="hdr-actions"><span class="muted small">${visiveis} de ${movs.length} visíveis ao cliente</span><button class="btn ghost sm" id="mAdd">${icon('plus')} Lançar</button></div></header>
         ${p.ultimaSync ? `<p class="muted small">Última consulta ao DataJud: ${esc(fmtDateTime(p.ultimaSync))}</p>` : ''}
-        ${movs.length ? `<ol class="timeline">${movs.map(m => `<li class="${m.visivelCliente ? '' : 'hidden-mov'}"><span class="tl-dot"></span><div class="tl-head"><time>${esc(fmtDate(m.data))}</time>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : '<span class="badge soft">Escritório</span>'}<span class="sp"></span><button class="icon-btn sm" data-vis="${m.id}" title="${m.visivelCliente ? 'Visível ao cliente — clique para ocultar' : 'Oculto do cliente — clique para mostrar'}">${icon(m.visivelCliente ? 'eye' : 'eyeOff')}</button><button class="icon-btn sm" data-mov="${m.id}" title="Editar">${icon('edit')}</button></div><b class="tl-t">${esc(m.titulo)}</b>${m.descricao ? `<p>${esc(m.descricao)}</p>` : ''}${m.explicacao ? `<p class="explain">${icon('user')} <span>${esc(m.explicacao)}</span></p>` : ''}</li>`).join('')}</ol>` : `<div class="empty sm">${icon('history')}<p>Nenhuma movimentação. Lance manualmente ou busque no DataJud.</p></div>`}
+        ${movs.length ? `<ol class="timeline">${movs.map(m => `<li class="${m.visivelCliente ? '' : 'hidden-mov'}"><span class="tl-dot"></span><div class="tl-head"><time>${esc(fmtDate(m.data))}</time>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : m.origem === 'djen' ? '<span class="badge djen">DJEN</span>' : m.origem === 'documento' ? '<span class="badge soft">Documento</span>' : '<span class="badge soft">Escritório</span>'}<span class="sp"></span><button class="icon-btn sm" data-vis="${m.id}" title="${m.visivelCliente ? 'Visível ao cliente — clique para ocultar' : 'Oculto do cliente — clique para mostrar'}">${icon(m.visivelCliente ? 'eye' : 'eyeOff')}</button><button class="icon-btn sm" data-mov="${m.id}" title="Editar">${icon('edit')}</button></div><b class="tl-t">${esc(m.titulo)}</b>${Judicial.textoMov(m)}${m.link ? `<a class="link small" href="${esc(m.link)}" target="_blank" rel="noopener">${icon('link')} abrir publicação</a>` : ''}${m.explicacao ? `<p class="explain">${icon('user')} <span>${esc(m.explicacao)}</span></p>` : ''}</li>`).join('')}</ol>` : `<div class="empty sm">${icon('history')}<p>Nenhuma movimentação. Lance manualmente ou busque no DataJud.</p></div>`}
       </section>
       <div class="col">
-        <section class="card"><header><h2>${icon('file')} Dados do processo</h2></header>
-          <dl class="dl">
-            <dt>Cliente(s)</dt><dd>${clientes.map(c => `<a href="#/clientes?c=${c.id}">${esc(c.nome)}</a>`).join(', ') || '—'}</dd>
-            <dt>Órgão julgador</dt><dd>${esc(p.orgao || '—')}</dd><dt>Comarca</dt><dd>${esc(p.comarca || '—')}</dd>
-            <dt>Distribuição</dt><dd>${esc(fmtDate(p.distribuicao) || '—')}</dd><dt>Valor da causa</dt><dd>${esc(fmtMoney(p.valorCausa) || '—')}</dd>
-            <dt>Fase</dt><dd>${esc(p.fase || '—')}</dd><dt>Responsável</dt><dd>${esc(p.responsavel || '—')}</dd><dt>Honorários</dt><dd>${esc(p.honorarios || '—')}</dd>
-            <dt>Aviso ao cliente</dt><dd>${p.notificarCliente ? 'por e-mail a cada movimentação' : 'desativado'}</dd>
-          </dl>
-          ${p.obs ? `<div class="note-box"><span class="lbl">Anotações internas</span>${esc(p.obs)}</div>` : ''}
-        </section>
+
+        <section class="card"><header><h2>${icon('file')} Arquivos</h2>${p.pastaLink ? `<a class="link small" href="${esc(p.pastaLink)}" target="_blank" rel="noopener">${icon('link')} Pasta no Drive</a>` : ''}</header>
+          ${(p.arquivos || []).length ? `<ul class="plain files">${p.arquivos.map(a => `<li>${icon('file')} ${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>` : esc(a.nome)}${a.tipo ? ` <span class="muted small">· ${esc(a.tipo)}</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Nenhum arquivo. Use “Juntar arquivos” para guardar petições, decisões e documentos na pasta do processo no Drive do escritório.</p>'}</section>
         <section class="card"><header><h2>${icon('calendar')} Agenda</h2><button class="btn ghost sm" id="aAdd">${icon('plus')} Novo</button></header>
           ${prazos.length ? `<ul class="agenda-list compact">${prazos.map(Views.agendaItem).join('')}</ul>` : '<p class="muted small">Nenhum prazo ou audiência.</p>'}</section>
       </div>
     </div>`;
     $('#pEdit').onclick = () => Judicial.edit(p);
+    ['#pMail', '#pMail2'].forEach(k => $(k)?.addEventListener('click', () => Judicial.emailCliente(p)));
+    $$('[data-ptcli]', v).forEach(b => b.onclick = () => Judicial.tornarCliente(p, +b.dataset.ptcli));
     $('#pPrev').onclick = () => { if (!clientes.length) return UI.toast('Vincule um cliente ao processo.', 'warn'); Portal.preview(clientes[0].id, p.id); };
     $('#pSync').onclick = () => Judicial.datajud(p);
+    $('#pDocs').onclick = () => JudDocs.open(p);
     $('#mAdd').onclick = () => Judicial.editMov(null, p);
     $('#aAdd').onclick = () => Judicial.editPrazo(null, p.id);
     $$('[data-mov]', v).forEach(b => b.onclick = () => Judicial.editMov(DB.get('movimentos', b.dataset.mov), p));
@@ -111,12 +128,90 @@ const Judicial = {
       App.render(true);
     } catch (e) { UI.toast(e.message, 'bad'); b.disabled = false; b.innerHTML = icon('sync') + ' Buscar movimentações (DataJud)'; }
   },
+  /** texto da movimentação: nas decisões publicadas, só a parte dispositiva (a íntegra fica em "ler inteiro teor") */
+  recolher: `<button type="button" class="link small tl-rec" onclick="const d=this.closest('details');d.open=false;d.scrollIntoView({block:'nearest',behavior:'smooth'})">▲ recolher</button>`,
+  /** completar o valor da causa dos processos que não têm (o DJEN e o DataJud não informam esse dado) */
+  completarValores(procs) {
+    const l = procs.filter(p => !(num(p.valorCausa) > 0));
+    const m = UI.modal({ title: 'Valor da causa', sub: `${l.length} processo(s) sem valor informado`, wide: true,
+      body: `<p class="muted small">O DJEN e o DataJud não informam o valor da causa. Digite os valores que souber (os vazios ficam como estão) — ou use “Juntar arquivos” com a petição inicial no processo, que a IA preenche sozinha.</p>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>Processo</th><th>Cliente</th><th>Classe</th><th style="width:170px">Valor da causa (R$)</th></tr></thead><tbody>
+        ${l.map((p, i) => `<tr><td class="mono">${esc(fmtCNJ(p.numero))}</td><td>${esc(clienteNomes(p) || '—')}</td><td>${esc(p.classe || '')}</td><td><input class="input sm" data-vc="${i}" inputmode="decimal" placeholder="0,00"></td></tr>`).join('')}</tbody></table></div>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="vcOk">${icon('check')} Salvar valores</button>` });
+    $('#vcOk', m).onclick = async () => {
+      const mud = $$('[data-vc]', m).map(x => [l[+x.dataset.vc], num(x.value)]).filter(([, v]) => v > 0).map(([p, v]) => ({ ...p, valorCausa: v }));
+      if (mud.length) await DB.save('processos', mud);
+      UI.closeModal(); UI.toast(`${mud.length} valor(es) salvo(s).`); App.render(true);
+    };
+  },
+  textoMov(m) {
+    const t = m.descricao || ''; if (!t) return '';
+    if (DJEN.ehDecisao(m.titulo)) {
+      const d = DJEN.dispositivo(t);
+      if (d.resumido) return `<p class="dispositivo"><span class="disp-tag">Dispositivo</span>${esc(d.texto)}</p><details class="tl-more full"><summary><span class="link small">ler inteiro teor</span></summary><p class="pre">${esc(t)}</p>${Judicial.recolher}</details>`;
+    }
+    return t.length > 420 ? `<details class="tl-more"><summary><span class="tl-prev">${esc(t.slice(0, 300))}… </span><span class="link small">ler tudo</span></summary><p class="pre">${esc(t)}</p>${Judicial.recolher}</details>` : `<p>${esc(t)}</p>`;
+  },
+  /** e-mail do(s) cliente(s) e aviso automático de andamento */
+  emailCliente(p) {
+    const cls = (p.clienteIds || []).map(i => DB.get('clientes', i)).filter(Boolean);
+    const m = UI.modal({ title: 'E-mail do cliente', sub: fmtCNJ(p.numero),
+      body: `<p class="muted small">É por este e-mail que o cliente recebe o aviso de cada nova movimentação visível para ele e, se você quiser, o acesso ao portal para acompanhar o processo.</p>
+        ${cls.map((c, i) => `<div class="fld"><label>${esc(c.nome)}</label><input class="input" type="email" data-em="${i}" value="${esc(c.email || '')}" placeholder="nome@exemplo.com"></div>`).join('')}
+        <label class="switch" style="margin-top:10px"><input type="checkbox" id="emAviso" ${p.notificarCliente || !cls.some(c => c.email) ? 'checked' : ''}><span></span>Avisar o cliente por e-mail a cada nova movimentação deste processo</label>
+        <label class="switch"><input type="checkbox" id="emPortal"><span></span>Dar acesso ao portal do cliente (ele recebe um convite por e-mail)</label>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="emOk">${icon('check')} Salvar</button>` });
+    $('#emOk', m).onclick = async () => {
+      const mails = $$('[data-em]', m).map(x => x.value.trim().toLowerCase());
+      const ruim = mails.find(e => e && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)); if (ruim) return UI.toast('E-mail inválido: ' + ruim, 'bad');
+      const aviso = $('#emAviso', m).checked, portal = $('#emPortal', m).checked;
+      const mud = cls.map((c, i) => ({ ...c, email: mails[i] })).filter((c, i) => c.email !== (cls[i].email || ''));
+      if (mud.length) await DB.save('clientes', mud);
+      if (!!p.notificarCliente !== aviso) await DB.save('processos', { ...p, notificarCliente: aviso });
+      UI.closeModal();
+      if (portal) for (const c of cls.map((c, i) => ({ ...c, email: mails[i] })).filter(c => c.email)) await Views.grantAccess(c);
+      else UI.toast('Salvo.' + (aviso && !mails.some(Boolean) ? ' Atenção: sem e-mail, o aviso não tem para onde ir.' : ''), aviso && !mails.some(Boolean) ? 'warn' : 'ok');
+      App.render(true);
+    };
+  },
+  partesHtml(p) {
+    // quem é cliente vem dos clientes vinculados ao processo (o que for escolhido em Editar vale aqui também)
+    const nomesCli = new Set((p.clienteIds || []).map(i => DB.get('clientes', i)).filter(Boolean).map(c => norm(c.nome)));
+    const ps = (p.partes || []).map((x, i) => ({ ...x, i, papel: x.papel || DJEN.papelDe(x.nome), nome: DJEN.limparNome(x.nome) })).filter(x => !DJEN.ehAdvDoEscritorio(x.nome)); if (!ps.length) return '';
+    ps.forEach(x => x.cliente = nomesCli.size ? nomesCli.has(norm(x.nome)) : false);
+    const grupo = (pl, tit) => { const l = ps.filter(x => (x.polo || '') === pl); return l.length ? `<div class="pt-grupo"><h4>${tit}</h4>${l.map(x => `<div class="pt-item"><div class="pt-linha"><div><b>${esc(x.nome)}</b>${x.cliente ? ' <span class="pill good">cliente</span>' : ''}${x.papel ? ` <small class="muted">${esc(x.papel)}</small>` : ''}${x.doc ? ` <small class="muted mono">${esc(fmtDoc(x.doc))}</small>` : ''}</div>${x.cliente ? '' : `<button class="btn ghost xs" data-ptcli="${x.i}" title="Tornar esta parte o cliente do escritório neste processo">${icon('user')} é o cliente</button>`}</div>${(x.advogados || []).length ? `<small class="pt-adv">${icon('user')} ${x.advogados.map(a => esc(a.nome) + (a.oab ? ` <span class="muted">(OAB ${esc(a.oab)}${a.uf ? '/' + esc(a.uf) : ''})</span>` : '') + (a.escritorio ? ' <span class="badge soft">escritório</span>' : '')).join(' · ')}</small>` : ''}</div>`).join('')}</div>` : ''; };
+    return `<section class="card partes-card"><header><h2>${icon('users')} Partes</h2></header><div class="pt-cols">${grupo('Ativo', 'Polo ativo')}${grupo('Passivo', 'Polo passivo')}${grupo('Terceiro', 'Terceiros interessados')}${grupo('', 'Polo não informado')}</div></section>`;
+  },
+  /** troca o cliente do processo pela parte escolhida: vincula (ou cria) o cliente, acerta o polo e a parte contrária */
+  async tornarCliente(p, idx) {
+    const pt = (p.partes || [])[idx]; if (!pt) return;
+    const nome = DJEN.limparNome(pt.nome);
+    const antigos = (p.clienteIds || []).map(i => DB.get('clientes', i)).filter(Boolean);
+    const msg = antigos.length ? `Trocar o cliente deste processo de <b>${esc(antigos.map(c => c.nome).join(', '))}</b> para <b>${esc(nome)}</b>?` : `Definir <b>${esc(nome)}</b> como cliente deste processo?`;
+    if (!await UI.confirm(msg, 'Confirmar', false)) return;
+    let c = DB.all('clientes').find(x => norm(x.nome) === norm(nome));
+    if (!c) { c = { id: uid('cl'), tipo: DJEN.PJ.test(nome) ? 'Pessoa jurídica' : 'Pessoa física', nome, obs: `Cadastrado pelo processo ${fmtCNJ(p.numero)}. Completar CPF/CNPJ e contato.` }; await DB.save('clientes', c); }
+    p.partes = p.partes.map((x, i) => ({ ...x, cliente: i === idx }));
+    p.clienteIds = [c.id];
+    if (pt.polo === 'Ativo' || pt.polo === 'Passivo') {
+      p.polo = DJEN.poloCliente(pt.polo, p.area);
+      p.parteContraria = p.partes.filter(x => x.polo && x.polo !== pt.polo && x.polo !== 'Terceiro' && !DJEN.ehAdvDoEscritorio(DJEN.limparNome(x.nome))).map(x => DJEN.limparNome(x.nome)).join('; ');
+    }
+    await DB.save('processos', p);
+    // o cliente trocado, se foi criado automaticamente e não tem outro processo nem acesso ao portal, sai do cadastro
+    const sobra = antigos.filter(a => a.id !== c.id && /^Cadastrado (automaticamente )?pelo processo/.test(a.obs || '') && !a.email && !DB.all('processos').some(x => (x.clienteIds || []).includes(a.id)));
+    if (sobra.length) await DB.remove('clientes', sobra.map(a => a.id));
+    UI.toast(`Cliente do processo: ${nome}.${sobra.length ? ` O cadastro de ${sobra.map(a => a.nome).join(', ')}, criado por engano, foi removido.` : ''}`, 'ok', 7000);
+    App.render(true);
+  },
   mergeDatajud(p, r) {
     p.ultimaSync = new Date().toISOString();
     if (!r.encontrado) return [];
     ['classe', 'orgao', 'assunto'].forEach(k => { if (!p[k] && r[k]) p[k] = r[k]; });
     if (!p.distribuicao && r.ajuizamento) p.distribuicao = parseDate(r.ajuizamento);
     if (!p.tribunal && r.tribunal) p.tribunal = r.tribunal;
+    const tj = !p.transito && (r.movimentos || []).filter(m => /tr[âa]nsit[oa] em julgado/i.test(m.titulo + ' ' + (m.descricao || ''))).sort((a, b) => a.data.localeCompare(b.data))[0];
+    if (tj) { p.transito = tj.data; setTimeout(() => UI.toast(`A fase de conhecimento transitou em julgado em ${fmtDate(tj.data)}.`, 'ok', 7000), 400); }
     const vis = escritorio().djVisivel !== false;
     const have = new Set(DB.where('movimentos', m => m.processoId === p.id).map(m => m.chave || (m.data + '|' + norm(m.titulo))));
     const novos = [];

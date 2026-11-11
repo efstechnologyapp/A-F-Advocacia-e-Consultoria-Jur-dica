@@ -1,4 +1,3 @@
-/* Amorim Firmo — Advocacia e Consultoria Jurídica · app.js (gerado a partir de src/) */
 'use strict';
 /* =====================================================================
    AMORIM FIRMO — Advocacia e Consultoria Jurídica
@@ -9,6 +8,7 @@
 const APP_VERSAO = '1.13.7';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.8', data: '11/11/2026', itens: ['Painel da empresa: “+ outros” em Contratos por tomador expande e recolhe a lista.', 'Achados em aberto: tocar num risco ou numa área abre a página de achados já filtrada para resolver.', 'Vencimentos: tocar num mês (gráfico ou tabela) lista os contratos que vencem nele; “Ver todos” mostra os 12 meses, e cada contrato abre a ficha.'] },
   { numero: '1.13.7', data: '11/11/2026', itens: ['Visão geral: o quadro “Últimas movimentações” passou a ser o último da página.'] },
   { numero: '1.13.6', data: '11/11/2026', itens: ['Ficha do contrato: o quadro “postos contratados” mostra o salário-base × quantidade de cada posto e a linha “Total mensal” com o total de postos, de salários-base e do custo previsto.'] },
   { numero: '1.13.5', data: '11/11/2026', itens: ['Ficha do contrato: ao abrir um item (posto, linha mensal do DP, obrigação, achado, documento, custo superveniente) ou “Editar contrato”, a janela tem o botão “Voltar”, que retorna à ficha do contrato; salvar ou excluir também retornam à ficha.'] },
@@ -863,23 +863,31 @@ function mountChart(el, spec) {
   hit.addEventListener('mousemove', onMove);
   hit.addEventListener('mouseleave', () => { Tip.hide(); if (xh) xh.style.display = 'none'; });
   hit.addEventListener('touchstart', e => onMove(e.touches[0]), { passive: true });
+  if (spec.onPick) { hit.style.cursor = 'pointer'; hit.addEventListener('click', ev => { const pt = s.getBoundingClientRect(); const i = Math.max(0, Math.min(geom.n - 1, Math.floor(((ev.clientX - pt.left) * (W / pt.width) - geom.padL) / geom.band))); Tip.hide(); spec.onPick(i); }); }
   $('.tbl-toggle', el).onclick = e => {
     const t = $('.chart-table', el); t.hidden = !t.hidden; e.target.textContent = t.hidden ? 'Ver tabela' : 'Ocultar tabela';
-    if (!t.hidden && !t.innerHTML) t.innerHTML = `<table class="mini"><thead><tr><th></th>${spec.series.map(se => `<th>${esc(se.name)}</th>`).join('')}</tr></thead><tbody>${spec.labels.map((l, i) => `<tr><td>${esc(spec.fullLabels?.[i] || l)}</td>${spec.series.map(se => `<td class="r">${num(se.values[i]) === null ? '—' : esc(fmt(se.values[i]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (!t.hidden && !t.innerHTML) t.innerHTML = `<table class="mini"><thead><tr><th></th>${spec.series.map(se => `<th>${esc(se.name)}</th>`).join('')}</tr></thead><tbody>${spec.labels.map((l, i) => `<tr ${spec.onPick ? `class="clic" data-pick="${i}"` : ''}><td>${esc(spec.fullLabels?.[i] || l)}</td>${spec.series.map(se => `<td class="r">${num(se.values[i]) === null ? '—' : esc(fmt(se.values[i]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (spec.onPick) $$('[data-pick]', t).forEach(r => r.onclick = () => spec.onPick(+r.dataset.pick));
   };
 }
 /** barras horizontais (ranking) em HTML */
 function hbarHtml(items, fmt = fmtMoney, max = 8) {
   if (!items.length) return '<div class="chart-empty">Sem dados.</div>';
-  const top = items.slice(0, max), m = Math.max(...top.map(i => i.value), 1);
-  return `<div class="hbars">${top.map(i => `<div class="hbar" title="${esc(i.label)}: ${esc(fmt(i.value))}"><span class="hbar-l">${esc(i.label)}</span><span class="hbar-t"><span style="width:${Math.max(1.5, i.value / m * 100)}%;background:${i.color || 'var(--s1)'}"></span></span><span class="hbar-v">${esc(fmt(i.value))}</span></div>`).join('')}${items.length > max ? `<div class="muted small">+ ${items.length - max} outros</div>` : ''}</div>`;
+  const m = Math.max(...items.map(i => i.value), 1), extra = items.length - max;
+  return `<div class="hbars">${items.map((i, k) => `<div class="hbar${i.attr ? ' clic' : ''}${k >= max ? ' hb-x' : ''}" ${k >= max ? 'hidden' : ''} ${i.attr || ''} title="${esc(i.label)}: ${esc(fmt(i.value))}"><span class="hbar-l">${esc(i.label)}</span><span class="hbar-t"><span style="width:${Math.max(1.5, i.value / m * 100)}%;background:${i.color || 'var(--s1)'}"></span></span><span class="hbar-v">${esc(fmt(i.value))}</span></div>`).join('')}${extra > 0 ? `<button type="button" class="link small hb-more" data-n="${extra}">+ ${extra} outros</button>` : ''}</div>`;
 }
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('.hb-more'); if (!b) return;
+  const abrir = !b.dataset.o; b.parentNode.querySelectorAll('.hb-x').forEach(x => x.hidden = !abrir);
+  b.dataset.o = abrir ? '1' : ''; b.textContent = abrir ? 'Recolher' : `+ ${b.dataset.n} outros`;
+});
+
 /** barra segmentada (distribuição por status) */
 function segBar(parts) {
   const tot = parts.reduce((s, p) => s + p.value, 0);
   if (!tot) return '<div class="chart-empty">Sem registros.</div>';
-  return `<div class="segbar">${parts.filter(p => p.value).map(p => `<span style="flex:${p.value};background:${p.color}" title="${esc(p.label)}: ${p.value}"></span>`).join('')}</div>
-  <div class="seglegend">${parts.filter(p => p.value).map(p => `<span><i style="background:${p.color}"></i>${esc(p.label)} <b>${p.value}</b> <em>${fmtPct(p.value / tot)}</em></span>`).join('')}</div>`;
+  return `<div class="segbar">${parts.filter(p => p.value).map(p => `<span ${p.attr || ''} class="${p.attr ? 'clic' : ''}" style="flex:${p.value};background:${p.color}" title="${esc(p.label)}: ${p.value}"></span>`).join('')}</div>
+  <div class="seglegend">${parts.filter(p => p.value).map(p => `<span ${p.attr || ''} class="${p.attr ? 'clic' : ''}"><i style="background:${p.color}"></i>${esc(p.label)} <b>${p.value}</b> <em>${fmtPct(p.value / tot)}</em></span>`).join('')}</div>`;
 }
 /* =====================================================================
    Componentes de interface: ícones, avisos, janelas, formulários, tabelas
@@ -2122,8 +2130,8 @@ const Consult = {
     const S = Consult.stats(e, de);
     const porTom = {}; S.cs.forEach(c => { const t = tomadorBase(c); porTom[t] = (porTom[t] || 0) + 1; });
     const venc12 = []; for (let i = 0; i < 12; i++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + i); const k = d.toISOString().slice(0, 7); venc12.push({ k, n: S.cs.filter(c => isISO(c.fim) && c.fim.slice(0, 7) === k).length }); }
-    const achRisco = RISCOS.map((r, i) => ({ label: r, value: S.achAbertos.filter(a => norm(a.risco) === norm(r)).length, color: ['var(--info)', 'var(--warning)', 'var(--serious)', 'var(--critical)'][i] }));
-    const achArea = {}; S.achAbertos.forEach(a => achArea[a.area || 'Outros'] = (achArea[a.area || 'Outros'] || 0) + 1);
+    const achRisco = RISCOS.map((r, i) => ({ label: r, attr: `data-ach-r="${esc(r)}"`, value: S.achAbertos.filter(a => norm(a.risco) === norm(r)).length, color: ['var(--info)', 'var(--warning)', 'var(--serious)', 'var(--critical)'][i] }));
+    const achArea = {}; S.achAbertos.forEach(a => achArea[a.area || 'Sem área'] = (achArea[a.area || 'Sem área'] || 0) + 1);
     const ins = Consult.insights(S);
     const vazia = !S.cs.length && !empRecs('documentos', e.id).length;
     host.innerHTML = `${vazia ? `<div class="drop-hero">${icon('upload')}<div><b>Comece juntando os documentos da empresa</b><span>Arraste a pasta com os contratos, aditivos e a planilha de auditoria: o app guarda no Drive, lê com IA, liga cada arquivo ao contrato e monta o painel.</span></div><button class="btn primary" id="heroDocs">${icon('upload')} Juntar documentos</button></div>` : ''}
@@ -2147,11 +2155,16 @@ const Consult = {
     </div>
     <div class="grid2">
       <section class="card"><header><h2>Contratos por tomador</h2></header>${hbarHtml(Object.entries(porTom).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value), v => v + (v > 1 ? ' contratos' : ' contrato'), 8)}</section>
-      <section class="card"><header><h2>Vencimentos nos próximos 12 meses</h2></header><div data-chart="vc"></div></section>
-      <section class="card"><header><h2>Achados em aberto por risco</h2></header>${segBar(achRisco)}<h4 class="sec">Por área</h4>${hbarHtml(Object.entries(achArea).map(([label, value]) => ({ label, value, color: 'var(--s2)' })).sort((a, b) => b.value - a.value), v => String(v), 6)}</section>
+      <section class="card"><header><h2>Vencimentos nos próximos 12 meses</h2><button class="link small" type="button" id="vcTodos">Ver todos</button></header><div data-chart="vc"></div></section>
+      <section class="card"><header><h2>Achados em aberto por risco</h2><a class="link small" href="#/achados" id="achTodos">Resolver</a></header><p class="muted small">Toque num risco ou numa área para ver a lista.</p>${segBar(achRisco)}<h4 class="sec">Por área</h4>${hbarHtml(Object.entries(achArea).map(([label, value]) => ({ label, value, color: 'var(--s2)', attr: `data-ach-a="${esc(label)}"` })).sort((a, b) => b.value - a.value), v => String(v), 6)}</section>
       <section class="card"><header><h2>Situação das obrigações</h2></header>${segBar(S.obDist)}<h4 class="sec">Alertas</h4>${Views.alertasConsultoria(e.id)}</section>
     </div>`;
     $('#heroDocs', host)?.addEventListener('click', () => Docs.open(e));
+    const verAch = f => { Achados.st = { risco: 'todos', status: 'abertos', emp: e.id, area: '', busca: '', ...f }; Achados._rolar = 1; location.hash = '#/achados'; };
+    $$('[data-ach-r]', host).forEach(x => x.onclick = () => verAch({ risco: x.dataset.achR }));
+    $$('[data-ach-a]', host).forEach(x => x.onclick = () => verAch({ area: x.dataset.achA }));
+    $('#achTodos', host).onclick = ev => { ev.preventDefault(); verAch({}); };
+    $('#vcTodos', host).onclick = () => Consult.vencLista(e, S.cs, null);
     $$('[data-per]', host).forEach(b => b.onclick = () => { st.p = b.dataset.per; App.render(true); });
     const I = S.ind, L = I.map(i => fmtCompShort(i.competencia)), FL = I.map(i => fmtComp(i.competencia));
     const g = k => I.map(i => num(i[k]));
@@ -2164,7 +2177,17 @@ const Consult = {
     const pct = v => fmtPct(v), ax = v => NUM.format(Math.round(v * 100)) + '%';
     mountChart(C('mg'), { labels: L, fullLabels: FL, kind: 'line', series: [{ name: 'Margem bruta', values: I.map(i => num(i.receita) ? (num(i.receita) - (num(i.custo) || 0)) / num(i.receita) : null), color: 'var(--s3)' }], fmt: pct, axisFmt: ax, empty });
     mountChart(C('ct'), { labels: L, fullLabels: FL, kind: 'line', series: [{ name: 'Carga tributária', values: I.map(i => num(i.receita) ? ['inss', 'fgts', 'iss', 'federais', 'outrosTributos'].reduce((s, k) => s + (num(i[k]) || 0), 0) / num(i.receita) : null), color: 'var(--s4)' }], fmt: pct, axisFmt: ax, empty });
-    mountChart(C('vc'), { labels: venc12.map(x => fmtCompShort(x.k)), fullLabels: venc12.map(x => fmtComp(x.k)), kind: 'bar', series: [{ name: 'Contratos vencendo', values: venc12.some(x => x.n) ? venc12.map(x => x.n) : venc12.map(() => null) }], fmt: v => fmtNum(v) + ' contrato(s)', axisFmt: v => fmtNum(v), empty: 'Nenhum contrato com data de término cadastrada nos próximos 12 meses.' });
+    mountChart(C('vc'), { labels: venc12.map(x => fmtCompShort(x.k)), fullLabels: venc12.map(x => fmtComp(x.k)), kind: 'bar', series: [{ name: 'Contratos vencendo', values: venc12.some(x => x.n) ? venc12.map(x => x.n) : venc12.map(() => null) }], fmt: v => fmtNum(v) + ' contrato(s)', axisFmt: v => fmtNum(v), empty: 'Nenhum contrato com data de término cadastrada nos próximos 12 meses.', onPick: i => Consult.vencLista(e, S.cs, venc12[i].k) });
+  },
+
+  /** lista dos contratos que vencem num mês (k = 'AAAA-MM') ou nos próximos 12 meses (k = null) */
+  vencLista(e, cs, k) {
+    const ini = todayISO().slice(0, 7), d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 11); const fimP = d.toISOString().slice(0, 7);
+    const l = cs.filter(c => isISO(c.fim) && (k ? c.fim.slice(0, 7) === k : c.fim.slice(0, 7) >= ini && c.fim.slice(0, 7) <= fimP)).sort((a, b) => a.fim.localeCompare(b.fim));
+    const dias = c => { const n = daysUntil(c.fim); return n < 0 ? `<span class="bad">venceu há ${-n} dia(s)</span>` : n === 0 ? '<b>vence hoje</b>' : `faltam ${n} dia(s)`; };
+    const m = UI.modal({ title: k ? 'Contratos que vencem em ' + fmtComp(k) : 'Vencimentos nos próximos 12 meses', sub: `${l.length} contrato(s) · toque para abrir a ficha`, wide: true,
+      body: l.length ? `<div class="venc-l">${l.map(c => `<button type="button" class="venc-i" data-vc="${c.id}"><span><b>${esc(c.codigo || '')}</b> ${esc(c.tomador || '')}<small class="muted">${esc([c.unidade, c.numero && 'nº ' + c.numero].filter(Boolean).join(' · '))}</small></span><span class="r">${fmtDate(c.fim)}<small>${dias(c)}</small></span></button>`).join('')}</div>` : '<div class="empty"><p>Nenhum contrato.</p></div>' });
+    $$('[data-vc]', m).forEach(b => b.onclick = () => { UI.closeModal(); Consult.contrato360(e, DB.get('contratos', b.dataset.vc)); });
   },
 
   /* ---------------- IMPORTAÇÃO DA PLANILHA ---------------- */
@@ -2283,6 +2306,7 @@ const Achados = {
       ${Object.keys(porArea).length > 1 ? `<div class="ach-areas">${Object.entries(porArea).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<button class="chip ${st.area === k ? 'on' : ''}" data-ar="${esc(k)}">${esc(k)} <b>${n}</b></button>`).join('')}</div>` : ''}
       <p class="muted small">${l.length} achado(s)</p>
       <div class="ach-list">${l.map(a => Achados.card(a, nomeE(a.empresaId), emps.length > 1)).join('') || `<div class="empty">${icon('check')}<p>Nenhum achado com estes filtros.</p></div>`}</div>`;
+    if (Achados._rolar) { Achados._rolar = 0; setTimeout(() => $('.ach-f', v)?.scrollIntoView({ block: 'start' }), 60); }
     const re = () => Achados.view(v);
     $('#acB').oninput = e => { st.busca = e.target.value; clearTimeout(Achados._t); Achados._t = setTimeout(() => { re(); const i = $('#acB'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 350); };
     $('#acR').onchange = e => { st.risco = e.target.value; re(); }; $('#acS').onchange = e => { st.status = e.target.value; re(); };

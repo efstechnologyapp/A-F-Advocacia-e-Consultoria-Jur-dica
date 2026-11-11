@@ -117,7 +117,13 @@ const XLSX = (() => {
     });
     return zip(files);
   }
-  return { read, write };
+  /** descompacta um .zip → [{name, data:Uint8Array}] */
+  async function unzip(buf) {
+    const files = unzipIndex(buf), out = [];
+    for (const [name, f] of Object.entries(files)) { if (name.endsWith('/')) continue; out.push({ name, data: f.method === 0 ? f.raw : await inflate(f.raw) }); }
+    return out;
+  }
+  return { read, write, unzip };
 })();
 
 function download(blob, name) {

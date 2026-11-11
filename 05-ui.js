@@ -69,6 +69,9 @@ const UI = {
     setTimeout(() => { const f = $('input:not([type=hidden]):not([type=checkbox]),select,textarea', m); f && f.focus(); }, 30);
     onOpen && onOpen(m); return m;
   },
+  /** resolve quando o modal for fechado */
+  /** resolve quando o modal for fechado; 'substituido' se outra janela tomou o lugar dele */
+  aguardar(m) { return new Promise(r => { const t = setInterval(() => { if (!m.isConnected) { clearInterval(t); r($('#modal') ? 'substituido' : undefined); } }, 300); }); },
   closeModal() { $('#modal')?.remove(); document.body.classList.remove('noscroll'); },
   confirm(msg, okLabel = 'Confirmar', danger = true) {
     return new Promise(res => {
@@ -138,17 +141,18 @@ const UI = {
     return { rec: r, errs };
   },
   /** abre o formulário de edição genérico */
-  editRecord(coll, rec, { title, ctx = {}, onSaved, extraBase = {}, allowDelete = true } = {}) {
+  editRecord(coll, rec, { title, ctx = {}, onSaved, extraBase = {}, allowDelete = true, voltar } = {}) {
     const sc = SCHEMAS[coll], isNew = !rec?.id; rec = rec || {};
     const m = UI.modal({
       title: title || (isNew ? 'Novo(a) ' + sc.singular : 'Editar ' + sc.singular), wide: sc.fields.length > 8,
       body: UI.form(sc, rec, ctx),
-      foot: `${!isNew && allowDelete ? `<button class="btn ghost danger-text" id="mDel">${icon('trash')} Excluir</button>` : ''}<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="mSave">${icon('check')} Salvar</button>`
+      foot: `${!isNew && allowDelete ? `<button class="btn ghost danger-text" id="mDel">${icon('trash')} Excluir</button>` : ''}<span class="sp"></span>${voltar ? `<button class="btn ghost" id="mVoltar">${icon('chevL')} Voltar</button>` : `<button class="btn ghost" data-close>Cancelar</button>`}<button class="btn primary" id="mSave">${icon('check')} Salvar</button>`
     });
+    if (voltar) { $('#mVoltar', m).onclick = () => voltar(); $('header [data-close]', m)?.addEventListener('click', ev => { ev.stopPropagation(); voltar(); }); }
     const form = $('form', m);
     $('[data-newcliente]', m)?.addEventListener('click', () => {
       const snap = UI.readForm(form, sc, { ...rec, ...extraBase }).rec;
-      UI.editRecord('clientes', null, { onSaved: c => { snap.clienteIds = [...(snap.clienteIds || []), c.id]; UI.editRecord(coll, snap, { title, ctx, onSaved, extraBase, allowDelete }); } });
+      UI.editRecord('clientes', null, { onSaved: c => { snap.clienteIds = [...(snap.clienteIds || []), c.id]; UI.editRecord(coll, snap, { title, ctx, onSaved, extraBase, allowDelete, voltar }); } });
     });
     $('#mSave', m).onclick = async () => {
       const { rec: r, errs } = UI.readForm(form, sc, { ...rec, ...extraBase });
@@ -160,11 +164,14 @@ const UI = {
       derive(coll, r);
       const [saved] = await DB.save(coll, r); UI.closeModal(); UI.toast('Salvo com sucesso.');
       onSaved ? onSaved(saved) : App.render();
+      if (voltar) voltar();
     };
     $('#mDel', m)?.addEventListener('click', async () => {
       if (!await UI.confirm(`Excluir este(a) ${sc.singular}? Esta ação não pode ser desfeita.`, 'Excluir')) return;
       await DB.remove(coll, rec.id); UI.toast('Registro excluído.'); App.render();
+      if (voltar) voltar();
     });
+    if (coll === 'empresas' || coll === 'clientes') RFB.attach(m, coll);
     return m;
   },
   /* ---------- célula formatada ---------- */
@@ -198,8 +205,8 @@ function pill(v) {
 
 /* ---------- Tabela de dados (busca, filtros, ordenação, paginação) ---------- */
 const TableState = {};
-function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', emptyMsg = 'Nenhum registro.', cols }) {
-  const st = TableState[id] = TableState[id] || { q: '', sort: null, dir: 1, page: 0, f: {} };
+function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', tools = '', sortDefault = null, emptyMsg = 'Nenhum registro.', cols }) {
+  const st = TableState[id] = TableState[id] || { q: '', sort: sortDefault, dir: 1, page: 0, f: {} };
   const fields = cols ? cols.map(k => schema.fields.find(f => f.k === k)) : schema.fields.filter(f => f.list);
   const draw = () => {
     let list = rows.slice();
@@ -213,6 +220,7 @@ function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions
         return String(x ?? '').localeCompare(String(y ?? ''), 'pt-BR', { numeric: true }) * st.dir;
       });
     }
+    host._list = list; // lista filtrada e ordenada (usada na impressão)
     const per = 50, pages = Math.max(1, Math.ceil(list.length / per)); st.page = Math.min(st.page, pages - 1);
     const slice = list.slice(st.page * per, st.page * per + per);
     const moneyF = fields.filter(f => f.type === 'money');
@@ -223,7 +231,7 @@ function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions
     $$('tr[data-id]', host).forEach(tr => tr.onclick = () => onOpen && onOpen(rows.find(r => r.id === tr.dataset.id)));
     $$('[data-pg]', host).forEach(b => b.onclick = () => { st.page += +b.dataset.pg; draw(); });
   };
-  host.innerHTML = `<div class="dt-tools"><div class="search">${icon('search')}<input type="search" placeholder="Buscar…" value="${esc(st.q)}"></div>${filters.map(fl => `<select data-filter="${fl.k}"><option value="">${esc(fl.label)}: todos</option>${fl.opts.map(o => `<option ${st.f[fl.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('')}<span class="sp"></span>${actions}</div><div class="dt-body"></div>`;
+  host.innerHTML = `<div class="dt-tools"><div class="search">${icon('search')}<input type="search" placeholder="Buscar…" value="${esc(st.q)}"></div>${filters.map(fl => `<select data-filter="${fl.k}"><option value="">${esc(fl.label)}: todos</option>${fl.opts.map(o => `<option ${st.f[fl.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('')}${tools}<span class="sp"></span>${actions}</div><div class="dt-body"></div>`;
   $('.search input', host).oninput = e => { st.q = e.target.value; st.page = 0; draw(); };
   $$('[data-filter]', host).forEach(s => s.onchange = () => { st.f[s.dataset.filter] = s.value; st.page = 0; draw(); });
   draw();

@@ -100,21 +100,29 @@ function mountChart(el, spec) {
   hit.addEventListener('mousemove', onMove);
   hit.addEventListener('mouseleave', () => { Tip.hide(); if (xh) xh.style.display = 'none'; });
   hit.addEventListener('touchstart', e => onMove(e.touches[0]), { passive: true });
+  if (spec.onPick) { hit.style.cursor = 'pointer'; hit.addEventListener('click', ev => { const pt = s.getBoundingClientRect(); const i = Math.max(0, Math.min(geom.n - 1, Math.floor(((ev.clientX - pt.left) * (W / pt.width) - geom.padL) / geom.band))); Tip.hide(); spec.onPick(i); }); }
   $('.tbl-toggle', el).onclick = e => {
     const t = $('.chart-table', el); t.hidden = !t.hidden; e.target.textContent = t.hidden ? 'Ver tabela' : 'Ocultar tabela';
-    if (!t.hidden && !t.innerHTML) t.innerHTML = `<table class="mini"><thead><tr><th></th>${spec.series.map(se => `<th>${esc(se.name)}</th>`).join('')}</tr></thead><tbody>${spec.labels.map((l, i) => `<tr><td>${esc(spec.fullLabels?.[i] || l)}</td>${spec.series.map(se => `<td class="r">${num(se.values[i]) === null ? '—' : esc(fmt(se.values[i]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (!t.hidden && !t.innerHTML) t.innerHTML = `<table class="mini"><thead><tr><th></th>${spec.series.map(se => `<th>${esc(se.name)}</th>`).join('')}</tr></thead><tbody>${spec.labels.map((l, i) => `<tr ${spec.onPick ? `class="clic" data-pick="${i}"` : ''}><td>${esc(spec.fullLabels?.[i] || l)}</td>${spec.series.map(se => `<td class="r">${num(se.values[i]) === null ? '—' : esc(fmt(se.values[i]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (spec.onPick) $$('[data-pick]', t).forEach(r => r.onclick = () => spec.onPick(+r.dataset.pick));
   };
 }
 /** barras horizontais (ranking) em HTML */
 function hbarHtml(items, fmt = fmtMoney, max = 8) {
   if (!items.length) return '<div class="chart-empty">Sem dados.</div>';
-  const top = items.slice(0, max), m = Math.max(...top.map(i => i.value), 1);
-  return `<div class="hbars">${top.map(i => `<div class="hbar" title="${esc(i.label)}: ${esc(fmt(i.value))}"><span class="hbar-l">${esc(i.label)}</span><span class="hbar-t"><span style="width:${Math.max(1.5, i.value / m * 100)}%;background:${i.color || 'var(--s1)'}"></span></span><span class="hbar-v">${esc(fmt(i.value))}</span></div>`).join('')}${items.length > max ? `<div class="muted small">+ ${items.length - max} outros</div>` : ''}</div>`;
+  const m = Math.max(...items.map(i => i.value), 1), extra = items.length - max;
+  return `<div class="hbars">${items.map((i, k) => `<div class="hbar${i.attr ? ' clic' : ''}${k >= max ? ' hb-x' : ''}" ${k >= max ? 'hidden' : ''} ${i.attr || ''} title="${esc(i.label)}: ${esc(fmt(i.value))}"><span class="hbar-l">${esc(i.label)}</span><span class="hbar-t"><span style="width:${Math.max(1.5, i.value / m * 100)}%;background:${i.color || 'var(--s1)'}"></span></span><span class="hbar-v">${esc(fmt(i.value))}</span></div>`).join('')}${extra > 0 ? `<button type="button" class="link small hb-more" data-n="${extra}">+ ${extra} outros</button>` : ''}</div>`;
 }
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('.hb-more'); if (!b) return;
+  const abrir = !b.dataset.o; b.parentNode.querySelectorAll('.hb-x').forEach(x => x.hidden = !abrir);
+  b.dataset.o = abrir ? '1' : ''; b.textContent = abrir ? 'Recolher' : `+ ${b.dataset.n} outros`;
+});
+
 /** barra segmentada (distribuição por status) */
 function segBar(parts) {
   const tot = parts.reduce((s, p) => s + p.value, 0);
   if (!tot) return '<div class="chart-empty">Sem registros.</div>';
-  return `<div class="segbar">${parts.filter(p => p.value).map(p => `<span style="flex:${p.value};background:${p.color}" title="${esc(p.label)}: ${p.value}"></span>`).join('')}</div>
-  <div class="seglegend">${parts.filter(p => p.value).map(p => `<span><i style="background:${p.color}"></i>${esc(p.label)} <b>${p.value}</b> <em>${fmtPct(p.value / tot)}</em></span>`).join('')}</div>`;
+  return `<div class="segbar">${parts.filter(p => p.value).map(p => `<span ${p.attr || ''} class="${p.attr ? 'clic' : ''}" style="flex:${p.value};background:${p.color}" title="${esc(p.label)}: ${p.value}"></span>`).join('')}</div>
+  <div class="seglegend">${parts.filter(p => p.value).map(p => `<span ${p.attr || ''} class="${p.attr ? 'clic' : ''}"><i style="background:${p.color}"></i>${esc(p.label)} <b>${p.value}</b> <em>${fmtPct(p.value / tot)}</em></span>`).join('')}</div>`;
 }

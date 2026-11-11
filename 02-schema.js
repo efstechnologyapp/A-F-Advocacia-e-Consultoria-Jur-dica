@@ -22,6 +22,11 @@ const SCHEMAS = {
       F('email', 'E-mail (acesso ao portal)', 'email', { list: 1 }),
       F('telefone', 'Telefone / WhatsApp', 'tel', { list: 1 }),
       F('endereco', 'Endereço', 'text', { w: 'full' }),
+      F('nacionalidade', 'Nacionalidade', 'text', { hint: 'Para a qualificação no contrato e na inicial' }),
+      F('estadoCivil', 'Estado civil', 'select', { opts: ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Separado(a)', 'Viúvo(a)'] }),
+      F('profissao', 'Profissão', 'text'),
+      F('rg', 'RG / órgão expedidor', 'text'),
+      F('representante', 'Representante legal (pessoa jurídica ou incapaz)', 'text', { w: 'full' }),
       F('obs', 'Observações', 'long')
     ]
   },
@@ -41,6 +46,7 @@ const SCHEMAS = {
       F('valorCausa', 'Valor da causa (R$)', 'money'),
       F('status', 'Situação', 'select', { opts: ['Ativo', 'Suspenso', 'Sobrestado', 'Arquivado provisoriamente', 'Encerrado'], list: 1 }),
       F('fase', 'Fase', 'select', { opts: ['Conhecimento', 'Instrução', 'Sentença', 'Recursal', 'Cumprimento de sentença', 'Execução', 'Inquérito', 'Administrativa'] }),
+      F('transito', 'Trânsito em julgado (fase de conhecimento)', 'date', { hint: 'Preenchido automaticamente pela certidão de trânsito nos arquivos ou pelo DataJud' }),
       F('responsavel', 'Advogado responsável', 'text'),
       F('honorarios', 'Honorários contratados', 'text'),
       F('segredo', 'Segredo de justiça', 'bool'),
@@ -71,10 +77,16 @@ const SCHEMAS = {
   /* ---------------- Consultoria ---------------- */
   empresas: {
     titulo: 'Empresas', singular: 'empresa', fields: [
-      F('razao', 'Razão social', 'text', { req: 1, w: 'full' }),
+      F('cnpj', 'CNPJ', 'doc', { hint: 'Digite o CNPJ e clique em “Buscar na Receita” para preencher o resto' }),
+      F('razao', 'Razão social', 'text', { req: 1 }),
       F('fantasia', 'Nome fantasia', 'text'),
-      F('cnpj', 'CNPJ', 'doc'),
-      F('segmento', 'Segmento', 'text'),
+      F('segmento', 'Atividade principal (CNAE)', 'text'),
+      F('situacao', 'Situação cadastral (RFB)', 'text'),
+      F('abertura', 'Data de abertura', 'date'),
+      F('porte', 'Porte', 'text'),
+      F('capital', 'Capital social (R$)', 'money'),
+      F('endereco', 'Endereço', 'text', { w: 'full' }),
+      F('socios', 'Quadro de sócios e administradores', 'long'),
       F('sigla', 'Prefixo dos IDs de contrato', 'text', { hint: 'Ex.: JSP (gera JSP-001, JSP-002…)' }),
       F('contato', 'Contato principal', 'text'),
       F('email', 'E-mail', 'email'),
@@ -286,6 +298,28 @@ const SCHEMAS = {
       F('limitacao', 'Limitação', 'text')
     ]
   },
+  supervenientes: {
+    titulo: 'Custos supervenientes', sheet: 'Custos supervenientes', singular: 'comprovante', fields: [
+      F('contrato', 'ID contrato', 'contrato', { list: 1 }),
+      F('dataEmissao', 'Data de emissão', 'date', { list: 1 }),
+      F('tipoDoc', 'Tipo de documento', 'select', { opts: ['NF-e', 'NFS-e', 'Cupom fiscal', 'Recibo', 'Fatura', 'Boleto', 'Guia', 'Outro'], list: 1 }),
+      F('numero', 'Número', 'text', { list: 1 }),
+      F('emitente', 'Emitente (fornecedor)', 'text', { list: 1 }),
+      F('cnpjEmitente', 'CNPJ do emitente', 'doc'),
+      F('destinatario', 'Destinatário', 'text'),
+      F('cnpjDestinatario', 'CNPJ do destinatário', 'doc'),
+      F('anotacao', 'Anotação / local (escrito na nota)', 'text'),
+      F('descricao', 'Descrição (opcional)', 'text', { w: 'full' }),
+      F('valor', 'Valor (R$)', 'money', { list: 1 }),
+      F('natureza', 'Natureza do pedido', 'select', { opts: ['Reembolso de despesa extraordinária', 'Reequilíbrio econômico-financeiro (fato imprevisível)', 'Repactuação / reajuste (CCT, insumos)', 'Outro'], list: 1 }),
+      F('justificativa', 'Justificativa (por que o custo não estava previsto)', 'long', { w: 'full' }),
+      F('status', 'Situação', 'select', { opts: ['Em análise', 'Apresentado à Administração', 'Deferido', 'Deferido parcialmente', 'Indeferido', 'Pago'], list: 1 }),
+      F('valorDeferido', 'Valor deferido (R$)', 'money'),
+      F('protocolo', 'Protocolo / processo administrativo', 'text'),
+      F('link', 'Arquivo (Drive)', 'link'),
+      F('obsAuditoria', 'Observações da auditoria', 'long', { w: 'full' })
+    ]
+  },
   aditivos: {
     titulo: 'Aditivos', sheet: 'Aditivos identificados', singular: 'aditivo', fields: [
       F('contrato', 'ID contrato', 'contrato', { list: 1 }),
@@ -302,7 +336,7 @@ const SCHEMAS = {
   }
 };
 /* coleções de auditoria (uma aba cada), na ordem da planilha */
-const AUDIT = ['contratos', 'obrigacoes', 'maoDeObra', 'materiais', 'financeiro', 'medicoes', 'indicadores', 'achados', 'documentos', 'aditivos'];
+const AUDIT = ['contratos', 'obrigacoes', 'maoDeObra', 'materiais', 'financeiro', 'medicoes', 'indicadores', 'achados', 'documentos', 'aditivos', 'supervenientes'];
 
 /* campos calculados — garantem consistência dos dados */
 function derive(c, r) {
