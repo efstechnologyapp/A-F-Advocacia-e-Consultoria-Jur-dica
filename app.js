@@ -9,7 +9,7 @@
 const APP_VERSAO = '1.9.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)'] },
+  { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)', 'Achados de auditoria: painel próprio (clique no cartão da Visão geral ou no menu) com o que cada achado significa — critério, causa, risco, contrato, valor e o que fazer — e ações para resolver: em andamento, responsável e prazo, concluir com evidência'] },
   { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte', 'Botão “é o cliente” em cada parte: troca o cliente do processo com um clique (acerta polo e parte contrária; o cliente criado por engano sai do cadastro) — e o cartão Partes passa a refletir o cliente escolhido em Editar', 'Impressão da relação de processos (ícone ao lado do filtro de situação): todos ou por área, respeitando filtro e busca — cabeçalho com brasão, dados do escritório, indicadores, agrupamento por área, paginação e aviso de sigilo; pronto para imprimir ou salvar em PDF', 'Cadastro de cliente: ao digitar um CNPJ válido, os dados da Receita entram sozinhos (razão social, endereço, telefone, e-mail)', 'E-mail do cliente direto na página do processo: informar/alterar, ligar o aviso automático de andamento e convidar para o portal'] },
   { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca começa na hora e traz todo o histórico de intimações do advogado no DJEN (depois, só as novas)', 'Consulta ao DJEN mais robusta: quando a API responde “sistema muito ocupado”, o app espera e tenta de novo, respeitando o limite de consultas por minuto', 'Consulta testada com a OAB real: a API do DJEN às vezes falha em páginas com registros defeituosos (“sistema muito ocupado”) — o app agora tenta de novo e, se preciso, lê a página em partes e pula só o trecho defeituoso', 'Cliente: vinculado sozinho quando uma parte já é cliente cadastrado; nos demais casos, a revisão mostra as partes de cada processo para escolher o cliente (com sugestão quando as intimações dão sinal claro) — testes com os processos reais mostraram que o lado do escritório não dá para deduzir com segurança só pelo DJEN'] },
   { numero: '1.8.0', data: '10/11/2026', itens: ['Partes em campos próprios: polo ativo e polo passivo, cada parte com seus advogados (OAB/UF) e o selo “escritório” nos advogados da casa', 'Cliente automático: a parte do lado em que atua o advogado do escritório vira o cliente — vinculada se já existir, criada se não existir', 'Na revisão dos processos encontrados pela OAB, a coluna “Cliente do escritório” mostra o lado detectado e permite corrigir', 'Processos já cadastrados sem cliente recebem partes e cliente a cada nova intimação'] },
@@ -1268,13 +1268,14 @@ const App = {
       ${item('/agenda', 'calendar', 'Agenda e prazos', DB.where('prazos', p => !p.concluido && daysUntil(p.data) !== null && daysUntil(p.data) <= 7).length || '')}
       <div class="nav-h">Consultoria jurídica</div>
       ${item('/empresas', 'building', 'Empresas', DB.all('empresas').length || '')}
+      ${DB.all('achados').length ? item('/achados', 'alert', 'Achados de auditoria', DB.where('achados', x => achadoAberto(x) && /alto|cr[ií]tico/i.test(x.risco || '')).length || '') : ''}
       ${DB.all('empresas').sort((a, b) => (a.fantasia || a.razao).localeCompare(b.fantasia || b.razao)).map(e => `<a href="#/empresa/${e.id}" class="sub ${route.startsWith('/empresa/' + e.id) ? 'on' : ''}"><span>${esc(e.fantasia || e.razao)}</span></a>`).join('')}
       <div class="nav-h">Cadastros</div>
       ${item('/clientes', 'users', 'Clientes', DB.all('clientes').length || '')}`;
     $('#lnkGestao')?.classList.toggle('on', route.startsWith('/gestao'));
   },
   /** páginas de primeiro nível (menu) não têm "Voltar"; as de detalhe têm */
-  TOPO: /^#?\/?(painel|judicial\/[a-z]+|agenda|atendimentos|clientes|empresas|gestao(\/[a-z]+)?)?$/,
+  TOPO: /^#?\/?(painel|judicial\/[a-z]+|agenda|atendimentos|clientes|empresas|achados|gestao(\/[a-z]+)?)?$/,
   voltar(parts) {
     if (App._nav > 0) { App._nav -= 2; history.back(); return; }
     const pai = [...parts].reverse().slice(1).find(p => p.href); location.hash = '#' + (pai ? pai.href : '/painel');
@@ -1298,6 +1299,7 @@ const App = {
       else if (a === 'agenda') Views.agenda(v);
       else if (a === 'atendimentos') Atend.list(v);
       else if (a === 'atendimento') Atend.detail(v, b, c || 'caso');
+      else if (a === 'achados') Achados.view(v);
       else if (a === 'empresas') Consult.list(v);
       else if (a === 'empresa') Consult.workspace(v, b, c || 'painel');
       else if (a === 'clientes') Views.clientes(v);
@@ -1373,7 +1375,7 @@ const Views = {
       ${kpi('Compromissos em 7 dias', prox7.length, atras.length ? `<b class="t-bad">${atras.length} em atraso</b>` : 'nenhum em atraso', atras.length ? 'bad' : '', '#/agenda')}
       ${kpi('Empresas em consultoria', DB.all('empresas').length, `${DB.all('contratos').length} contratos auditados`, '', '#/empresas')}
       ${kpi('Contratos vencendo (90 dias)', venc90.length, 'renovação ou encerramento', venc90.length ? 'warn' : '')}
-      ${kpi('Achados de risco alto', achAlt.length, 'em aberto nos planos de ação', achAlt.length ? 'bad' : '')}
+      ${kpi('Achados de risco alto', achAlt.length, achAlt.length ? 'em aberto · <u>ver e resolver</u>' : 'em aberto nos planos de ação', achAlt.length ? 'bad' : '', '#/achados')}
     </div>
     <div class="grid2">
       <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
@@ -2077,6 +2079,90 @@ const Consult = {
     });
     download(XLSX.write(sheets), `Auditoria_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.xlsx`);
     UI.toast('Planilha gerada.');
+  }
+};
+
+/* =====================================================================
+   PAINEL DE ACHADOS — o que cada achado significa e como resolver
+   ===================================================================== */
+const Achados = {
+  view(v, q = {}) {
+    App.crumbs([{ t: 'Consultoria jurídica' }, { t: 'Achados de auditoria' }]);
+    const st = Achados.st = Achados.st || { risco: 'alto', status: 'abertos', emp: '', area: '', busca: '' };
+    if (q.risco) st.risco = q.risco;
+    const emps = DB.all('empresas'), nomeE = id => { const e = DB.get('empresas', id); return e ? (e.fantasia || e.razao) : '—'; };
+    const todos = DB.all('achados');
+    const filtra = a => (st.risco === 'todos' || (st.risco === 'alto' ? /alto|cr[ií]tico/i.test(a.risco || '') : norm(a.risco) === norm(st.risco)))
+      && (st.status === 'todos' || (st.status === 'abertos' ? achadoAberto(a) : !achadoAberto(a)))
+      && (!st.emp || a.empresaId === st.emp) && (!st.area || (a.area || 'Sem área') === st.area)
+      && (!st.busca || norm([a.codigo, a.contrato, a.achado, a.criterio, a.causa, a.recomendacao, a.responsavel].join(' ')).includes(norm(st.busca)));
+    const l = todos.filter(filtra).sort((a, b) => Achados.peso(b) - Achados.peso(a) || String(a.prazo || '9').localeCompare(String(b.prazo || '9')));
+    const abertosAlto = todos.filter(a => achadoAberto(a) && /alto|cr[ií]tico/i.test(a.risco || ''));
+    const venc = abertosAlto.filter(a => a.prazo && daysUntil(a.prazo) < 0).length, semResp = abertosAlto.filter(a => !a.responsavel).length;
+    const valor = abertosAlto.reduce((s, a) => s + (num(a.valor) || 0), 0);
+    const areas = [...new Set(todos.map(a => a.area || 'Sem área'))].sort();
+    const porArea = {}; l.forEach(a => { const k = a.area || 'Sem área'; porArea[k] = (porArea[k] || 0) + 1; });
+    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Consultoria jurídica</span><h1>${icon('alert', 'h-ic')} Achados de auditoria</h1>
+        <p class="muted">Achado é uma irregularidade ou risco encontrado na auditoria dos contratos — por exemplo, obrigação trabalhista ou fiscal sem comprovação, contrato vencido, valor divergente. Cada um traz o critério violado, a causa, o risco e a ação corretiva recomendada. Resolver é: executar a recomendação, guardar a evidência e marcar como concluído.</p></div></div>
+      <div class="kpis sm">${kpi('Alto/crítico em aberto', abertosAlto.length, 'exigem ação', abertosAlto.length ? 'bad' : '')}${kpi('Com prazo vencido', venc, 'entre os de risco alto', venc ? 'warn' : '')}${kpi('Sem responsável', semResp, 'defina quem resolve', semResp ? 'warn' : '')}${kpi('Valor envolvido', valor ? fmtMoneyShort(valor) : '—', 'nos de risco alto em aberto')}</div>
+      <section class="card ach-guia"><header><h2>${icon('list')} Como resolver, em 4 passos</h2></header><ol>
+        <li><b>Entenda</b> — leia a constatação e o critério (cláusula, lei ou norma que não foi cumprida).</li>
+        <li><b>Atribua</b> — defina o responsável na empresa e um prazo realista; marque “Em andamento”.</li>
+        <li><b>Corrija</b> — execute a recomendação (cobrar documento, regularizar recolhimento, aditar contrato, notificar o tomador…).</li>
+        <li><b>Comprove e conclua</b> — registre a evidência (guia paga, certidão, aditivo assinado) e conclua. O achado sai do painel e entra no relatório como resolvido.</li></ol></section>
+      <div class="dt-tools ach-f"><div class="search">${icon('search')}<input id="acB" type="search" placeholder="Buscar no achado, contrato, recomendação…" value="${esc(st.busca)}"></div>
+        <select id="acR"><option value="alto" ${st.risco === 'alto' ? 'selected' : ''}>Risco alto e crítico</option>${RISCOS.map(r => `<option value="${r}" ${st.risco === r ? 'selected' : ''}>Risco ${r.toLowerCase()}</option>`).join('')}<option value="todos" ${st.risco === 'todos' ? 'selected' : ''}>Todos os riscos</option></select>
+        <select id="acS"><option value="abertos" ${st.status === 'abertos' ? 'selected' : ''}>Em aberto</option><option value="fechados" ${st.status === 'fechados' ? 'selected' : ''}>Resolvidos</option><option value="todos" ${st.status === 'todos' ? 'selected' : ''}>Todos</option></select>
+        ${emps.length > 1 ? `<select id="acE"><option value="">Todas as empresas</option>${emps.map(e => `<option value="${e.id}" ${st.emp === e.id ? 'selected' : ''}>${esc(e.fantasia || e.razao)}</option>`).join('')}</select>` : ''}
+        <select id="acA"><option value="">Todas as áreas</option>${areas.map(x => `<option ${st.area === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+      ${Object.keys(porArea).length > 1 ? `<div class="ach-areas">${Object.entries(porArea).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<button class="chip ${st.area === k ? 'on' : ''}" data-ar="${esc(k)}">${esc(k)} <b>${n}</b></button>`).join('')}</div>` : ''}
+      <p class="muted small">${l.length} achado(s)</p>
+      <div class="ach-list">${l.map(a => Achados.card(a, nomeE(a.empresaId), emps.length > 1)).join('') || `<div class="empty">${icon('check')}<p>Nenhum achado com estes filtros.</p></div>`}</div>`;
+    const re = () => Achados.view(v);
+    $('#acB').oninput = e => { st.busca = e.target.value; clearTimeout(Achados._t); Achados._t = setTimeout(() => { re(); const i = $('#acB'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 350); };
+    $('#acR').onchange = e => { st.risco = e.target.value; re(); }; $('#acS').onchange = e => { st.status = e.target.value; re(); };
+    $('#acE')?.addEventListener('change', e => { st.emp = e.target.value; re(); }); $('#acA').onchange = e => { st.area = e.target.value; re(); };
+    $$('[data-ar]').forEach(b => b.onclick = () => { st.area = st.area === b.dataset.ar ? '' : b.dataset.ar; re(); });
+    $$('[data-ac]').forEach(b => b.onclick = () => Achados.acao(b.dataset.ac, b.dataset.id, re));
+  },
+  peso: a => ({ 'crítico': 4, critico: 4, alto: 3, 'médio': 2, medio: 2, baixo: 1 }[norm(a.risco)] || 0),
+  card(a, emp, mostraEmp) {
+    const d = a.prazo ? daysUntil(a.prazo) : null, aberto = achadoAberto(a);
+    const c = a.contrato && DB.where('contratos', x => x.empresaId === a.empresaId && x.codigo === a.contrato)[0];
+    return `<article class="ach ${norm(a.risco)} ${aberto ? '' : 'fechado'}">
+      <header><span class="pill ${/cr[ií]t/i.test(a.risco) ? 'critical' : /alto/i.test(a.risco) ? 'serious' : /m[eé]dio/i.test(a.risco) ? 'warn' : 'neutral'}">Risco ${esc((a.risco || '—').toLowerCase())}</span>
+        <b class="mono">${esc(a.codigo || '')}</b>${a.area ? `<span class="tag">${esc(a.area)}</span>` : ''}${mostraEmp ? `<span class="muted small">${esc(emp)}</span>` : ''}
+        <span class="sp"></span><span class="pill ${aberto ? (/andamento/i.test(a.status) ? 'info' : 'neutral') : 'good'}">${esc(a.status || 'Pendente')}</span></header>
+      <p class="ach-t">${esc(a.achado || '')}</p>
+      <dl class="dl cols ach-dl">
+        ${a.criterio ? `<dt>Critério</dt><dd>${esc(a.criterio)}</dd>` : ''}${a.causa ? `<dt>Causa provável</dt><dd>${esc(a.causa)}</dd>` : ''}
+        ${c || a.contrato ? `<dt>Contrato</dt><dd>${c ? `<button class="link" data-ac="contrato" data-id="${a.id}">${esc(a.contrato)} · ${esc(tomadorBase(c) || c.objeto || '')}</button>` : esc(a.contrato)}</dd>` : ''}${a.periodo ? `<dt>Período</dt><dd>${esc(a.periodo)}</dd>` : ''}
+        ${num(a.valor) ? `<dt>Valor envolvido</dt><dd>${esc(fmtMoney(a.valor))}</dd>` : ''}
+        <dt>Responsável</dt><dd>${a.responsavel ? esc(a.responsavel) : '<span class="t-warn">não definido</span>'}</dd>
+        <dt>Prazo</dt><dd>${a.prazo ? `${esc(fmtDate(a.prazo))}${aberto && d !== null ? (d < 0 ? ` <b class="t-bad">vencido há ${-d} dia(s)</b>` : d <= 7 ? ` <b class="t-warn">em ${d} dia(s)</b>` : '') : ''}` : '<span class="t-warn">sem prazo</span>'}</dd>
+        ${a.evidenciaConclusao ? `<dt>Evidência</dt><dd>${esc(a.evidenciaConclusao)}${a.dataValidacao ? ' · ' + esc(fmtDate(a.dataValidacao)) : ''}</dd>` : ''}</dl>
+      ${a.recomendacao ? `<div class="ach-rec">${icon('check')}<div><span>O que fazer</span>${esc(a.recomendacao)}</div></div>` : ''}
+      <footer>${aberto ? `${/andamento/i.test(a.status) ? '' : `<button class="btn ghost sm" data-ac="andamento" data-id="${a.id}">${icon('clock')} Em andamento</button>`}<button class="btn ghost sm" data-ac="atribuir" data-id="${a.id}">${icon('user')} Responsável e prazo</button><button class="btn primary sm" data-ac="concluir" data-id="${a.id}">${icon('check')} Concluir com evidência</button>` : `<button class="btn ghost sm" data-ac="reabrir" data-id="${a.id}">Reabrir</button>`}<span class="sp"></span><button class="btn ghost sm" data-ac="editar" data-id="${a.id}">${icon('edit')} Editar</button></footer></article>`;
+  },
+  acao(tipo, id, re) {
+    const a = DB.get('achados', id); if (!a) return;
+    const e = DB.get('empresas', a.empresaId);
+    const salvar = async (campos, msg) => { await DB.save('achados', { ...a, ...campos }); UI.toast(msg); re(); };
+    if (tipo === 'andamento') return salvar({ status: 'Em andamento' }, 'Achado em andamento.');
+    if (tipo === 'reabrir') return salvar({ status: 'Pendente', dataValidacao: '' }, 'Achado reaberto.');
+    if (tipo === 'editar') return UI.editRecord('achados', a, { ctx: { empresaId: a.empresaId }, onSaved: re });
+    if (tipo === 'contrato') { const c = DB.where('contratos', x => x.empresaId === a.empresaId && x.codigo === a.contrato)[0]; return c && e && Consult.contrato360(e, c); }
+    if (tipo === 'atribuir') {
+      const m = UI.modal({ title: 'Responsável e prazo', sub: esc(a.codigo || ''), body: `<form class="grid-form" id="atf"><div class="fld full"><label>Responsável (na empresa ou no escritório)</label><input name="r" value="${esc(a.responsavel || '')}" placeholder="Ex.: Setor de RH da JSP — Maria"></div><div class="fld"><label>Prazo</label><input type="date" name="p" value="${esc(a.prazo || '')}"></div></form>`,
+        foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="atOk">${icon('check')} Salvar</button>` });
+      $('#atOk', m).onclick = () => { const f = $('#atf', m); UI.closeModal(); salvar({ responsavel: f.r.value.trim(), prazo: f.p.value, status: achadoAberto(a) && !/andamento/i.test(a.status) ? 'Em andamento' : a.status }, 'Responsável e prazo definidos.'); };
+      return;
+    }
+    if (tipo === 'concluir') {
+      const m = UI.modal({ title: 'Concluir achado', sub: esc(a.codigo || ''), body: `<p class="muted small">${esc(a.achado || '')}</p><form class="grid-form" id="cof"><div class="fld full"><label>Evidência de conclusão *</label><input name="ev" value="${esc(a.evidenciaConclusao || '')}" placeholder="Ex.: guia do FGTS de 03/2025 paga em 10/04 (anexada); aditivo nº 2 assinado"></div><div class="fld"><label>Data</label><input type="date" name="dt" value="${todayISO()}"></div></form>`,
+        foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="coOk">${icon('check')} Concluir</button>` });
+      $('#coOk', m).onclick = () => { const f = $('#cof', m); if (!f.ev.value.trim()) return UI.toast('Registre a evidência — é o que comprova a correção no relatório.', 'bad'); UI.closeModal(); salvar({ status: 'Concluído', evidenciaConclusao: f.ev.value.trim(), dataValidacao: f.dt.value }, 'Achado concluído.'); };
+    }
   }
 };
 /* =====================================================================
