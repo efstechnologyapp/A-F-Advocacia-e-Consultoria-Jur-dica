@@ -6,9 +6,11 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.12.1';
+const APP_VERSAO = '1.13.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.0', data: '11/11/2026', itens: ['RELATÓRIOS DO DP: além da folha de pagamento, o app reconhece os relatórios de vale-alimentação, cesta básica, vale-transporte e férias. Os departamentos são ligados aos contratos pelos vínculos da folha. Em Mão de obra, a linha do DP de cada competência recebe Benefícios (VA + cesta + VT), Encargos/provisões (férias pagas), Benefícios comprovados? e divergência quando há empregados da folha sem vale-alimentação; a evidência detalha cada benefício. Em Obrigações, as de benefícios e de férias já cadastradas recebem o verificado, o valor realizado e o status. Os demais dados das planilhas são ignorados.'] },
+  { numero: '1.12.2', data: '11/11/2026', itens: ['Ao juntar várias planilhas de uma vez, cada uma é tratada por vez (a conferência da folha do DP não é mais atropelada pelas seguintes) e as não reconhecidas aparecem num único aviso, com os nomes dos arquivos.'] },
   { numero: '1.12.1', data: '11/11/2026', itens: ['FOLHA DE PAGAMENTO (DP): ao juntar na empresa o “Relatório da Folha de Pagamento” do Departamento Pessoal, o app liga cada departamento ao contrato pelo nº (abas antigas, sem nº, pelo código do departamento) e preenche os campos que a auditoria já tem. Em Mão de obra, uma linha por competência com alocados na folha × postos contratados, folha bruta × custo previsto, CCT, divergências (postos vagos, saldo a pagar, pagamento após o 5º dia útil) e evidência. Em Obrigações, a execução com os postos recebe o verificado, a quantidade realizada e o status; o pagamento dos salários recebe previsto (líquido) × realizado (pago), desvios e status. Importar de novo atualiza sem duplicar.'] },
   { numero: '1.11.0', data: '11/11/2026', itens: ['CUSTOS SUPERVENIENTES por contrato: na ficha do contrato, “Juntar notas fiscais” (PDF com várias notas, mesmo escaneadas; fotos; XML da NF-e) com natureza do pedido (reembolso, reequilíbrio, repactuação), justificativa e situação (em análise, apresentado, deferido, pago)', 'A IA separa as notas do PDF e lê de cada uma só o essencial — número, data, emitente, valor total e a anotação à mão — e sugere o contrato pela anotação/local; uma tela de conferência permite marcar as notas e ajustar o contrato de cada uma', 'Conferências automáticas: duplicidade, mesmo emitente/data/valor, emissão fora da vigência, destinatário com CNPJ diferente da contratada, sem justificativa', 'Relatório de auditoria do contrato (papel timbrado): identificação, documentação, mão de obra, achados, obrigações, custos supervenientes com quantidade de documentos e valor total por natureza e situação, parecer e assinatura — e anexo com a cópia de cada nota (as páginas exatas)', 'Nova aba “Custos supervenientes” na empresa'] },
   { numero: '1.10.2', data: '11/11/2026', itens: ['PDF compilado (ex.: aditivo + contrato original + termo de referência + anexos no mesmo arquivo): a IA lista cada peça com as páginas, e na ficha do contrato o lápis ao lado do arquivo permite marcar o que ele contém', 'A legenda da documentação passa a reconhecer o contrato principal dentro do compilado e lembra de concluir o achado correspondente', 'Documento do inventário sem arquivo: botão para escolher o PDF e anexá-lo ao Drive ali mesmo', 'Peças marcadas no compilado contam como arquivo: o aditivo do inventário deixa de aparecer “sem arquivo” quando está dentro do PDF; e o achado do contrato-base pode ser concluído com um clique, com a evidência (arquivo e páginas) já escrita'] },
@@ -943,6 +945,8 @@ const UI = {
     setTimeout(() => { const f = $('input:not([type=hidden]):not([type=checkbox]),select,textarea', m); f && f.focus(); }, 30);
     onOpen && onOpen(m); return m;
   },
+  /** resolve quando o modal for fechado */
+  aguardar(m) { return new Promise(r => { const t = setInterval(() => { if (!m.isConnected) { clearInterval(t); r(); } }, 300); }); },
   closeModal() { $('#modal')?.remove(); document.body.classList.remove('noscroll'); },
   confirm(msg, okLabel = 'Confirmar', danger = true) {
     return new Promise(res => {
@@ -2134,8 +2138,9 @@ const Consult = {
   },
 
   /* ---------------- IMPORTAÇÃO DA PLANILHA ---------------- */
-  async importar(e, file) {
+  async importar(e, file, quieto) {
     let book; try { book = await XLSX.read(await file.arrayBuffer()); } catch (err) { UI.toast('Não consegui ler a planilha: ' + err.message, 'bad'); return; }
+    const tdp = BenefDP.tipo(book); if (tdp) return BenefDP.importar(e, book, file, tdp);
     if (FolhaDP.reconhece(book)) return FolhaDP.importar(e, book, file);
     const plan = [];
     for (const coll of AUDIT) {
@@ -2164,7 +2169,7 @@ const Consult = {
       plan.push({ coll, sheetName, rows: recs, matched: map.filter(Boolean).length });
     }
     const found = plan.filter(p => p.rows.length);
-    if (!found.length) { UI.toast('Nenhuma aba reconhecida. Os nomes das colunas devem seguir o modelo da planilha de auditoria.', 'bad', 6000); return; }
+    if (!found.length) { if (quieto) return 'nao'; UI.toast('Nenhuma aba reconhecida. Os nomes das colunas devem seguir o modelo da planilha de auditoria.', 'bad', 6000); return; }
     const m = UI.modal({
       title: 'Importar planilha', sub: esc(file.name), wide: true,
       body: `<p class="muted">Abas reconhecidas e quantidade de linhas. Escolha, para cada aba, se os dados substituem os já cadastrados nesta empresa ou se são acrescentados.</p>
@@ -2679,7 +2684,9 @@ const Docs = {
     Docs.finalizar(e, res, planilhas);
   },
   async finalizar(e, res, planilhas) {
-    for (const p of planilhas) await Consult.importar(e, p);
+    const nao = [];
+    for (const p of planilhas) if (await Consult.importar(e, p, true) === 'nao') nao.push(p.name);
+    if (nao.length) UI.toast(`${nao.length === 1 ? 'Planilha não reconhecida' : nao.length + ' planilhas não reconhecidas'}: ${nao.join(', ')}. O app reconhece a planilha de auditoria e os relatórios do DP (folha de pagamento, vale-alimentação, cesta básica, vale-transporte e férias).`, 'bad', 9000);
     if (res.length) Docs.revisar(e, res.filter(r => !r.erro), res.filter(r => r.erro));
     else location.hash = '#/empresa/' + e.id;
   },
@@ -4529,12 +4536,13 @@ const FolhaDP = {
       if (qtd && x.temColab && x.colab > qtd) div.push(`${fmtNum(x.colab - qtd)} empregado(s) além dos postos contratados`);
       if (x.saldo > 0) div.push('saldo de salários a pagar ' + fmtMoney(x.saldo));
       if (x.atraso) div.push(`pagamento após o 5º dia útil (${fmtDate(x.data)}; limite ${fmtDate(x.limite)})`);
-      return derive('maoDeObra', {
-        id: FolhaDP.idDe(e.id, 'mo', c.codigo, x.comp), empresaId: e.id, contrato: c.codigo, competencia: x.comp, origem: 'folhaDP',
-        posto: 'Total do contrato — folha de pagamento (DP)', cct: x.cct ? 'CCT ' + x.cct : '',
+      const id = FolhaDP.idDe(e.id, 'mo', c.codigo, x.comp);
+      return BenefDP.compor({ ...(DB.get('maoDeObra', id) || {}),
+        id, empresaId: e.id, contrato: c.codigo, competencia: x.comp, origem: 'folhaDP',
+        posto: BenefDP.POSTO, deps: [...new Set(ls.filter(l => l.comp === x.comp && l.cod).map(l => l.cod))], cct: x.cct ? 'CCT ' + x.cct : '',
         qtdContratada: qtd || null, qtdAlocada: x.temColab ? x.colab : null, custoApurado: x.bruto, custoPrevisto: prev || null,
-        divergencia: div.join('; '),
-        evidencia: `Relatório da Folha de Pagamento (DP), aba ${[...x.abas].join(', ')} — ${[...x.deps].join(', ')}: líquido ${fmtMoney(x.liq)}, pago ${fmtMoney(x.pago)}${x.envio ? ', enviada à controladoria em ' + fmtDate(x.envio) : ''}${x.aprovacao ? ', aprovada em ' + fmtDate(x.aprovacao) : ''}${x.bruto === null ? ' (o relatório deste mês não traz o valor bruto)' : ''}${prev ? `. Custo previsto = salários-base dos postos contratados (${fmtMoney(prev)})` : ''}`
+        divFolha: div.join('; '),
+        evFolha: `Relatório da Folha de Pagamento (DP), aba ${[...x.abas].join(', ')} — ${[...x.deps].join(', ')}: líquido ${fmtMoney(x.liq)}, pago ${fmtMoney(x.pago)}${x.envio ? ', enviada à controladoria em ' + fmtDate(x.envio) : ''}${x.aprovacao ? ', aprovada em ' + fmtDate(x.aprovacao) : ''}${x.bruto === null ? ' (o relatório deste mês não traz o valor bruto)' : ''}${prev ? `. Custo previsto = salários-base dos postos contratados (${fmtMoney(prev)})` : ''}`
       });
     });
     // ---------- Obrigações ----------
@@ -4610,9 +4618,202 @@ const FolhaDP = {
       for (const [cid, ls] of Object.entries(porC)) { const c = DB.get('contratos', cid); if (!c) continue; const r = FolhaDP.preencher(e, c, ls); MO.push(...r.mo); OB.push(...r.ob); }
       // lançamentos da versão anterior (financeiro e mão de obra por departamento) são substituídos
       const velhos = DB.where('financeiro', r => r.empresaId === e.id && r.origem === 'folhaDP').map(r => r.id); if (velhos.length) await DB.remove('financeiro', velhos);
-      const novos = new Set(MO.map(r => r.id)), vm = DB.where('maoDeObra', r => r.empresaId === e.id && r.origem === 'folhaDP' && !novos.has(r.id) && Object.keys(porC).some(id => DB.get('contratos', id)?.codigo === r.contrato)).map(r => r.id); if (vm.length) await DB.remove('maoDeObra', vm);
+      const novos = new Set(MO.map(r => r.id)), vm = DB.where('maoDeObra', r => r.empresaId === e.id && r.origem === 'folhaDP' && !novos.has(r.id) && !BenefDP.temBenef(r) && Object.keys(porC).some(id => DB.get('contratos', id)?.codigo === r.contrato)).map(r => r.id); if (vm.length) await DB.remove('maoDeObra', vm);
+      const deps = { ...(e.dpDeps || {}) }; $$('[data-fdp]', m).forEach(s => { const g = grupos[s.dataset.fdp], c = s.value && DB.get('contratos', s.value); if (g && c && /^\d/.test(g.k)) deps[g.k] = c.codigo; });
+      await DB.save('empresas', { ...DB.get('empresas', e.id), dpDeps: deps });
       if (MO.length) await DB.save('maoDeObra', MO); if (OB.length) await DB.save('obrigacoes', OB);
       UI.closeModal(); UI.toast(`Folha aplicada em ${Object.keys(porC).length} contrato(s): ${MO.length} linhas de mão de obra e ${OB.length} obrigações preenchidas.`, 'ok', 6000); App.render();
     };
+    return UI.aguardar(m);
+  }
+};
+/* =====================================================================
+   RELATÓRIOS DO DP — vale-alimentação, cesta básica, vale-transporte e
+   férias. Preenchem os campos já existentes: Mão de obra (benefícios,
+   encargos/provisões, benefícios comprovados, divergência, evidência)
+   e Obrigações (benefícios e férias).
+   ===================================================================== */
+const BenefDP = {
+  POSTO: 'Total do contrato — Departamento Pessoal (folha e benefícios)',
+  NOME: { va: 'Vale-alimentação', cesta: 'Cesta básica', vt: 'Vale-transporte', ferias: 'Férias' },
+  MESES: ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
+
+  temBenef: r => ['va', 'vt', 'cesta', 'ferias'].some(k => num(r[k]) !== null && r[k] !== undefined),
+
+  /** monta os campos visíveis da linha de mão de obra a partir das partes (folha + benefícios) */
+  compor(r) {
+    const v = k => num(r[k]);
+    const bs = ['va', 'cesta', 'vt'].filter(k => v(k) !== null);
+    r.beneficios = bs.length ? +bs.reduce((s, k) => s + v(k), 0).toFixed(2) : null;
+    r.encargos = v('ferias') !== null ? v('ferias') : null;
+    const div = [r.divFolha], ev = [r.evFolha];
+    const qa = v('qtdAlocada');
+    if (v('vaQtd') !== null && qa) { if (v('vaQtd') < qa * 0.95) div.push(`${fmtNum(qa - v('vaQtd'))} empregado(s) da folha sem vale-alimentação (${fmtNum(v('vaQtd'))} de ${fmtNum(qa)})`); }
+    if (r.va !== undefined && r.va !== null) ev.push(`Vale-alimentação: ${fmtMoney(r.va)}${v('vaQtd') !== null ? ` para ${fmtNum(v('vaQtd'))} empregado(s)` : ''}${r.vaDia ? ` (valor por dia: ${typeof r.vaDia === 'number' ? fmtMoney(r.vaDia) : r.vaDia})` : ''}`);
+    if (r.cesta !== undefined && r.cesta !== null) ev.push(`Cesta básica: ${fmtMoney(r.cesta)}${v('cestaQtd') !== null ? ` para ${fmtNum(v('cestaQtd'))} empregado(s)` : ''}${r.cestaUnit ? ` (cesta ${fmtMoney(r.cestaUnit)})` : ''}`);
+    if (r.vt !== undefined && r.vt !== null) ev.push(`Vale-transporte: recarga ${fmtMoney(r.vt)}${v('vtDevido') !== null ? `, devido ${fmtMoney(r.vtDevido)}` : ''}`);
+    if (r.ferias !== undefined && r.ferias !== null) ev.push(!num(r.ferias) ? 'Férias: nenhuma paga no mês' : `Férias pagas: ${fmtMoney(r.ferias)}${v('feriasQtd') ? ` para ${fmtNum(v('feriasQtd'))} empregado(s)` : ''}`);
+    r.divergencia = div.filter(Boolean).join('; ');
+    r.evidencia = ev.filter(Boolean).join(' | ');
+    if (bs.length) r.benefComprovados = r.divergencia.includes('sem vale-alimentação') ? 'Parcial' : 'Sim';
+    return derive('maoDeObra', r);
+  },
+
+  /** que relatório é este? */
+  tipo(book) {
+    for (const [nome, rows] of Object.entries(book)) {
+      if (/^planilha\s*\d/.test(norm(nome))) continue;
+      const topo = rows.slice(0, 12).map(r => Array.from(r || [], norm));
+      const tit = topo.flat().join(' ');
+      for (const h of topo) {
+        if (!h.some(c => c.startsWith('departamento'))) continue;
+        if (h.some(c => c.includes('recarga')) && h.some(c => c.includes('valor devido'))) return 'vt';
+        if (h.some(c => c.includes('qtd ativos')) || /ticket alimenta|vale.alimenta/.test(tit)) return 'va';
+        if (h.some(c => c.includes('valores da cesta') || c.includes('qtde ativos'))) return 'cesta';
+        if (h.some(c => c === 'totais') || /ferias/.test(tit)) return 'ferias';
+      }
+      if (/relatorio.{0,4}ferias|ferias - /.test(tit) && !/consolidado/.test(norm(nome))) return 'ferias';
+    }
+    return null;
+  },
+
+  anoDe(book) {
+    for (const rows of Object.values(book)) for (const r of rows.slice(0, 10)) for (const c of Array.from(r || [])) { const m = String(c ?? '').match(/\b(20\d\d)\b/); if (m) return m[1]; const n = String(c ?? '').match(/\b\d{2}\.(\d{2})\b/); if (n) return '20' + n[1]; }
+    return String(new Date().getFullYear());
+  },
+  /** competência pelo nome da aba ou título: "VALORES |09.26", "1ª QUINZENA AGOSTO", "MARÇO" + "FÉRIAS 03.26" */
+  comp(nome, rows, ano) {
+    const n = norm(nome); let m = n.match(/(\d{1,2})\.(\d{2})\b/);
+    if (m) return `20${m[2]}-${String(+m[1]).padStart(2, '0')}`;
+    const mi = BenefDP.MESES.findIndex(x => n.includes(x));
+    if (mi >= 0) { const t = rows.slice(0, 4).flat().map(x => String(x ?? '')).join(' ').match(/(\d{2})\.(\d{2})\b/); const a = t && +t[1] === mi + 1 ? '20' + t[2] : ano; return `${a}-${String(mi + 1).padStart(2, '0')}`; }
+    return null;
+  },
+
+  ler(book, tipo) {
+    const ano = BenefDP.anoDe(book), out = [];
+    for (const [nome, rows] of Object.entries(book)) {
+      if (/consolidado|^planilha/.test(norm(nome))) continue;
+      const comp = BenefDP.comp(nome, rows, ano); if (!comp) continue;
+      if (tipo === 'ferias') {
+        for (const r of rows) {
+          const a = Array.from(r || []); const j = a.findIndex(c => typeof c === 'string' && /^\s*0*\d+(\.\d+)?\s*-/.test(c)); if (j < 0 || j > 2) continue;
+          const valor = num(a[j + 2]), qtd = num(a[j + 4]);
+          out.push({ aba: nome, comp, dep: a[j].trim(), cod: FolhaDP.codDep(a[j]), valor: valor || 0, qtd: qtd || 0 });
+        }
+        continue;
+      }
+      let hi = -1; for (let i = 0; i < Math.min(14, rows.length); i++) if (Array.from(rows[i] || [], norm).some(c => c.startsWith('departamento'))) { hi = i; break; }
+      if (hi < 0) continue;
+      const hr = Array.from(rows[hi] || []), h = hr.map(norm), col = f => h.findIndex(f);
+      const C = { dep: col(c => c.startsWith('departamento')), esf: col(c => c === 'esfera') };
+      if (tipo === 'va') { C.unit = col(c => c.includes('valor por dia')); C.qtd = col(c => c.includes('qtd ativos')); C.valor = hr.findIndex(c => typeof c === 'number' && c > 20000); if (C.valor < 0) C.valor = C.qtd + 1; }
+      if (tipo === 'cesta') { C.unit = col(c => c.includes('valores da cesta')); C.qtd = col(c => c.includes('qtde ativos')); C.valor = col(c => c === 'valor'); }
+      if (tipo === 'vt') { C.valor = col(c => c.includes('recarga')); C.devido = col(c => c.includes('valor devido')); C.econ = col(c => c.includes('economia')); }
+      for (const r0 of rows.slice(hi + 1)) {
+        const r = Array.from(r0 || []), dep = String(r[C.dep] ?? '').trim();
+        if (!/^\s*0*\d+(\.\d+)?\s*-/.test(dep)) continue;
+        const g = k => C[k] >= 0 ? r[C[k]] : undefined;
+        const valor = num(g('valor')), qtd = num(g('qtd'));
+        if (!valor && !qtd && !num(g('devido'))) continue;
+        out.push({ aba: nome, comp, dep, cod: FolhaDP.codDep(dep), esfera: String(g('esf') ?? '').trim(), valor: valor || 0, qtd, unit: g('unit') ?? '', devido: num(g('devido')) });
+      }
+    }
+    return out;
+  },
+
+  /** departamento → contrato: vínculos já usados (folha), nº do contrato no nome, linhas do DP já gravadas */
+  mapa(e) {
+    const M = { ...(e.dpDeps || {}) };
+    DB.where('maoDeObra', r => r.empresaId === e.id && r.origem === 'folhaDP').forEach(r => {
+      (r.deps || []).forEach(d => { if (!M[d]) M[d] = r.contrato; });
+      const t = String(r.evFolha || r.evidencia || '').match(/—\s(.+?):\s*líquido/); if (t) t[1].split(', ').forEach(d => { const k = FolhaDP.codDep(d); if (k && !M[k]) M[k] = r.contrato; });
+    });
+    return M;
+  },
+
+  async importar(e, book, file, tipo) {
+    const linhas = BenefDP.ler(book, tipo), nomeT = BenefDP.NOME[tipo];
+    if (!linhas.length) { UI.toast(`Reconheci o relatório de ${nomeT.toLowerCase()}, mas não encontrei linhas com valores.`, 'bad', 6000); return; }
+    const contratos = empRecs('contratos', e.id), byCod = BenefDP.mapa(e), chaves = {};
+    contratos.forEach(c => FolhaDP.chavesContrato(c).forEach(k => (chaves[k] = chaves[k] || []).push(c)));
+    const grupos = {};
+    linhas.forEach(l => { const k = l.cod || l.dep; const g = grupos[k] = grupos[k] || { k, dep: l.dep, esfera: l.esfera, linhas: [] }; g.linhas.push(l); if (!g.esfera && l.esfera) g.esfera = l.esfera; });
+    const G = Object.values(grupos).sort((a, b) => (+a.k || 0) - (+b.k || 0));
+    G.forEach(g => {
+      const cod = byCod[g.k] && contratos.find(c => c.codigo === byCod[g.k]);
+      if (cod) { g.auto = cod.id; return; }
+      const nm = g.linhas.map(l => l.dep).join(' ').match(/\d[\d.]*\s*\/\s*\d{2,4}/); const cs = nm ? chaves[FolhaDP.chave(nm[0])] || [] : [];
+      g.auto = cs.length === 1 ? cs[0].id : '';
+    });
+    const comps = [...new Set(linhas.map(l => l.comp))].sort();
+    const ok = G.filter(g => g.auto), sem = G.filter(g => !g.auto);
+    const opts = sel => `<option value="">— não lançar —</option>${contratos.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt', { numeric: true })).map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.codigo)}${c.numero ? ' · nº ' + esc(c.numero) : ''} — ${esc(c.unidade || c.tomador || '')}</option>`).join('')}`;
+    const ult = g => g.linhas.slice().sort((a, b) => b.comp.localeCompare(a.comp))[0];
+    const linha = g => { const u = ult(g); return `<tr><td><b>${esc(g.dep)}</b>${g.esfera ? `<small class="muted" style="display:block">${esc(g.esfera)}</small>` : ''}</td><td class="r">${u.qtd ? fmtNum(u.qtd) : '—'}</td><td class="r">${fmtMoney(u.valor)}<small class="muted" style="display:block">${fmtComp(u.comp)}</small></td><td><select data-bdp="${esc(g.k)}">${opts(g.auto)}</select></td></tr>`; };
+    const tab = list => `<div class="table-wrap"><table class="dt"><thead><tr><th>Departamento (planilha)</th><th class="r">${tipo === 'vt' ? '' : 'Empregados'}</th><th class="r">Valor (últ.)</th><th>Contrato no app</th></tr></thead><tbody>${list.map(linha).join('')}</tbody></table></div>`;
+    const destino = tipo === 'ferias' ? '<b>Encargos/provisões</b> (férias pagas no mês) e a obrigação de férias, se houver' : `<b>Benefícios</b> (soma de vale-alimentação, cesta básica e vale-transporte), <b>Benefícios comprovados?</b>${tipo === 'va' ? ', divergência quando há empregados da folha sem vale-alimentação' : ''} e as obrigações de benefícios já cadastradas no contrato`;
+    const m = UI.modal({
+      title: `${nomeT} (DP)`, sub: esc(file.name), wide: true,
+      body: `<p class="muted">Competências: <b>${comps.map(fmtComp).join(', ')}</b>. Os departamentos foram ligados aos contratos pelos vínculos já usados na folha de pagamento (ou pelo nº do contrato no nome). Em cada contrato e competência, a linha do DP em <b>Mão de obra</b> recebe ${destino}. Importar de novo atualiza sem duplicar.</p>
+        <h4 class="sec">Ligados a contratos do app <span class="count">${ok.length}</span></h4>${ok.length ? tab(ok) : '<p class="muted small">Nenhum departamento ligado. Importe antes a folha de pagamento (ela cria os vínculos) ou escolha os contratos abaixo.</p>'}
+        <details ${ok.length ? '' : 'open'}><summary class="sec">Sem contrato correspondente <span class="count">${sem.length}</span></summary>${sem.length ? tab(sem) : ''}</details>`,
+      foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="bdpOk">${icon('upload')} Preencher</button>`
+    });
+    const conta = () => { const n = new Set($$('[data-bdp]', m).map(s => s.value).filter(Boolean)).size; $('#bdpOk', m).innerHTML = `${icon('upload')} Preencher ${n} contrato(s)`; $('#bdpOk', m).disabled = !n; };
+    $$('[data-bdp]', m).forEach(s => s.onchange = conta); conta();
+    $('#bdpOk', m).onclick = async () => {
+      const b = $('#bdpOk', m); b.disabled = true; b.innerHTML = icon('sync', 'spin') + ' Preenchendo…';
+      const porC = {}, deps = { ...(e.dpDeps || {}) };
+      $$('[data-bdp]', m).forEach(s => { const g = grupos[s.dataset.bdp]; if (!s.value || !g) return; (porC[s.value] = porC[s.value] || []).push(...g.linhas); const c = DB.get('contratos', s.value); if (c && /^\d/.test(g.k)) deps[g.k] = c.codigo; });
+      const MO = [], OB = [];
+      for (const [cid, ls] of Object.entries(porC)) {
+        const c = DB.get('contratos', cid); if (!c) continue;
+        const porComp = {}; ls.forEach(l => (porComp[l.comp] = porComp[l.comp] || []).push(l));
+        for (const [comp, L] of Object.entries(porComp)) {
+          const id = FolhaDP.idDe(e.id, 'mo', c.codigo, comp), r = { ...(DB.get('maoDeObra', id) || { id, empresaId: e.id, contrato: c.codigo, competencia: comp, origem: 'folhaDP', posto: BenefDP.POSTO }) };
+          const soma = k => L.some(l => num(l[k]) !== null) ? +L.reduce((s, l) => s + (num(l[k]) || 0), 0).toFixed(2) : null;
+          const un = [...new Set(L.map(l => l.unit).filter(x => x !== '' && x !== null && x !== undefined))].join(' / ');
+          if (tipo === 'va') Object.assign(r, { va: soma('valor'), vaQtd: soma('qtd'), vaDia: un });
+          if (tipo === 'cesta') Object.assign(r, { cesta: soma('valor'), cestaQtd: soma('qtd'), cestaUnit: num(un) ?? un });
+          if (tipo === 'vt') Object.assign(r, { vt: soma('valor'), vtDevido: soma('devido') });
+          if (tipo === 'ferias') Object.assign(r, { ferias: soma('valor'), feriasQtd: soma('qtd') });
+          r.posto = BenefDP.POSTO;
+          MO.push(BenefDP.compor(r));
+        }
+      }
+      if (MO.length) await DB.save('maoDeObra', MO);
+      for (const cid of Object.keys(porC)) { const c = DB.get('contratos', cid); if (c) OB.push(...BenefDP.obrigacoes(e, c)); }
+      if (OB.length) await DB.save('obrigacoes', OB);
+      await DB.save('empresas', { ...DB.get('empresas', e.id), dpDeps: deps });
+      UI.closeModal(); UI.toast(`Relatório de ${nomeT.toLowerCase()} aplicado em ${Object.keys(porC).length} contrato(s): ${MO.length} linhas de mão de obra e ${OB.length} obrigações.`, 'ok', 6000); App.render();
+    };
+    return UI.aguardar(m);
+  },
+
+  /** obrigações de benefícios e de férias, recalculadas a partir das linhas do DP do contrato */
+  obrigacoes(e, c) {
+    const L = DB.where('maoDeObra', r => r.empresaId === e.id && r.contrato === c.codigo && r.origem === 'folhaDP').sort((a, b) => String(a.competencia).localeCompare(String(b.competencia)));
+    const obs = DB.where('obrigacoes', r => r.empresaId === e.id && r.contrato === c.codigo), out = [], marca = '[Benefícios DP]';
+    const juntar = (antigo, novo, mk) => { const a = String(antigo || '').split('\n').filter(t => !t.startsWith(mk)).join('\n').trim(); return (/n[aã]o verificad|n[aã]o apresentad/i.test(a) || !a ? '' : a + '\n') + mk + ' ' + novo; };
+    const com = k => L.filter(r => num(r[k]) !== null && r[k] !== undefined);
+    const serie = (k, q) => com(k).map(r => `${fmtComp(r.competencia)} ${fmtMoney(r[k])}${q && num(r[q]) !== null ? ` (${fmtNum(r[q])})` : ''}`).join(' · ');
+    const B = ['va', 'cesta', 'vt'].filter(k => com(k).length);
+    if (B.length) {
+      const partes = B.map(k => `${BenefDP.NOME[k]}: ${serie(k, { va: 'vaQtd', cesta: 'cestaQtd' }[k])}`);
+      const falta = com('va').filter(r => num(r.qtdAlocada) && num(r.vaQtd) !== null && num(r.vaQtd) < num(r.qtdAlocada) * 0.95);
+      const total = +L.reduce((s, r) => s + (num(r.beneficios) || 0), 0).toFixed(2);
+      const ver = `${partes.join('. ')}. Total no período: ${fmtMoney(total)}.`;
+      const base = { qtdRealizada: `${com(B[0]).length} competência(s)`, valorRealizado: total, ...(com('va').some(r => num(r.qtdAlocada)) ? { status: falta.length ? 'Parcialmente cumprido' : 'Cumprido', desvio: falta.map(r => `${fmtComp(r.competencia)}: ${fmtNum(num(r.qtdAlocada) - num(r.vaQtd))} empregado(s) da folha sem vale-alimentação`).join('; '), impacto: falta.length ? 'Médio' : 'Baixo' } : {}) };
+      const alvo = obs.filter(r => r.grupo === 'Benefícios' || /vale|alimenta[cç]|refei[cç]|transporte|cesta|benef[ií]cio/i.test(r.obrigacao || ''));
+      if (alvo.length) alvo.forEach(r => out.push(derive('obrigacoes', { ...r, ...base, verificado: juntar(r.verificado, ver, marca) })));
+    }
+    const F = com('ferias').filter(r => num(r.ferias));
+    const fer = obs.filter(r => /f[eé]rias/i.test(r.obrigacao || ''));
+    if (fer.length && com('ferias').length) {
+      const ver = F.length ? `Férias pagas: ${serie('ferias', 'feriasQtd')}.` : `Nenhuma férias paga nas competências do relatório (${com('ferias').map(r => fmtComp(r.competencia)).join(', ')}).`;
+      fer.forEach(r => out.push(derive('obrigacoes', { ...r, verificado: juntar(r.verificado, ver, '[Férias DP]'), valorRealizado: +F.reduce((s, x) => s + num(x.ferias), 0).toFixed(2) })));
+    }
+    return out;
   }
 };
