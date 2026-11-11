@@ -9,7 +9,7 @@
 const APP_VERSAO = '1.8.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte', 'Botão “é o cliente” em cada parte: troca o cliente do processo com um clique (acerta polo e parte contrária; o cliente criado por engano sai do cadastro) — e o cartão Partes passa a refletir o cliente escolhido em Editar'] },
+  { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte', 'Botão “é o cliente” em cada parte: troca o cliente do processo com um clique (acerta polo e parte contrária; o cliente criado por engano sai do cadastro) — e o cartão Partes passa a refletir o cliente escolhido em Editar', 'Impressão da relação de processos (ícone ao lado do filtro de situação): todos ou por área, respeitando filtro e busca — cabeçalho com brasão, dados do escritório, indicadores, agrupamento por área, paginação e aviso de sigilo; pronto para imprimir ou salvar em PDF'] },
   { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca começa na hora e traz todo o histórico de intimações do advogado no DJEN (depois, só as novas)', 'Consulta ao DJEN mais robusta: quando a API responde “sistema muito ocupado”, o app espera e tenta de novo, respeitando o limite de consultas por minuto', 'Consulta testada com a OAB real: a API do DJEN às vezes falha em páginas com registros defeituosos (“sistema muito ocupado”) — o app agora tenta de novo e, se preciso, lê a página em partes e pula só o trecho defeituoso', 'Cliente: vinculado sozinho quando uma parte já é cliente cadastrado; nos demais casos, a revisão mostra as partes de cada processo para escolher o cliente (com sugestão quando as intimações dão sinal claro) — testes com os processos reais mostraram que o lado do escritório não dá para deduzir com segurança só pelo DJEN'] },
   { numero: '1.8.0', data: '10/11/2026', itens: ['Partes em campos próprios: polo ativo e polo passivo, cada parte com seus advogados (OAB/UF) e o selo “escritório” nos advogados da casa', 'Cliente automático: a parte do lado em que atua o advogado do escritório vira o cliente — vinculada se já existir, criada se não existir', 'Na revisão dos processos encontrados pela OAB, a coluna “Cliente do escritório” mostra o lado detectado e permite corrigir', 'Processos já cadastrados sem cliente recebem partes e cliente a cada nova intimação'] },
   { numero: '1.7.0', data: '10/11/2026', itens: ['Cadastro dos advogados do escritório (nome, OAB, UF) em Gestão do App › Sistema', 'Consulta automática diária às intimações do DJEN (API pública do CNJ) em nome desses advogados: cada intimação é lançada no processo, com o texto publicado', 'Processos com intimação ainda não cadastrados aparecem para revisar e cadastrar com um clique (com os andamentos do DataJud) ou ignorar'] },
@@ -1040,7 +1040,7 @@ function pill(v) {
 
 /* ---------- Tabela de dados (busca, filtros, ordenação, paginação) ---------- */
 const TableState = {};
-function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', emptyMsg = 'Nenhum registro.', cols }) {
+function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', tools = '', emptyMsg = 'Nenhum registro.', cols }) {
   const st = TableState[id] = TableState[id] || { q: '', sort: null, dir: 1, page: 0, f: {} };
   const fields = cols ? cols.map(k => schema.fields.find(f => f.k === k)) : schema.fields.filter(f => f.list);
   const draw = () => {
@@ -1055,6 +1055,7 @@ function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions
         return String(x ?? '').localeCompare(String(y ?? ''), 'pt-BR', { numeric: true }) * st.dir;
       });
     }
+    host._list = list; // lista filtrada e ordenada (usada na impressão)
     const per = 50, pages = Math.max(1, Math.ceil(list.length / per)); st.page = Math.min(st.page, pages - 1);
     const slice = list.slice(st.page * per, st.page * per + per);
     const moneyF = fields.filter(f => f.type === 'money');
@@ -1065,7 +1066,7 @@ function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions
     $$('tr[data-id]', host).forEach(tr => tr.onclick = () => onOpen && onOpen(rows.find(r => r.id === tr.dataset.id)));
     $$('[data-pg]', host).forEach(b => b.onclick = () => { st.page += +b.dataset.pg; draw(); });
   };
-  host.innerHTML = `<div class="dt-tools"><div class="search">${icon('search')}<input type="search" placeholder="Buscar…" value="${esc(st.q)}"></div>${filters.map(fl => `<select data-filter="${fl.k}"><option value="">${esc(fl.label)}: todos</option>${fl.opts.map(o => `<option ${st.f[fl.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('')}<span class="sp"></span>${actions}</div><div class="dt-body"></div>`;
+  host.innerHTML = `<div class="dt-tools"><div class="search">${icon('search')}<input type="search" placeholder="Buscar…" value="${esc(st.q)}"></div>${filters.map(fl => `<select data-filter="${fl.k}"><option value="">${esc(fl.label)}: todos</option>${fl.opts.map(o => `<option ${st.f[fl.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('')}${tools}<span class="sp"></span>${actions}</div><div class="dt-body"></div>`;
   $('.search input', host).oninput = e => { st.q = e.target.value; st.page = 0; draw(); };
   $$('[data-filter]', host).forEach(s => s.onchange = () => { st.f[s.dataset.filter] = s.value; st.page = 0; draw(); });
   draw();
@@ -1601,8 +1602,10 @@ const Judicial = {
     dataTable($('#tbl'), {
       id: 'proc-' + area, rows, schema: sc, cols: all ? ['numero', '_cli', '_area', 'classe', 'status', '_ult', '_prox'] : ['numero', '_cli', 'classe', 'orgao', 'status', '_ult', '_prox'],
       filters: [{ k: 'status', label: 'Situação', opts: SCHEMAS.processos.fields.find(f => f.k === 'status').opts }],
+      tools: `<button class="icon-btn tool-print" id="pRel" title="Imprimir a relação de processos (com os filtros e a busca aplicados)">${icon('printer')}</button>`,
       onOpen: p => location.hash = '#/processo/' + p.id, emptyMsg: 'Nenhum processo cadastrado nesta área.'
     });
+    $('#pRel').onclick = () => { const st = TableState['proc-' + area] || {}; Report.processos($('#tbl')._list || rows, { area: all ? null : area, situacao: st.f?.status || '', busca: st.q || '' }); };
     $('#nProc').onclick = () => Judicial.edit(null, all ? 'civil' : area);
     $('#nProcDocs').onclick = () => JudDocs.open();
   },
@@ -2129,16 +2132,98 @@ const Report = {
     <div class="sign"><div class="line"></div><b>${esc(o.resp || '')}</b><span>${esc(o.oab || '')}</span><span>${esc(esc0.nome || 'Amorim Firmo')} — ${BRAND.caption}</span></div></main>
     <footer>${esc(esc0.nome || 'Amorim Firmo')} · ${BRAND.caption}${o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''}</footer></body></html>`;
   },
-  open(e, o) {
-    const html = Report.build(e, o);
+  open(e, o) { Report.mostrar(Report.build(e, o), o.titulo, `Relatorio_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.html`); },
+  mostrar(html, titulo, arquivo) {
     const ov = document.createElement('div'); ov.className = 'report-ov';
-    ov.innerHTML = `<div class="report-bar"><b>${icon('printer')} ${esc(o.titulo)}</b><span class="sp"></span><button class="btn primary" id="rPrint">${icon('printer')} Imprimir / salvar PDF</button><button class="btn ghost light" id="rHtml">${icon('download')} Baixar HTML</button><button class="icon-btn light" id="rClose">${icon('x')}</button></div><iframe title="Relatório"></iframe>`;
+    ov.innerHTML = `<div class="report-bar"><b>${icon('printer')} ${esc(titulo)}</b><span class="sp"></span><button class="btn primary" id="rPrint">${icon('printer')} Imprimir / salvar PDF</button><button class="btn ghost light" id="rHtml">${icon('download')} Baixar HTML</button><button class="icon-btn light" id="rClose">${icon('x')}</button></div><iframe title="Relatório"></iframe>`;
     document.body.appendChild(ov); document.body.classList.add('noscroll');
     const fr = $('iframe', ov); fr.srcdoc = html;
     $('#rPrint').onclick = () => fr.contentWindow.print();
-    $('#rHtml').onclick = () => download(new Blob([html], { type: 'text/html' }), `Relatorio_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.html`);
+    $('#rHtml').onclick = () => download(new Blob([html], { type: 'text/html' }), arquivo);
     $('#rClose').onclick = () => { ov.remove(); document.body.classList.remove('noscroll'); };
   },
+  /* ---------- Relação de processos do escritório ---------- */
+  processos(lista, { area, situacao, busca }) {
+    const E = escritorio(), A = area ? AREAS[area] : null, agora = new Date();
+    const titulo = A ? 'Direito ' + (A.nome === 'Cível' ? 'Civil' : A.nome) : 'Todos os processos';
+    const ultMov = p => DB.where('movimentos', m => m.processoId === p.id).sort((a, b) => String(b.data).localeCompare(String(a.data)))[0];
+    const proxComp = p => DB.where('prazos', z => z.processoId === p.id && !z.concluido && String(z.data) >= todayISO()).sort((a, b) => String(a.data).localeCompare(String(b.data)))[0];
+    const ordem = Object.keys(AREAS);
+    const ps = lista.slice().sort((a, b) => ordem.indexOf(a.area) - ordem.indexOf(b.area) || String(a.numero).localeCompare(String(b.numero)));
+    const valor = ps.reduce((s, p) => s + (num(p.valorCausa) || 0), 0), comValor = ps.filter(p => num(p.valorCausa) > 0).length;
+    const ativos = ps.filter(p => (p.status || 'Ativo') === 'Ativo').length, tj = ps.filter(p => p.transito).length;
+    const clientesN = new Set(ps.flatMap(p => p.clienteIds || [])).size;
+    const porArea = ordem.map(k => [k, ps.filter(p => p.area === k).length]).filter(([, n]) => n);
+    const filtros = [situacao && 'Situação: ' + situacao, busca && `Busca: “${busca}”`].filter(Boolean).join(' · ');
+    const contato = [E.endereco, E.email, E.whatsapp && 'WhatsApp ' + E.whatsapp].filter(Boolean).map(esc).join('<span class="dot">·</span>');
+    const linha = (p, i) => {
+      const u = ultMov(p), z = proxComp(p), cli = (p.clienteIds || []).map(id => DB.get('clientes', id)?.nome).filter(Boolean).join(', ');
+      return `<tr><td class="n">${i + 1}</td>
+        <td><b class="cnj">${esc(fmtCNJ(p.numero))}</b><small>${esc([p.tribunal, p.orgao].filter(Boolean).join(' · '))}</small></td>
+        <td>${cli ? esc(cli) : '<i class="gap">a definir</i>'}${p.polo ? `<small>${esc(p.polo)}</small>` : ''}</td>
+        <td>${esc(p.parteContraria || '—')}</td>
+        <td>${esc(p.classe || '—')}${p.assunto ? `<small>${esc(p.assunto)}</small>` : ''}</td>
+        <td class="c">${esc(fmtDate(p.distribuicao) || '—')}</td>
+        <td class="r">${num(p.valorCausa) > 0 ? esc(fmtMoney(p.valorCausa)) : '—'}</td>
+        <td><span class="st st-${norm(p.status || 'Ativo').replace(/\s+/g, '-')}">${esc(p.status || 'Ativo')}</span>${p.fase ? `<small>${esc(p.fase)}</small>` : ''}${p.transito ? `<small class="tj">Trânsito em ${esc(fmtDate(p.transito))}</small>` : ''}</td>
+        <td>${u ? `<b class="d">${esc(fmtDate(u.data))}</b><small>${esc(String(u.titulo || '').replace(/ \((DJEN|DataJud)\)$/, '').slice(0, 70))}</small>` : '—'}${z ? `<small class="prox">Próximo: ${esc(z.tipo || '')} em ${esc(fmtDate(z.data))}</small>` : ''}</td></tr>`;
+    };
+    let i = 0;
+    const grupos = A ? `<tbody>${ps.map(p => linha(p, i++)).join('')}</tbody>` : porArea.map(([k, n]) => `<tbody><tr class="grp"><td colspan="9">${esc(AREAS[k].nome)} <span>${n} processo(s)</span></td></tr>${ps.filter(p => p.area === k).map(p => linha(p, i++)).join('')}</tbody>`).join('');
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relação de processos — ${esc(E.nome || 'Amorim Firmo')}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <style>${Report.CSS_REL}@page{@bottom-left{content:"${String(E.nome || 'Amorim Firmo').replace(/["\\]/g, '')} — ${BRAND.caption} · Documento interno, protegido pelo sigilo profissional (Lei 8.906/94, art. 7º, II)";font:7pt Manrope,Arial,sans-serif;color:#8a8e98}}</style></head><body><div class="folha">
+      <header class="cab">
+        <div class="marca"><img src="${new URL(BRAND.logoDark, location.href)}" alt="">
+          <div><div class="nome">${esc((E.nome || 'Amorim Firmo').toUpperCase())}</div><div class="leg">${esc(BRAND.caption)}</div>
+          ${E.advogado ? `<div class="resp">${esc(E.advogado)}${E.oab ? ` <span class="dot">·</span> ${esc(E.oab)}` : ''}</div>` : ''}${contato ? `<div class="cont">${contato}</div>` : ''}</div></div>
+        <div class="doc"><div class="tipo">Relação de processos</div><h1>${esc(titulo)}</h1>${filtros ? `<div class="filt">${filtros}</div>` : ''}
+          <div class="emit">Emitido em ${agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}, às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}<br>por ${esc(Session.user?.nome || Session.user?.email || '')}</div></div>
+      </header>
+      <div class="filete"></div>
+      <section class="kpis">
+        <div><b>${ps.length}</b><span>processo(s) relacionados</span></div>
+        <div><b>${ativos}</b><span>em andamento</span></div>
+        <div><b>${clientesN}</b><span>cliente(s)</span></div>
+        <div><b>${valor ? esc(fmtMoneyShort(valor)) : '—'}</b><span>valor das causas${comValor < ps.length ? ` · informado em ${comValor} de ${ps.length}` : ''}</span></div>
+        <div><b>${tj}</b><span>com trânsito em julgado</span></div>
+      </section>
+      ${!A && porArea.length > 1 ? `<div class="areas">${porArea.map(([k, n]) => `<span><i style="width:${Math.max(4, Math.round(n / ps.length * 100))}%"></i>${esc(AREAS[k].nome)} <b>${n}</b></span>`).join('')}</div>` : ''}
+      <table class="rel"><thead><tr><th class="n">#</th><th>Processo / juízo</th><th>Cliente</th><th>Parte contrária</th><th>Classe / assunto</th><th class="c">Distribuição</th><th class="r">Valor da causa</th><th>Situação</th><th>Última movimentação</th></tr></thead>${grupos}</table>
+      ${ps.length ? '' : '<p class="vazio">Nenhum processo com os filtros aplicados.</p>'}
+      <p class="nota">Fontes: cadastro do escritório, DataJud (CNJ) e Diário de Justiça Eletrônico Nacional (DJEN). Valores da causa conforme informados no cadastro.</p>
+      <footer><span>${esc(E.nome || 'Amorim Firmo')} — ${esc(BRAND.caption)}</span><span>Documento interno · informação sigilosa protegida pelo sigilo profissional (Lei 8.906/94, art. 7º, II)</span></footer>
+      </div></body></html>`;
+    Report.mostrar(html, 'Relação de processos — ' + titulo, `Relacao_processos_${A ? area + '_' : ''}${todayISO()}.html`);
+  },
+  CSS_REL: `@page{size:A4 landscape;margin:12mm 12mm 16mm;@bottom-right{content:"Página " counter(page) " de " counter(pages);font:7.5pt Manrope,Arial,sans-serif;color:#8a8e98}}
+  *{box-sizing:border-box}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{margin:0;font:8.6pt/1.42 Manrope,'Helvetica Neue',Arial,sans-serif;color:#1d2433}
+  .cab{display:flex;justify-content:space-between;align-items:flex-end;gap:10mm;padding-bottom:4mm}
+  .marca{display:flex;align-items:center;gap:5mm}.marca img{width:23mm;height:auto}
+  .nome{font:600 21pt/1 'Cormorant Garamond',Georgia,serif;letter-spacing:.16em;color:#121c33}
+  .leg{font:600 7pt Manrope,Arial,sans-serif;letter-spacing:.34em;text-transform:uppercase;color:#a07c43;margin:1.6mm 0 2.6mm}
+  .resp{font-weight:600;font-size:8.6pt;color:#121c33}.cont{font-size:7.8pt;color:#5d6270;margin-top:.6mm}.dot{color:#b08a4e;margin:0 1.6mm}
+  .doc{text-align:right;max-width:105mm}.tipo{font:700 7pt Manrope,Arial,sans-serif;letter-spacing:.3em;text-transform:uppercase;color:#a07c43}
+  .doc h1{font:600 20pt/1.1 'Cormorant Garamond',Georgia,serif;color:#121c33;margin:1mm 0 1.2mm}.filt{font-size:8pt;color:#121c33;margin-bottom:1mm}.emit{font-size:7.6pt;color:#6b6f7b}
+  .filete{height:3px;border-top:1.2pt solid #b08a4e;border-bottom:.5pt solid #b08a4e;margin-bottom:4.5mm}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:3mm;margin-bottom:3.5mm}
+  .kpis div{border:1px solid #e7e0d2;border-left:2.5pt solid #b08a4e;border-radius:1.6mm;padding:2.4mm 3.2mm;background:#fcfaf5}
+  .kpis b{display:block;font:600 15pt/1.1 'Cormorant Garamond',Georgia,serif;color:#121c33}.kpis span{font-size:7.4pt;color:#6b6f7b}
+  .areas{display:flex;flex-wrap:wrap;gap:2mm 6mm;margin:0 0 4mm;font-size:7.8pt;color:#4a4f5c}.areas span{display:inline-flex;align-items:center;gap:1.6mm}.areas i{display:inline-block;height:2mm;min-width:3mm;max-width:22mm;background:#121c33;border-radius:1mm}.areas b{color:#121c33}
+  table.rel{width:100%;border-collapse:collapse}
+  .rel thead th{background:#121c33;color:#fff;font:700 6.9pt Manrope,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:2.2mm 2mm;border-bottom:1.5pt solid #b08a4e}
+  .rel td{padding:2mm;border-bottom:.5pt solid #e7e0d2;vertical-align:top}.rel tr{page-break-inside:avoid}
+  .rel tbody tr:nth-child(even):not(.grp) td{background:#fbf9f4}
+  .rel small{display:block;color:#6b6f7b;font-size:7.3pt;margin-top:.5mm}.rel .cnj{font-variant-numeric:tabular-nums;letter-spacing:.01em;white-space:nowrap}
+  .rel .n{width:7mm;color:#a07c43;font-weight:700;text-align:center}.rel .r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.rel .c{text-align:center;white-space:nowrap}
+  .rel .d{font-weight:600}.rel .gap{color:#a86a12}.rel .tj{color:#6a4fb3}.rel .prox{color:#1d7a63}
+  .grp td{background:#f3ede0!important;font:600 11pt 'Cormorant Garamond',Georgia,serif;color:#121c33;letter-spacing:.04em;padding:2.2mm 2.4mm;border-bottom:.8pt solid #b08a4e}.grp span{font:600 7.2pt Manrope,Arial,sans-serif;color:#a07c43;letter-spacing:.12em;text-transform:uppercase;margin-left:3mm}
+  .st{display:inline-block;padding:.3mm 2mm;border-radius:5mm;font-weight:700;font-size:7.2pt;background:#e5f2ec;color:#1d7a63}.st-encerrado,.st-arquivado-provisoriamente{background:#ecebe8;color:#5d6270}.st-suspenso,.st-sobrestado{background:#fbf0dc;color:#9a6b1e}
+  .vazio{text-align:center;color:#6b6f7b;padding:10mm}.nota{font-size:7pt;color:#8a8e98;margin-top:3mm}
+  @media print{footer{display:none}}
+  footer{display:flex;justify-content:space-between;font-size:7pt;color:#8a8e98;border-top:.5pt solid #e7e0d2;padding-top:1.4mm}
+  @media screen{body{background:#e9e6df;padding:8mm 0}.folha{background:#fff;max-width:277mm;margin:0 auto;padding:11mm 11mm 6mm;box-shadow:0 2px 16px rgba(0,0,0,.09)}footer{position:static;margin-top:5mm}}`,
   CSS: `@page{size:A4;margin:18mm 16mm 20mm}*{box-sizing:border-box}body{font-family:Georgia,'Times New Roman',serif;color:#1d2433;font-size:10.5pt;line-height:1.5;margin:0;
   --s1:#2f6bb3;--s2:#c98a1e;--s3:#1d9a7c;--s4:#7056c9;--s5:#c4485e;--chart-bg:#fff}
   .cover{height:257mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}
