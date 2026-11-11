@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.1';
+const APP_VERSAO = '1.13.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.2', data: '11/11/2026', itens: ['Relatórios do DP juntados na mesma leva: cada planilha passa a aproveitar os vínculos departamento → contrato criados pela anterior (ex.: férias usa o nº de contrato lido no vale-transporte).'] },
   { numero: '1.13.1', data: '11/11/2026', itens: ['Relatórios do DP: o contrato de cada departamento também é identificado pelo nº do contrato que a própria planilha traz (ex.: tabela do consolidado do vale-transporte) e pelos nº guardados na importação da folha. Departamento com nº de contrato não cadastrado no app aparece com o nº indicado.'] },
   { numero: '1.13.0', data: '11/11/2026', itens: ['RELATÓRIOS DO DP: além da folha de pagamento, o app reconhece os relatórios de vale-alimentação, cesta básica, vale-transporte e férias. Os departamentos são ligados aos contratos pelos vínculos da folha. Em Mão de obra, a linha do DP de cada competência recebe Benefícios (VA + cesta + VT), Encargos/provisões (férias pagas), Benefícios comprovados? e divergência quando há empregados da folha sem vale-alimentação; a evidência detalha cada benefício. Em Obrigações, as de benefícios e de férias já cadastradas recebem o verificado, o valor realizado e o status. Os demais dados das planilhas são ignorados.'] },
   { numero: '1.12.2', data: '11/11/2026', itens: ['Ao juntar várias planilhas de uma vez, cada uma é tratada por vez (a conferência da folha do DP não é mais atropelada pelas seguintes) e as não reconhecidas aparecem num único aviso, com os nomes dos arquivos.'] },
@@ -2140,6 +2141,7 @@ const Consult = {
 
   /* ---------------- IMPORTAÇÃO DA PLANILHA ---------------- */
   async importar(e, file, quieto) {
+    e = DB.get('empresas', e.id) || e; // pode ter mudado na planilha anterior (vínculos do DP)
     let book; try { book = await XLSX.read(await file.arrayBuffer()); } catch (err) { UI.toast('Não consegui ler a planilha: ' + err.message, 'bad'); return; }
     const tdp = BenefDP.tipo(book); if (tdp) return BenefDP.importar(e, book, file, tdp);
     if (FolhaDP.reconhece(book)) return FolhaDP.importar(e, book, file);
@@ -4582,6 +4584,7 @@ const FolhaDP = {
   },
 
   async importar(e, book, file) {
+    e = DB.get('empresas', e.id) || e; // pode ter mudado na planilha anterior (vínculos do DP)
     const linhas = FolhaDP.ler(book);
     if (!linhas.length) { UI.toast('Reconheci o relatório de folha, mas não encontrei linhas com valores.', 'bad', 6000); return; }
     const contratos = empRecs('contratos', e.id), mapa = {};
@@ -4752,6 +4755,7 @@ const BenefDP = {
   },
 
   async importar(e, book, file, tipo) {
+    e = DB.get('empresas', e.id) || e; // pode ter mudado na planilha anterior (vínculos do DP)
     const linhas = BenefDP.ler(book, tipo), nomeT = BenefDP.NOME[tipo];
     if (!linhas.length) { UI.toast(`Reconheci o relatório de ${nomeT.toLowerCase()}, mas não encontrei linhas com valores.`, 'bad', 6000); return; }
     const contratos = empRecs('contratos', e.id), byCod = BenefDP.mapa(e), chaves = {}, nums = { ...(e.dpNums || {}), ...BenefDP.numeros(book) };
