@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.4';
+const APP_VERSAO = '1.13.5';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.5', data: '11/11/2026', itens: ['Ficha do contrato: ao abrir um item (posto, linha mensal do DP, obrigação, achado, documento, custo superveniente) ou “Editar contrato”, a janela tem o botão “Voltar”, que retorna à ficha do contrato; salvar ou excluir também retornam à ficha.'] },
   { numero: '1.13.4', data: '11/11/2026', itens: ['Ficha do contrato: Mão de obra separada em dois quadros — “postos contratados” e “custo mês a mês (Departamento Pessoal)”, este com competência, postos contratados, empregados na folha, folha bruta, benefícios, férias, salários previstos e divergência, em ordem de mês. Corrigido: a coluna de custo apurado (folha bruta) não recebe mais, por engano, o valor dos benefícios nos meses em que o relatório da folha não traz o bruto — basta juntar de novo a planilha da folha para corrigir os meses já importados.'] },
   { numero: '1.13.3', data: '11/11/2026', itens: ['Juntada de várias planilhas: terminada a última conferência, a tela se encerra. Se você sair de uma conferência para outra janela (ex.: abrir um contrato) ou começar nova juntada, as conferências pendentes da juntada anterior não reaparecem depois.'] },
   { numero: '1.13.2', data: '11/11/2026', itens: ['Relatórios do DP juntados na mesma leva: cada planilha passa a aproveitar os vínculos departamento → contrato criados pela anterior (ex.: férias usa o nº de contrato lido no vale-transporte).'] },
@@ -1021,17 +1022,18 @@ const UI = {
     return { rec: r, errs };
   },
   /** abre o formulário de edição genérico */
-  editRecord(coll, rec, { title, ctx = {}, onSaved, extraBase = {}, allowDelete = true } = {}) {
+  editRecord(coll, rec, { title, ctx = {}, onSaved, extraBase = {}, allowDelete = true, voltar } = {}) {
     const sc = SCHEMAS[coll], isNew = !rec?.id; rec = rec || {};
     const m = UI.modal({
       title: title || (isNew ? 'Novo(a) ' + sc.singular : 'Editar ' + sc.singular), wide: sc.fields.length > 8,
       body: UI.form(sc, rec, ctx),
-      foot: `${!isNew && allowDelete ? `<button class="btn ghost danger-text" id="mDel">${icon('trash')} Excluir</button>` : ''}<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="mSave">${icon('check')} Salvar</button>`
+      foot: `${!isNew && allowDelete ? `<button class="btn ghost danger-text" id="mDel">${icon('trash')} Excluir</button>` : ''}<span class="sp"></span>${voltar ? `<button class="btn ghost" id="mVoltar">${icon('chevL')} Voltar</button>` : `<button class="btn ghost" data-close>Cancelar</button>`}<button class="btn primary" id="mSave">${icon('check')} Salvar</button>`
     });
+    if (voltar) { $('#mVoltar', m).onclick = () => voltar(); $('header [data-close]', m)?.addEventListener('click', ev => { ev.stopPropagation(); voltar(); }); }
     const form = $('form', m);
     $('[data-newcliente]', m)?.addEventListener('click', () => {
       const snap = UI.readForm(form, sc, { ...rec, ...extraBase }).rec;
-      UI.editRecord('clientes', null, { onSaved: c => { snap.clienteIds = [...(snap.clienteIds || []), c.id]; UI.editRecord(coll, snap, { title, ctx, onSaved, extraBase, allowDelete }); } });
+      UI.editRecord('clientes', null, { onSaved: c => { snap.clienteIds = [...(snap.clienteIds || []), c.id]; UI.editRecord(coll, snap, { title, ctx, onSaved, extraBase, allowDelete, voltar }); } });
     });
     $('#mSave', m).onclick = async () => {
       const { rec: r, errs } = UI.readForm(form, sc, { ...rec, ...extraBase });
@@ -1043,10 +1045,12 @@ const UI = {
       derive(coll, r);
       const [saved] = await DB.save(coll, r); UI.closeModal(); UI.toast('Salvo com sucesso.');
       onSaved ? onSaved(saved) : App.render();
+      if (voltar) voltar();
     };
     $('#mDel', m)?.addEventListener('click', async () => {
       if (!await UI.confirm(`Excluir este(a) ${sc.singular}? Esta ação não pode ser desfeita.`, 'Excluir')) return;
       await DB.remove(coll, rec.id); UI.toast('Registro excluído.'); App.render();
+      if (voltar) voltar();
     });
     if (coll === 'empresas' || coll === 'clientes') RFB.attach(m, coll);
     return m;
@@ -2005,6 +2009,7 @@ const Consult = {
       </tbody></table></div>`;
   },
   contrato360(e, c) {
+    const volta = () => Consult.contrato360(e, DB.get('contratos', c.id) || c);
     const rel = coll => DB.where(coll, r => r.empresaId === e.id && r.contrato === c.codigo);
     const ob = rel('obrigacoes'), mo = rel('maoDeObra'), fi = rel('financeiro'), ac = rel('achados'), dc = rel('documentos'), ad = rel('aditivos'), me = rel('medicoes'), ma = rel('materiais');
     const d = isISO(c.fim) ? daysUntil(c.fim) : null;
@@ -2029,7 +2034,7 @@ const Consult = {
       ${ad.length ? mini('Aditivos', 'aditivos', ad, ['nome', 'datas', 'valor']) : ''}`,
       foot: `<button class="btn ghost danger-text" id="cDel">${icon('trash')} Excluir</button><span class="sp"></span><button class="btn ghost" id="svRel">${icon('printer')} Relatório do contrato</button><button class="btn ghost" id="cAch">${icon('alert')} Registrar achado</button><button class="btn primary" id="cEd">${icon('edit')} Editar contrato</button>`
     });
-    $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id } });
+    $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id }, voltar: volta });
     $('#cJunt', m)?.addEventListener('click', () => { UI.closeModal(); Docs.open(e); });
     $$('[data-dcont]', m).forEach(b => b.onclick = () => Consult.conteudoDoc(e, c, DB.get('documentos', b.dataset.dcont)));
     Superv.bind(m, e, c);
@@ -2055,9 +2060,9 @@ const Consult = {
         UI.toast('Arquivo anexado. Já pode abrir pelo botão.'); Consult.contrato360(e, DB.get('contratos', c.id) || c);
       } catch (err) { UI.toast('Não consegui anexar: ' + err.message, 'bad', 7000); b.disabled = false; b.querySelector('b').textContent = (alvo.tipo || 'Documento') + ' — sem arquivo'; }
     });
-    $('#cAch', m).onclick = () => UI.editRecord('achados', { contrato: c.codigo, status: 'Pendente' }, { ctx: { empresaId: e.id }, extraBase: { empresaId: e.id } });
+    $('#cAch', m).onclick = () => UI.editRecord('achados', { contrato: c.codigo, status: 'Pendente' }, { ctx: { empresaId: e.id }, extraBase: { empresaId: e.id }, voltar: volta });
     $('#cDel', m).onclick = async () => { if (!await UI.confirm(`Excluir o contrato ${c.codigo}? Os registros das outras abas são mantidos.`, 'Excluir')) return; await DB.remove('contratos', c.id); UI.closeModal(); App.render(); };
-    $$('[data-rel]', m).forEach(tr => tr.onclick = () => { const [coll, id] = tr.dataset.rel.split(':'); UI.editRecord(coll, DB.get(coll, id), { ctx: { empresaId: e.id } }); });
+    $$('[data-rel]', m).forEach(tr => tr.onclick = () => { const [coll, id] = tr.dataset.rel.split(':'); UI.editRecord(coll, DB.get(coll, id), { ctx: { empresaId: e.id }, voltar: volta }); });
   },
 
   /* ---------------- PAINEL / DASHBOARD ---------------- */
@@ -4229,7 +4234,7 @@ const Superv = {
   bind(m, e, c) {
     $('#svAdd', m)?.addEventListener('click', () => Superv.dialog(e, c));
     $('#svRel', m)?.addEventListener('click', () => Superv.relatorioDialog(e, c));
-    $$('[data-sv]', m).forEach(tr => tr.onclick = () => UI.editRecord('supervenientes', DB.get('supervenientes', tr.dataset.sv), { ctx: { empresaId: e.id }, onSaved: () => Consult.contrato360(e, DB.get('contratos', c.id) || c) }));
+    $$('[data-sv]', m).forEach(tr => tr.onclick = () => UI.editRecord('supervenientes', DB.get('supervenientes', tr.dataset.sv), { ctx: { empresaId: e.id }, voltar: () => Consult.contrato360(e, DB.get('contratos', c.id) || c) }));
   },
 
   /* ---------- juntar notas ---------- */
