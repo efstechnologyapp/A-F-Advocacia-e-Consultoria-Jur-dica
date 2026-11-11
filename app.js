@@ -1086,6 +1086,10 @@ const BRAND = {
   caption: 'Advocacia e Consultoria Jurídica'
 };
 const escritorio = () => DB.get('config', 'escritorio') || { id: 'escritorio', nome: 'Amorim Firmo', subtitulo: BRAND.caption };
+/** nome para cabeçalhos: sem "Advocacia e Consultoria Jurídica", que já vai na legenda */
+const nomeMarca = () => String(escritorio().nome || 'Amorim Firmo').replace(/[\s,–—-]*(sociedade de advogados|advocacia)(\s*(e|&)\s*consultoria(\s+jur[ií]dica)?)?\s*$/i, '').trim() || 'Amorim Firmo';
+/** OAB sempre no formato "OAB/PB 33.255" */
+const oabFmt = (v = escritorio().oab) => { v = String(v || '').trim(); if (!v || /oab/i.test(v)) return v; const d = onlyDigits(v), uf = (v.match(/\b([A-Z]{2})\b/) || [])[1] || ((escritorio().advogados || [])[0]?.uf || 'PB').toUpperCase(); return d ? `OAB/${uf} ${d.length > 3 ? d.slice(0, -3) + '.' + d.slice(-3) : d}` : v; };
 
 const App = {
   pendentes: 0,
@@ -2249,8 +2253,8 @@ const Report = {
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(o.titulo)} — ${esc(e.razao)}</title><style>${Report.CSS}</style></head><body>
     <div class="cover"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="cap">${BRAND.caption}</div><div class="rule"></div><h1>${esc(o.titulo)}</h1><p class="emp">${esc(e.razao)}${e.cnpj ? '<br>CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}</p><p class="meta">Período dos indicadores: ${esc(per)}<br>Emitido em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
     <main>${sec.join('')}
-    <div class="sign"><div class="line"></div><b>${esc(o.resp || '')}</b><span>${esc(o.oab || '')}</span><span>${esc(esc0.nome || 'Amorim Firmo')} — ${BRAND.caption}</span></div></main>
-    <footer>${esc(esc0.nome || 'Amorim Firmo')} · ${BRAND.caption}${o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''}</footer></body></html>`;
+    <div class="sign"><div class="line"></div><b>${esc(o.resp || '')}</b><span>${esc(o.oab || '')}</span><span>${esc(nomeMarca())} — ${BRAND.caption}</span></div></main>
+    <footer>${esc(nomeMarca())} · ${BRAND.caption}${o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''}</footer></body></html>`;
   },
   open(e, o) { Report.mostrar(Report.build(e, o), o.titulo, `Relatorio_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.html`); },
   mostrar(html, titulo, arquivo) {
@@ -2290,11 +2294,11 @@ const Report = {
     const grupos = A ? `<tbody>${ps.map(p => linha(p, i++)).join('')}</tbody>` : porArea.map(([k, n]) => `<tbody><tr class="grp"><td colspan="7">${esc(AREAS[k].nome)} <span>${n} processo(s)</span></td></tr>${ps.filter(p => p.area === k).map(p => linha(p, i++)).join('')}</tbody>`).join('');
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relação de processos — ${esc(E.nome || 'Amorim Firmo')}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-      <style>${Report.CSS_REL}@page{@bottom-left{content:"${String(E.nome || 'Amorim Firmo').replace(/["\\]/g, '')} — ${BRAND.caption} · Documento interno, protegido pelo sigilo profissional (Lei 8.906/94, art. 7º, II)";font:7pt Manrope,Arial,sans-serif;color:#8a8e98}}</style></head><body><div class="folha">
+      <style>${Report.CSS_REL}@page{@bottom-left{content:"${String(nomeMarca()).replace(/["\\]/g, '')} — ${BRAND.caption} · Documento interno, protegido pelo sigilo profissional (Lei 8.906/94, art. 7º, II)";font:7pt Manrope,Arial,sans-serif;color:#8a8e98}}</style></head><body><div class="folha">
       <header class="cab">
         <div class="marca"><img src="${new URL(BRAND.logoDark, location.href)}" alt="">
-          <div><div class="nome">${esc((E.nome || 'Amorim Firmo').toUpperCase())}</div><div class="leg">${esc(BRAND.caption)}</div>
-          ${E.advogado ? `<div class="resp">${esc(E.advogado)}${E.oab ? ` <span class="dot">·</span> ${esc(E.oab)}` : ''}</div>` : ''}${contato ? `<div class="cont">${contato}</div>` : ''}</div></div>
+          <div><div class="nome">${esc(nomeMarca().toUpperCase())}</div><div class="leg">${esc(BRAND.caption)}</div>
+          ${E.advogado ? `<div class="resp">${esc(E.advogado)}${E.oab ? ` <span class="dot">·</span> ${esc(oabFmt(E.oab))}` : ''}</div>` : ''}${contato ? `<div class="cont">${contato}</div>` : ''}</div></div>
         <div class="doc"><div class="tipo">Relação de processos</div><h1>${esc(titulo)}</h1>${filtros ? `<div class="filt">${filtros}</div>` : ''}
           <div class="emit">Emitido em ${agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}, às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}<br>por ${esc(Session.user?.nome || Session.user?.email || '')}</div></div>
       </header>
@@ -2310,7 +2314,7 @@ const Report = {
       <table class="rel"><thead><tr><th class="n">#</th><th style="width:25%">Processo / juízo</th><th style="width:22%">Cliente × parte contrária</th><th style="width:15%">Classe / assunto</th><th class="r">Valor da causa</th><th>Situação</th><th style="width:15%">Última movimentação</th></tr></thead>${grupos}</table>
       ${ps.length ? '' : '<p class="vazio">Nenhum processo com os filtros aplicados.</p>'}
       <p class="nota">Fontes: cadastro do escritório, DataJud (CNJ) e Diário de Justiça Eletrônico Nacional (DJEN). Valores da causa conforme informados no cadastro.</p>
-      <footer><span>${esc(E.nome || 'Amorim Firmo')} — ${esc(BRAND.caption)}</span><span>Documento interno · informação sigilosa protegida pelo sigilo profissional (Lei 8.906/94, art. 7º, II)</span></footer>
+      <footer><span>${esc(nomeMarca())} — ${esc(BRAND.caption)}</span><span>Documento interno · informação sigilosa protegida pelo sigilo profissional (Lei 8.906/94, art. 7º, II)</span></footer>
       </div></body></html>`;
     Report.mostrar(html, 'Relação de processos — ' + titulo, `Relacao_processos_${A ? area + '_' : ''}${todayISO()}.html`);
   },
@@ -3789,7 +3793,7 @@ const Atend = {
   },
   modeloContrato(a, c, E, h) {
     const hoje = new Date(), dataExt = hoje.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const contratado = `<b>${esc(String(E.advogado || '[COMPLETAR: advogado]').toUpperCase())}</b>, advogado(a) inscrito(a) na ${esc(E.oab || '[COMPLETAR: OAB]')}${E.nome ? `, integrante de ${esc(E.nome)}` : ''}, com escritório profissional em ${E.endereco ? esc(E.endereco) : '<mark>[COMPLETAR: endereço do escritório]</mark>'}${E.email ? ', e-mail ' + esc(E.email) : ''}`;
+    const contratado = `<b>${esc(String(E.advogado || '[COMPLETAR: advogado]').toUpperCase())}</b>, advogado(a) inscrito(a) na ${esc(oabFmt(E.oab) || '[COMPLETAR: OAB]')}${E.nome ? `, integrante de ${esc(E.nome)}` : ''}, com escritório profissional em ${E.endereco ? esc(E.endereco) : '<mark>[COMPLETAR: endereço do escritório]</mark>'}${E.email ? ', e-mail ' + esc(E.email) : ''}`;
     const rs = v => `${fmtMoney(v)} (${extenso(v)})`;
     const parc = h.parcelas > 1 ? `em ${h.parcelas} (${extensoN(h.parcelas)}) parcelas mensais e sucessivas de ${rs(Math.round(h.valor / h.parcelas * 100) / 100)}, vencendo-se a primeira em ${h.venc ? fmtDate(h.venc) : '<mark>[COMPLETAR: data]</mark>'} e as demais no mesmo dia dos meses subsequentes` : `à vista, até ${h.venc ? fmtDate(h.venc) : '<mark>[COMPLETAR: data]</mark>'}`;
     const fixo = `<p><b>a)</b> honorários iniciais no valor de ${h.valor ? rs(h.valor) : '<mark>[COMPLETAR: valor]</mark>'}, pagos ${parc}, por PIX ou transferência bancária em favor do CONTRATADO;</p>`;
@@ -3812,7 +3816,7 @@ ${C('DA PROTEÇÃO DE DADOS')}<p>Os dados pessoais do CONTRATANTE serão tratado
 ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pessoa')} para dirimir quaisquer questões oriundas deste contrato.</p>
 <p>E, por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor, na presença das testemunhas abaixo.</p>
 <p class="local">${esc(h.cidade || 'João Pessoa')}, ${dataExt}.</p>
-<div class="assin"><div><span></span><b>${esc(String(c?.nome || 'CONTRATANTE').toUpperCase())}</b>Contratante</div><div><span></span><b>${esc(String(E.advogado || 'CONTRATADO').toUpperCase())}</b>${esc(E.oab || 'Contratado')}</div></div>
+<div class="assin"><div><span></span><b>${esc(String(c?.nome || 'CONTRATANTE').toUpperCase())}</b>Contratante</div><div><span></span><b>${esc(String(E.advogado || 'CONTRATADO').toUpperCase())}</b>${esc(oabFmt(E.oab) || 'Contratado')}</div></div>
 <div class="assin test"><div><span></span><b>Testemunha 1</b>Nome:<br>CPF:</div><div><span></span><b>Testemunha 2</b>Nome:<br>CPF:</div></div>`;
   },
 
@@ -3862,7 +3866,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
   },
   dadosIA(a, c) {
     const E = escritorio();
-    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: E.oab || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: AREAS[a.area]?.nome || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
+    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: AREAS[a.area]?.nome || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
   },
   async organizar(a, c) {
     const b = $('#rlIA'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está organizando os fatos…`;
@@ -4002,7 +4006,7 @@ const Timbre = {
       .doc p{margin:0 0 3mm;text-align:justify}${peticao ? '.doc p{text-indent:25mm}.doc h1+p,.doc p:first-child{text-indent:0}' : ''}.doc li{text-align:justify;margin-bottom:1.5mm}.doc mark{background:#fff3c4}
       .doc .local{text-align:right;margin-top:8mm}.assin{display:flex;gap:14mm;margin-top:16mm;page-break-inside:avoid}.assin div{flex:1;text-align:center;font-size:10.5pt;line-height:1.35}.assin span{display:block;border-top:.8pt solid #111;margin-bottom:1.5mm}.assin b{display:block}.assin.test{margin-top:14mm;text-align:left}.assin.test div{text-align:left}
       @media print{.doc mark{background:none}}@media screen{body{background:#e9e6df;padding:8mm 0}table.pg{background:#fff;max-width:210mm;margin:0 auto;box-shadow:0 2px 16px rgba(0,0,0,.09)}table.pg td{padding-left:30mm;padding-right:20mm}table.pg>thead td{padding-top:12mm}table.pg>tbody td{padding-bottom:20mm}}</style></head><body>
-      <table class="pg"><thead><tr><td><div class="tb"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="n">${esc((E.nome || 'Amorim Firmo').toUpperCase())}</div><div class="l">${esc(BRAND.caption)}</div><div class="r"></div></div></td></tr></thead>
+      <table class="pg"><thead><tr><td><div class="tb"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="n">${esc(nomeMarca().toUpperCase())}</div><div class="l">${esc(BRAND.caption)}</div><div class="r"></div></div></td></tr></thead>
       <tbody><tr><td><div class="doc">${corpo}</div></td></tr></tbody></table></body></html>`;
     Report.mostrar(html, titulo, titulo.replace(/[^\wÀ-ú]+/g, '_') + '.html');
   }
