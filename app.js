@@ -6,9 +6,11 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.2';
+const APP_VERSAO = '1.13.4';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.4', data: '11/11/2026', itens: ['Ficha do contrato: Mão de obra separada em dois quadros — “postos contratados” e “custo mês a mês (Departamento Pessoal)”, este com competência, postos contratados, empregados na folha, folha bruta, benefícios, férias, salários previstos e divergência, em ordem de mês. Corrigido: a coluna de custo apurado (folha bruta) não recebe mais, por engano, o valor dos benefícios nos meses em que o relatório da folha não traz o bruto — basta juntar de novo a planilha da folha para corrigir os meses já importados.'] },
+  { numero: '1.13.3', data: '11/11/2026', itens: ['Juntada de várias planilhas: terminada a última conferência, a tela se encerra. Se você sair de uma conferência para outra janela (ex.: abrir um contrato) ou começar nova juntada, as conferências pendentes da juntada anterior não reaparecem depois.'] },
   { numero: '1.13.2', data: '11/11/2026', itens: ['Relatórios do DP juntados na mesma leva: cada planilha passa a aproveitar os vínculos departamento → contrato criados pela anterior (ex.: férias usa o nº de contrato lido no vale-transporte).'] },
   { numero: '1.13.1', data: '11/11/2026', itens: ['Relatórios do DP: o contrato de cada departamento também é identificado pelo nº do contrato que a própria planilha traz (ex.: tabela do consolidado do vale-transporte) e pelos nº guardados na importação da folha. Departamento com nº de contrato não cadastrado no app aparece com o nº indicado.'] },
   { numero: '1.13.0', data: '11/11/2026', itens: ['RELATÓRIOS DO DP: além da folha de pagamento, o app reconhece os relatórios de vale-alimentação, cesta básica, vale-transporte e férias. Os departamentos são ligados aos contratos pelos vínculos da folha. Em Mão de obra, a linha do DP de cada competência recebe Benefícios (VA + cesta + VT), Encargos/provisões (férias pagas), Benefícios comprovados? e divergência quando há empregados da folha sem vale-alimentação; a evidência detalha cada benefício. Em Obrigações, as de benefícios e de férias já cadastradas recebem o verificado, o valor realizado e o status. Os demais dados das planilhas são ignorados.'] },
@@ -948,7 +950,8 @@ const UI = {
     onOpen && onOpen(m); return m;
   },
   /** resolve quando o modal for fechado */
-  aguardar(m) { return new Promise(r => { const t = setInterval(() => { if (!m.isConnected) { clearInterval(t); r(); } }, 300); }); },
+  /** resolve quando o modal for fechado; 'substituido' se outra janela tomou o lugar dele */
+  aguardar(m) { return new Promise(r => { const t = setInterval(() => { if (!m.isConnected) { clearInterval(t); r($('#modal') ? 'substituido' : undefined); } }, 300); }); },
   closeModal() { $('#modal')?.remove(); document.body.classList.remove('noscroll'); },
   confirm(msg, okLabel = 'Confirmar', danger = true) {
     return new Promise(res => {
@@ -1990,6 +1993,17 @@ const Consult = {
       ${!comLink.length ? `<span class="muted small">${sem.length ? `${sem.length} documento(s) no inventário, ainda sem arquivo no Drive.` : 'Nenhum arquivo juntado a este contrato.'}</span> <button class="btn ghost xs" id="cJunt">${icon('upload')} Juntar o contrato</button>` : ''}
       ${sem.map(d => `<button type="button" class="arq falta" data-djunt="${d.id}" title="Este documento está no inventário da auditoria, mas o arquivo não está no Drive. Clique para escolher o PDF e anexá-lo.">${icon('upload')}<span><b>${esc(d.tipo || 'Documento')} — sem arquivo</b><small>${esc(d.arquivo || 'escolher o PDF')}</small></span></button>`).join('')}<input type="file" id="cDocF" hidden accept=".pdf,image/*"></div>${Consult.diagArquivos(e, c, l)}`;
   },
+  /** linhas mensais vindas dos relatórios do DP (folha e benefícios), em ordem de competência */
+  moMensal(L) {
+    if (!L.length) return '';
+    L = L.slice().sort((a, b) => String(a.competencia).localeCompare(String(b.competencia)));
+    const m = v => num(v) !== null ? fmtMoney(v) : '—', n = v => num(v) !== null ? fmtNum(v) : '—';
+    return `<h4 class="sec">Mão de obra — custo mês a mês (Departamento Pessoal) <span class="count">${L.length}</span></h4>
+      <p class="muted small" style="margin:-4px 0 8px">Uma linha por competência, com os dados dos relatórios do DP (folha de pagamento, vale-alimentação, cesta básica, vale-transporte e férias). A folha bruta só aparece nos meses em que o relatório da folha a informa. Clique na linha para ver a evidência completa.</p>
+      <div class="table-wrap"><table class="mini"><thead><tr><th>Competência</th><th class="r">Postos contratados</th><th class="r">Empregados na folha</th><th class="r">Folha bruta</th><th class="r">Folha líquida</th><th class="r">Benefícios</th><th class="r">Férias</th><th class="r">Salários previstos</th><th>Divergência</th></tr></thead><tbody>
+      ${L.map(r => `<tr data-rel="maoDeObra:${r.id}"><td><b>${esc(fmtComp(r.competencia))}</b></td><td class="r">${n(r.qtdContratada)}</td><td class="r">${n(r.qtdAlocada)}</td><td class="r">${m(r.custoApurado)}</td><td class="r">${m(r.liquido)}</td><td class="r">${m(r.beneficios)}</td><td class="r">${m(r.encargos)}</td><td class="r">${m(r.custoPrevisto)}</td><td>${r.divergencia ? esc(r.divergencia) : '—'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  },
   contrato360(e, c) {
     const rel = coll => DB.where(coll, r => r.empresaId === e.id && r.contrato === c.codigo);
     const ob = rel('obrigacoes'), mo = rel('maoDeObra'), fi = rel('financeiro'), ac = rel('achados'), dc = rel('documentos'), ad = rel('aditivos'), me = rel('medicoes'), ma = rel('materiais');
@@ -2006,7 +2020,8 @@ const Consult = {
       ${mini('Achados e plano de ação', 'achados', ac, ['codigo', 'area', 'achado', 'risco', 'status'])}
       ${Superv.html(e, c)}
       ${mini('Obrigações', 'obrigacoes', ob, ['clausula', 'grupo', 'obrigacao', 'status'])}
-      ${mini('Mão de obra', 'maoDeObra', mo, ['posto', 'qtdContratada', 'salario', 'custoPrevisto', 'divergencia'])}
+      ${mini('Mão de obra — postos contratados', 'maoDeObra', mo.filter(r => r.origem !== 'folhaDP'), ['posto', 'qtdContratada', 'salario', 'custoPrevisto', 'divergencia'])}
+      ${Consult.moMensal(mo.filter(r => r.origem === 'folhaDP'))}
       ${mini('Financeiro', 'financeiro', fi, ['tipo', 'grupo', 'descricao', 'previsto', 'realizado'])}
       ${me.length ? mini('Medições', 'medicoes', me, ['competencia', 'numero', 'valorMedido', 'valorFaturado', 'glosa']) : ''}
       ${ma.length ? mini('Materiais', 'materiais', ma, ['item', 'qtdPrevista', 'qtdEntregue', 'valorTotal']) : ''}
@@ -2202,7 +2217,7 @@ const Consult = {
       }
       UI.closeModal(); UI.toast(`Importação concluída: ${fmtNum(total)} registros.`); App.render();
     };
-    return new Promise(res => { const iv = setInterval(() => { if (!document.body.contains(m)) { clearInterval(iv); res(); } }, 300); });
+    return UI.aguardar(m);
   },
   /* ---------------- EXPORTAÇÃO ---------------- */
   exportar(e) {
@@ -2579,8 +2594,9 @@ const Docs = {
   STOP: new Set(['contrato', 'contratos', 'de', 'da', 'do', 'das', 'dos', 'e', 'n', 'no', 'na', 'ct', 'pdf', 'termo', 'aditivo', 'aditivos', 'copia', 'final', 'assinado', 'scan', 'digitalizado', '1', '2', '3']),
   ABREV: { gab: 'gabinete', sec: 'secretaria', adm: 'administracao', pg: 'procuradoria geral', proc: 'procuradoria', fin: 'financas', com: 'comunicacao', agr: 'agricultura', pol: 'politica', ab: 'abastecimento', tur: 'turismo', saude: 'saude', educ: 'educacao', seduc: 'educacao' },
 
+  lote: 0,
   open(e) {
-    Docs.fila = [];
+    Docs.fila = []; Docs.lote++; // uma nova juntada encerra a conferência que tenha ficado pendente
     const m = UI.modal({
       title: e ? 'Juntar documentos' : 'Nova empresa a partir dos documentos', sub: e ? esc(e.fantasia || e.razao) : 'Arraste os contratos e a planilha: o app identifica a empresa contratada, busca o CNPJ na Receita e cadastra tudo', wide: true,
       body: `<div class="drop" id="drop">${icon('upload')}<b>Arraste aqui a pasta ou os arquivos</b><span>Contratos, termos aditivos, termos de referência (PDF), a planilha de auditoria (.xlsx) ou um .zip com tudo</span>
@@ -2687,8 +2703,13 @@ const Docs = {
     Docs.finalizar(e, res, planilhas);
   },
   async finalizar(e, res, planilhas) {
-    const nao = [];
-    for (const p of planilhas) if (await Consult.importar(e, p, true) === 'nao') nao.push(p.name);
+    const nao = [], lote = Docs.lote;
+    for (const p of planilhas) {
+      if (Docs.lote !== lote) return; // outra juntada começou: esta para aqui
+      const r = await Consult.importar(e, p, true);
+      if (r === 'nao') nao.push(p.name);
+      if (r === 'substituido') return; // o usuário saiu da conferência para outra tela: não reabre as próximas
+    }
     if (nao.length) UI.toast(`${nao.length === 1 ? 'Planilha não reconhecida' : nao.length + ' planilhas não reconhecidas'}: ${nao.join(', ')}. O app reconhece a planilha de auditoria e os relatórios do DP (folha de pagamento, vale-alimentação, cesta básica, vale-transporte e férias).`, 'bad', 9000);
     if (res.length) Docs.revisar(e, res.filter(r => !r.erro), res.filter(r => r.erro));
     else location.hash = '#/empresa/' + e.id;
@@ -4543,7 +4564,7 @@ const FolhaDP = {
       return BenefDP.compor({ ...(DB.get('maoDeObra', id) || {}),
         id, empresaId: e.id, contrato: c.codigo, competencia: x.comp, origem: 'folhaDP',
         posto: BenefDP.POSTO, deps: [...new Set(ls.filter(l => l.comp === x.comp && l.cod).map(l => l.cod))], cct: x.cct ? 'CCT ' + x.cct : '',
-        qtdContratada: qtd || null, qtdAlocada: x.temColab ? x.colab : null, custoApurado: x.bruto, custoPrevisto: prev || null,
+        qtdContratada: qtd || null, qtdAlocada: x.temColab ? x.colab : null, custoApurado: x.bruto, bruto: x.bruto, liquido: +x.liq.toFixed(2), custoPrevisto: prev || null,
         divFolha: div.join('; '),
         evFolha: `Relatório da Folha de Pagamento (DP), aba ${[...x.abas].join(', ')} — ${[...x.deps].join(', ')}: líquido ${fmtMoney(x.liq)}, pago ${fmtMoney(x.pago)}${x.envio ? ', enviada à controladoria em ' + fmtDate(x.envio) : ''}${x.aprovacao ? ', aprovada em ' + fmtDate(x.aprovacao) : ''}${x.bruto === null ? ' (o relatório deste mês não traz o valor bruto)' : ''}${prev ? `. Custo previsto = salários-base dos postos contratados (${fmtMoney(prev)})` : ''}`
       });
@@ -4661,7 +4682,13 @@ const BenefDP = {
     r.divergencia = div.filter(Boolean).join('; ');
     r.evidencia = ev.filter(Boolean).join(' | ');
     if (bs.length) r.benefComprovados = r.divergencia.includes('sem vale-alimentação') ? 'Parcial' : 'Sim';
-    return derive('maoDeObra', r);
+    // "Custo total apurado" = folha bruta do relatório da folha (derive() somaria benefícios e férias quando o bruto falta)
+    const bruto = r.bruto !== undefined ? num(r.bruto) : (!r.evFolha || /não traz o valor bruto/.test(r.evFolha) ? null : num(r.custoApurado));
+    r.bruto = bruto; r.custoApurado = null;
+    derive('maoDeObra', r);
+    r.custoApurado = bruto;
+    r.diferenca = bruto !== null && num(r.custoPrevisto) !== null ? +(bruto - num(r.custoPrevisto)).toFixed(2) : null;
+    return r;
   },
 
   /** que relatório é este? */
