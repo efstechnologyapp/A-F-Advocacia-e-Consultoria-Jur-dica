@@ -408,7 +408,8 @@ details.tl-more[open]>summary{display:none}.tl-rec{display:inline-block;margin-t
 @media (max-width:560px){
   .grid-form{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.kpi-v{font-size:24px}
   .top{padding:0 12px;gap:10px}.sync span{display:none}
-  .actions{width:100%}.actions .btn{flex:1}.emp-grid{grid-template-columns:1fr}.emp-card{padding:14px}
+  .actions{width:100%;flex-wrap:wrap}.actions .btn{flex:1 1 calc(50% - 5px);min-width:0;white-space:normal;text-align:center;justify-content:center;line-height:1.25}.actions>.input,.actions>select{flex:1 1 100%}
+  .view{overflow-x:clip}.emp-grid{grid-template-columns:1fr}.emp-card{padding:14px}
   .modal-bg{padding:0;place-items:end stretch}.modal{border-radius:18px 18px 0 0;max-height:94vh}
   .detail-grid{grid-template-columns:1fr}.proc-num{font-size:22px}
   .u-row{flex-wrap:wrap}.u-act{width:100%;justify-content:flex-start}
