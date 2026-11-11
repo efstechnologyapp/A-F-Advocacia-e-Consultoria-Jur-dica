@@ -9,7 +9,7 @@
 const APP_VERSAO = '1.10.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.10.2', data: '11/11/2026', itens: ['PDF compilado (ex.: aditivo + contrato original + termo de referência + anexos no mesmo arquivo): a IA lista cada peça com as páginas, e na ficha do contrato o lápis ao lado do arquivo permite marcar o que ele contém', 'A legenda da documentação passa a reconhecer o contrato principal dentro do compilado e lembra de concluir o achado correspondente', 'Documento do inventário sem arquivo: botão para escolher o PDF e anexá-lo ao Drive ali mesmo'] },
+  { numero: '1.10.2', data: '11/11/2026', itens: ['PDF compilado (ex.: aditivo + contrato original + termo de referência + anexos no mesmo arquivo): a IA lista cada peça com as páginas, e na ficha do contrato o lápis ao lado do arquivo permite marcar o que ele contém', 'A legenda da documentação passa a reconhecer o contrato principal dentro do compilado e lembra de concluir o achado correspondente', 'Documento do inventário sem arquivo: botão para escolher o PDF e anexá-lo ao Drive ali mesmo', 'Peças marcadas no compilado contam como arquivo: o aditivo do inventário deixa de aparecer “sem arquivo” quando está dentro do PDF; e o achado do contrato-base pode ser concluído com um clique, com a evidência (arquivo e páginas) já escrita'] },
   { numero: '1.10.1', data: '11/11/2026', itens: ['Juntar documentos (empresas, processos e atendimentos): o arquivo é guardado no Drive primeiro e lido pela IA em seguida — se a IA demorar ou estiver ocupada, o arquivo não se perde e aparece o botão “Ler de novo com a IA”', 'A IA desiste com aviso claro antes de estourar o tempo (em vez de “o servidor demorou demais”)', 'Tabelas da consultoria (contratos, obrigações, mão de obra, achados…) sempre em ordem pelo código (JSP-001, JSP-002…); clicar no título da coluna continua reordenando', 'Ficha do contrato: botões para abrir no Drive o contrato, os aditivos e os demais arquivos juntados (ou “Juntar o contrato”, se ainda não houver), com uma legenda do que falta (ex.: “Falta o contrato principal — só há termo aditivo”)', 'Documento do inventário sem arquivo: botão para escolher o PDF e anexá-lo ao Drive ali mesmo, ficando disponível para abrir na ficha do contrato'] },
   { numero: '1.10.0', data: '10/11/2026', itens: ['Link de consulta para os clientes (…/#/consulta), para o Instagram, Linktree e WhatsApp: o cliente informa CPF/CNPJ, telefone ou e-mail do cadastro, recebe um código no e-mail cadastrado e vê só os próprios processos — sem precisar de conta Google nem de liberação manual', 'Link pronto para copiar em Gestão do App › Sistema', 'Celular: os botões do topo das telas quebram a linha em vez de passar da largura da tela (sem precisar arrastar para o lado)'] },
   { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)', 'Achados de auditoria: painel próprio (clique no cartão da Visão geral ou no menu) com o que cada achado significa — critério, causa, risco, contrato, valor e o que fazer — e ações para resolver: em andamento, responsável e prazo, concluir com evidência', 'Cabeçalhos com o nome curto do escritório (a legenda já diz “Advocacia e Consultoria Jurídica”) e OAB no formato “OAB/PB 33.255”', 'Botão Voltar também no celular'] },
@@ -1910,6 +1910,10 @@ const Consult = {
   },
 
   /* visão 360º do contrato: tudo que se relaciona a ele */
+  /** tipo "canônico" de um documento, para casar inventário × peças do compilado */
+  tipoDoc: t => /aditivo|apostil/i.test(t || '') ? 'aditivo' : /refer[eê]ncia|\bTR\b/i.test(t || '') ? 'tr' : /edital/i.test(t || '') ? 'edital' : /planilha/i.test(t || '') ? 'planilha' : /anexo/i.test(t || '') ? 'anexo' : /contrato/i.test(t || '') ? 'contrato' : 'outro',
+  /** compilado (com link) que já contém a peça deste documento do inventário */
+  cobertoPor(d, l) { if (d.link) return null; const k = Consult.tipoDoc(d.tipo || d.arquivo); return l.find(x => x.link && (x.pecas || []).some(p => Consult.tipoDoc(p.tipo) === k)) || null; },
   /** o que um PDF contém: várias peças num arquivo só (aditivo + contrato + TR + anexos) */
   conteudoDoc(e, c, d) {
     const T = ['Termo aditivo', 'Contrato', 'Termo de referência', 'Edital', 'Planilha de custos', 'Anexo', 'Outro'];
@@ -1930,25 +1934,27 @@ const Consult = {
     const eAd = d => (d.pecas || []).length ? (d.pecas || []).some(x => /aditivo|apostil/i.test(x.tipo || '')) : /aditivo|apostil/i.test((d.tipo || '') + ' ' + (d.arquivo || ''));
     const temPeca = (d, re) => (d.pecas || []).some(x => re.test(x.tipo || ''));
     const eCt = d => temPeca(d, /^contrato/i) || (!eAd(d) && /contrato/i.test(d.tipo || ''));
-    const lk = l.filter(d => d.link), ctOk = lk.some(eCt), adOk = lk.some(eAd), semLink = l.filter(d => !d.link);
+    const lk = l.filter(d => d.link), ctOk = lk.some(eCt), adOk = lk.some(eAd), semLink = l.filter(d => !d.link && !Consult.cobertoPor(d, l)), cobertos = l.filter(d => Consult.cobertoPor(d, l));
     const temAditivo = adOk || l.some(eAd) || (c.aditivos && !isGap(c.aditivos) && /aditivo/i.test(c.aditivos));
     const msgs = [];
     if (!l.length) msgs.push('Nenhum documento deste contrato no app: junte o contrato principal e, se houver, os aditivos.');
     else if (!ctOk) msgs.push(lk.length ? `<b>Falta o contrato principal</b> no Drive — ${adOk ? 'só há termo(s) aditivo(s)' : 'os arquivos juntados não foram reconhecidos como contrato'}. Sem ele não dá para conferir objeto, cláusulas e valores originais: obtenha o PDF com o tomador e junte aqui.` : '<b>Falta o contrato principal</b> no Drive: junte o PDF do contrato original.');
     if (ctOk && temAditivo && !adOk) msgs.push('O cadastro registra aditivo, mas o PDF do aditivo não está no Drive.');
     if (semLink.length) msgs.push(`${semLink.length} documento(s) do inventário da auditoria ainda sem arquivo no Drive — clique no botão tracejado para escolher o PDF (do RAR descompactado) e anexá-lo.`);
-    const ach = DB.where('achados', a => a.empresaId === e.id && a.contrato === c.codigo && achadoAberto(a) && /documental|contrato-base|pdf|document/i.test((a.area || '') + ' ' + (a.achado || '')));
-    if (ach.length && msgs.length) msgs.push(`Relacionado ao(s) achado(s) em aberto ${esc(ach.map(a => a.codigo).join(', '))}.`);
+    const ach = DB.where('achados', a => a.empresaId === e.id && a.contrato === c.codigo && achadoAberto(a) && /contrato[- ]base|contrato (principal|original)|n[aã]o (foi )?identificad[oa] (o )?contrato|pdf leg[ií]vel/i.test(a.achado || ''));
+    if (cobertos.length) msgs.push(`${cobertos.length} documento(s) do inventário (${esc(cobertos.map(d => d.arquivo || d.tipo).join('; ').slice(0, 120))}) estão dentro do PDF compilado.`);
+    if (ach.length && !ctOk && msgs.length) msgs.push(`Relacionado ao(s) achado(s) em aberto ${esc(ach.map(a => a.codigo).join(', '))}.`);
     const pgCt = lk.flatMap(d => (d.pecas || []).filter(x => /^contrato/i.test(x.tipo || '')).map(x => x.paginaInicial)).filter(Boolean)[0];
-    if (ctOk && ach.length) msgs.push(`O contrato principal está no Drive${pgCt ? ` (a partir da pág. ${pgCt})` : ''}: depois de conferir, conclua o(s) achado(s) ${esc(ach.map(a => a.codigo).join(', '))} na tela de Achados.`);
-    if (!msgs.length) msgs.push('Documentação completa no Drive: contrato principal' + (adOk ? ' e aditivo(s).' : '.'));
-    return `<p class="arq-leg">${icon(msgs.length === 1 && /completa/.test(msgs[0]) ? 'check' : 'alert')}<span>${msgs.join(' ')}</span></p>`;
+    if (ctOk && ach.length) msgs.push(`O contrato principal está no Drive${pgCt ? ` (a partir da pág. ${pgCt})` : ''}, então o achado ${esc(ach.map(a => a.codigo).join(', '))} pode ser concluído: <button type="button" class="link small" data-achok="${ach.map(a => a.id).join(',')}">concluir com esta evidência</button>.`);
+    if (ctOk && !semLink.length) msgs.unshift('Documentação no Drive: contrato principal' + (adOk ? ' e aditivo(s)' : '') + ' presentes.');
+    if (!msgs.length) msgs.push('Sem pendências de documentação.');
+    return `<p class="arq-leg">${icon(ctOk && !semLink.length ? 'check' : 'alert')}<span>${msgs.join(' ')}</span></p>`;
   },
   /** arquivos do contrato no Drive do escritório (contrato, aditivos, termos…) */
   arquivosHtml(e, c, dc) {
     const ord = d => /aditivo/i.test(d.tipo || d.arquivo || '') ? 1 : /contrato/i.test(d.tipo || '') ? 0 : 2;
     const l = dc.slice().sort((a, b) => ord(a) - ord(b) || String(a.arquivo || '').localeCompare(String(b.arquivo || ''), 'pt-BR', { numeric: true }));
-    const comLink = l.filter(d => d.link), sem = l.filter(d => !d.link);
+    const comLink = l.filter(d => d.link), sem = l.filter(d => !d.link && !Consult.cobertoPor(d, l));
     return `<div class="arq-bar"><span class="lbl">${icon('file')} Arquivos no Drive</span>
       ${comLink.map(d => `<span class="arq-w"><a class="arq" href="${esc(d.link)}" target="_blank" rel="noopener" title="${esc(d.arquivo || '')}">${icon('link')}<span><b>${(d.pecas || []).length > 1 ? 'PDF compilado' : esc((d.pecas || [])[0]?.tipo || d.tipo || 'Documento')}${d.numero ? ' ' + esc(d.numero) : ''}</b><small>${(d.pecas || []).length > 1 ? esc(d.pecas.map(x => x.tipo + (x.paginaInicial ? ' (p. ' + x.paginaInicial + (x.paginaFinal && x.paginaFinal !== x.paginaInicial ? '–' + x.paginaFinal : '') + ')' : '')).join(' · ')) : esc(d.arquivo || 'abrir no Drive')}</small></span></a><button type="button" class="arq-ed" data-dcont="${d.id}" title="Dizer o que este PDF contém (contrato, aditivo, termo de referência, anexos…)">${icon('edit')}</button></span>`).join('')}
       ${!comLink.length ? `<span class="muted small">${sem.length ? `${sem.length} documento(s) no inventário, ainda sem arquivo no Drive.` : 'Nenhum arquivo juntado a este contrato.'}</span> <button class="btn ghost xs" id="cJunt">${icon('upload')} Juntar o contrato</button>` : ''}
@@ -1980,6 +1986,15 @@ const Consult = {
     $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id } });
     $('#cJunt', m)?.addEventListener('click', () => { UI.closeModal(); Docs.open(e); });
     $$('[data-dcont]', m).forEach(b => b.onclick = () => Consult.conteudoDoc(e, c, DB.get('documentos', b.dataset.dcont)));
+    $$('[data-achok]', m).forEach(b => b.onclick = async () => {
+      const dcs = DB.where('documentos', d => d.empresaId === e.id && d.contrato === c.codigo && d.link);
+      const ct = dcs.find(d => (d.pecas || []).some(p => Consult.tipoDoc(p.tipo) === 'contrato')) || dcs.find(d => Consult.tipoDoc(d.tipo) === 'contrato');
+      const pc = (ct?.pecas || []).find(p => Consult.tipoDoc(p.tipo) === 'contrato');
+      const ev = `Contrato-base localizado no Drive do escritório: ${ct?.arquivo || 'arquivo do contrato'}${pc?.paginaInicial ? `, págs. ${pc.paginaInicial}${pc.paginaFinal ? '–' + pc.paginaFinal : ''}` : ''}.`;
+      if (!await UI.confirm(`Concluir ${b.dataset.achok.split(',').length} achado(s) com a evidência:<br><i>${esc(ev)}</i>`, 'Concluir', false)) return;
+      await DB.save('achados', b.dataset.achok.split(',').map(id => ({ ...DB.get('achados', id), status: 'Concluído', evidenciaConclusao: ev, dataValidacao: todayISO() })));
+      UI.toast('Achado concluído.'); Consult.contrato360(e, DB.get('contratos', c.id) || c);
+    });
     // anexar o arquivo a um documento do inventário que ainda não está no Drive
     let alvo = null; const fArq = $('#cDocF', m);
     $$('[data-djunt]', m).forEach(b => b.onclick = () => { alvo = DB.get('documentos', b.dataset.djunt); fArq.value = ''; fArq.click(); });
