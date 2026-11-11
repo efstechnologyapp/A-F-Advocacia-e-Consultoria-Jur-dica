@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.0';
+const APP_VERSAO = '1.13.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.13.1', data: '11/11/2026', itens: ['Relatórios do DP: o contrato de cada departamento também é identificado pelo nº do contrato que a própria planilha traz (ex.: tabela do consolidado do vale-transporte) e pelos nº guardados na importação da folha. Departamento com nº de contrato não cadastrado no app aparece com o nº indicado.'] },
   { numero: '1.13.0', data: '11/11/2026', itens: ['RELATÓRIOS DO DP: além da folha de pagamento, o app reconhece os relatórios de vale-alimentação, cesta básica, vale-transporte e férias. Os departamentos são ligados aos contratos pelos vínculos da folha. Em Mão de obra, a linha do DP de cada competência recebe Benefícios (VA + cesta + VT), Encargos/provisões (férias pagas), Benefícios comprovados? e divergência quando há empregados da folha sem vale-alimentação; a evidência detalha cada benefício. Em Obrigações, as de benefícios e de férias já cadastradas recebem o verificado, o valor realizado e o status. Os demais dados das planilhas são ignorados.'] },
   { numero: '1.12.2', data: '11/11/2026', itens: ['Ao juntar várias planilhas de uma vez, cada uma é tratada por vez (a conferência da folha do DP não é mais atropelada pelas seguintes) e as não reconhecidas aparecem num único aviso, com os nomes dos arquivos.'] },
   { numero: '1.12.1', data: '11/11/2026', itens: ['FOLHA DE PAGAMENTO (DP): ao juntar na empresa o “Relatório da Folha de Pagamento” do Departamento Pessoal, o app liga cada departamento ao contrato pelo nº (abas antigas, sem nº, pelo código do departamento) e preenche os campos que a auditoria já tem. Em Mão de obra, uma linha por competência com alocados na folha × postos contratados, folha bruta × custo previsto, CCT, divergências (postos vagos, saldo a pagar, pagamento após o 5º dia útil) e evidência. Em Obrigações, a execução com os postos recebe o verificado, a quantidade realizada e o status; o pagamento dos salários recebe previsto (líquido) × realizado (pago), desvios e status. Importar de novo atualiza sem duplicar.'] },
@@ -4620,7 +4621,8 @@ const FolhaDP = {
       const velhos = DB.where('financeiro', r => r.empresaId === e.id && r.origem === 'folhaDP').map(r => r.id); if (velhos.length) await DB.remove('financeiro', velhos);
       const novos = new Set(MO.map(r => r.id)), vm = DB.where('maoDeObra', r => r.empresaId === e.id && r.origem === 'folhaDP' && !novos.has(r.id) && !BenefDP.temBenef(r) && Object.keys(porC).some(id => DB.get('contratos', id)?.codigo === r.contrato)).map(r => r.id); if (vm.length) await DB.remove('maoDeObra', vm);
       const deps = { ...(e.dpDeps || {}) }; $$('[data-fdp]', m).forEach(s => { const g = grupos[s.dataset.fdp], c = s.value && DB.get('contratos', s.value); if (g && c && /^\d/.test(g.k)) deps[g.k] = c.codigo; });
-      await DB.save('empresas', { ...DB.get('empresas', e.id), dpDeps: deps });
+      const nums = { ...(e.dpNums || {}) }; G.forEach(g => { if (/^\d/.test(g.k) && g.chave && g.numero && g.numero !== '-') nums[g.k] = String(g.numero); });
+      await DB.save('empresas', { ...DB.get('empresas', e.id), dpDeps: deps, dpNums: nums });
       if (MO.length) await DB.save('maoDeObra', MO); if (OB.length) await DB.save('obrigacoes', OB);
       UI.closeModal(); UI.toast(`Folha aplicada em ${Object.keys(porC).length} contrato(s): ${MO.length} linhas de mão de obra e ${OB.length} obrigações preenchidas.`, 'ok', 6000); App.render();
     };
@@ -4722,6 +4724,23 @@ const BenefDP = {
     return out;
   },
 
+  /** nº do contrato de cada departamento, lido das tabelas da própria planilha que trazem "Nº CONTRATO" (ex.: consolidado do VT) */
+  numeros(book) {
+    const out = {};
+    for (const rows of Object.values(book)) {
+      let C = null;
+      for (const r0 of rows) {
+        const r = Array.from(r0 || []), h = r.map(norm);
+        const ic = h.findIndex(c => /^n.{0,2}\s*contrato/.test(c)), id = h.findIndex(c => c.startsWith('departamento'));
+        if (ic >= 0 && id >= 0) { C = { ic, id }; continue; }
+        if (!C) continue;
+        const cod = FolhaDP.codDep(r[C.id]), k = FolhaDP.chave(r[C.ic]);
+        if (cod && k && !out[cod]) out[cod] = String(r[C.ic]).trim();
+      }
+    }
+    return out;
+  },
+
   /** departamento → contrato: vínculos já usados (folha), nº do contrato no nome, linhas do DP já gravadas */
   mapa(e) {
     const M = { ...(e.dpDeps || {}) };
@@ -4735,7 +4754,7 @@ const BenefDP = {
   async importar(e, book, file, tipo) {
     const linhas = BenefDP.ler(book, tipo), nomeT = BenefDP.NOME[tipo];
     if (!linhas.length) { UI.toast(`Reconheci o relatório de ${nomeT.toLowerCase()}, mas não encontrei linhas com valores.`, 'bad', 6000); return; }
-    const contratos = empRecs('contratos', e.id), byCod = BenefDP.mapa(e), chaves = {};
+    const contratos = empRecs('contratos', e.id), byCod = BenefDP.mapa(e), chaves = {}, nums = { ...(e.dpNums || {}), ...BenefDP.numeros(book) };
     contratos.forEach(c => FolhaDP.chavesContrato(c).forEach(k => (chaves[k] = chaves[k] || []).push(c)));
     const grupos = {};
     linhas.forEach(l => { const k = l.cod || l.dep; const g = grupos[k] = grupos[k] || { k, dep: l.dep, esfera: l.esfera, linhas: [] }; g.linhas.push(l); if (!g.esfera && l.esfera) g.esfera = l.esfera; });
@@ -4743,19 +4762,21 @@ const BenefDP = {
     G.forEach(g => {
       const cod = byCod[g.k] && contratos.find(c => c.codigo === byCod[g.k]);
       if (cod) { g.auto = cod.id; return; }
-      const nm = g.linhas.map(l => l.dep).join(' ').match(/\d[\d.]*\s*\/\s*\d{2,4}/); const cs = nm ? chaves[FolhaDP.chave(nm[0])] || [] : [];
+      const nm = g.linhas.map(l => l.dep).join(' ').match(/\d[\d.]*\s*\/\s*\d{2,4}/);
+      g.numero = nums[g.k] || (nm ? nm[0] : '');
+      const cs = g.numero ? chaves[FolhaDP.chave(g.numero)] || [] : [];
       g.auto = cs.length === 1 ? cs[0].id : '';
     });
     const comps = [...new Set(linhas.map(l => l.comp))].sort();
     const ok = G.filter(g => g.auto), sem = G.filter(g => !g.auto);
     const opts = sel => `<option value="">— não lançar —</option>${contratos.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt', { numeric: true })).map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.codigo)}${c.numero ? ' · nº ' + esc(c.numero) : ''} — ${esc(c.unidade || c.tomador || '')}</option>`).join('')}`;
     const ult = g => g.linhas.slice().sort((a, b) => b.comp.localeCompare(a.comp))[0];
-    const linha = g => { const u = ult(g); return `<tr><td><b>${esc(g.dep)}</b>${g.esfera ? `<small class="muted" style="display:block">${esc(g.esfera)}</small>` : ''}</td><td class="r">${u.qtd ? fmtNum(u.qtd) : '—'}</td><td class="r">${fmtMoney(u.valor)}<small class="muted" style="display:block">${fmtComp(u.comp)}</small></td><td><select data-bdp="${esc(g.k)}">${opts(g.auto)}</select></td></tr>`; };
+    const linha = g => { const u = ult(g); return `<tr><td><b>${esc(g.dep)}</b>${g.esfera || g.numero ? `<small class="muted" style="display:block">${esc(g.esfera || '')}${g.numero ? `${g.esfera ? ' · ' : ''}contrato ${esc(g.numero)}${g.auto ? '' : ' — não cadastrado no app (ou sem nº no cadastro)'}` : ''}</small>` : ''}</td><td class="r">${u.qtd ? fmtNum(u.qtd) : '—'}</td><td class="r">${fmtMoney(u.valor)}<small class="muted" style="display:block">${fmtComp(u.comp)}</small></td><td><select data-bdp="${esc(g.k)}">${opts(g.auto)}</select></td></tr>`; };
     const tab = list => `<div class="table-wrap"><table class="dt"><thead><tr><th>Departamento (planilha)</th><th class="r">${tipo === 'vt' ? '' : 'Empregados'}</th><th class="r">Valor (últ.)</th><th>Contrato no app</th></tr></thead><tbody>${list.map(linha).join('')}</tbody></table></div>`;
     const destino = tipo === 'ferias' ? '<b>Encargos/provisões</b> (férias pagas no mês) e a obrigação de férias, se houver' : `<b>Benefícios</b> (soma de vale-alimentação, cesta básica e vale-transporte), <b>Benefícios comprovados?</b>${tipo === 'va' ? ', divergência quando há empregados da folha sem vale-alimentação' : ''} e as obrigações de benefícios já cadastradas no contrato`;
     const m = UI.modal({
       title: `${nomeT} (DP)`, sub: esc(file.name), wide: true,
-      body: `<p class="muted">Competências: <b>${comps.map(fmtComp).join(', ')}</b>. Os departamentos foram ligados aos contratos pelos vínculos já usados na folha de pagamento (ou pelo nº do contrato no nome). Em cada contrato e competência, a linha do DP em <b>Mão de obra</b> recebe ${destino}. Importar de novo atualiza sem duplicar.</p>
+      body: `<p class="muted">Competências: <b>${comps.map(fmtComp).join(', ')}</b>. Os departamentos foram ligados aos contratos pelos vínculos já usados na folha de pagamento e pelo nº do contrato informado na própria planilha. Em cada contrato e competência, a linha do DP em <b>Mão de obra</b> recebe ${destino}. Importar de novo atualiza sem duplicar.</p>
         <h4 class="sec">Ligados a contratos do app <span class="count">${ok.length}</span></h4>${ok.length ? tab(ok) : '<p class="muted small">Nenhum departamento ligado. Importe antes a folha de pagamento (ela cria os vínculos) ou escolha os contratos abaixo.</p>'}
         <details ${ok.length ? '' : 'open'}><summary class="sec">Sem contrato correspondente <span class="count">${sem.length}</span></summary>${sem.length ? tab(sem) : ''}</details>`,
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="bdpOk">${icon('upload')} Preencher</button>`
@@ -4785,7 +4806,7 @@ const BenefDP = {
       if (MO.length) await DB.save('maoDeObra', MO);
       for (const cid of Object.keys(porC)) { const c = DB.get('contratos', cid); if (c) OB.push(...BenefDP.obrigacoes(e, c)); }
       if (OB.length) await DB.save('obrigacoes', OB);
-      await DB.save('empresas', { ...DB.get('empresas', e.id), dpDeps: deps });
+      await DB.save('empresas', { ...DB.get('empresas', e.id), dpDeps: deps, dpNums: { ...(DB.get('empresas', e.id).dpNums || {}), ...BenefDP.numeros(book) } });
       UI.closeModal(); UI.toast(`Relatório de ${nomeT.toLowerCase()} aplicado em ${Object.keys(porC).length} contrato(s): ${MO.length} linhas de mão de obra e ${OB.length} obrigações.`, 'ok', 6000); App.render();
     };
     return UI.aguardar(m);
