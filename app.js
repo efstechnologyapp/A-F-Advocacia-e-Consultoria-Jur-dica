@@ -6,9 +6,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.10.0';
+const APP_VERSAO = '1.10.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.10.1', data: '11/11/2026', itens: ['Juntar documentos (empresas, processos e atendimentos): o arquivo é guardado no Drive primeiro e lido pela IA em seguida — se a IA demorar ou estiver ocupada, o arquivo não se perde e aparece o botão “Ler de novo com a IA”', 'A IA desiste com aviso claro antes de estourar o tempo (em vez de “o servidor demorou demais”)'] },
   { numero: '1.10.0', data: '10/11/2026', itens: ['Link de consulta para os clientes (…/#/consulta), para o Instagram, Linktree e WhatsApp: o cliente informa CPF/CNPJ, telefone ou e-mail do cadastro, recebe um código no e-mail cadastrado e vê só os próprios processos — sem precisar de conta Google nem de liberação manual', 'Link pronto para copiar em Gestão do App › Sistema', 'Celular: os botões do topo das telas quebram a linha em vez de passar da largura da tela (sem precisar arrastar para o lado)'] },
   { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)', 'Achados de auditoria: painel próprio (clique no cartão da Visão geral ou no menu) com o que cada achado significa — critério, causa, risco, contrato, valor e o que fazer — e ações para resolver: em andamento, responsável e prazo, concluir com evidência', 'Cabeçalhos com o nome curto do escritório (a legenda já diz “Advocacia e Consultoria Jurídica”) e OAB no formato “OAB/PB 33.255”', 'Botão Voltar também no celular'] },
   { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte', 'Botão “é o cliente” em cada parte: troca o cliente do processo com um clique (acerta polo e parte contrária; o cliente criado por engano sai do cadastro) — e o cartão Partes passa a refletir o cliente escolhido em Editar', 'Impressão da relação de processos (ícone ao lado do filtro de situação): todos ou por área, respeitando filtro e busca — cabeçalho com brasão, dados do escritório, indicadores, agrupamento por área, paginação e aviso de sigilo; pronto para imprimir ou salvar em PDF', 'Cadastro de cliente: ao digitar um CNPJ válido, os dados da Receita entram sozinhos (razão social, endereço, telefone, e-mail)', 'E-mail do cliente direto na página do processo: informar/alterar, ligar o aviso automático de andamento e convidar para o portal'] },
@@ -2563,7 +2564,7 @@ const Docs = {
           const ler = opt.ia && /pdf|image/.test(x.file.type || 'pdf');
           set(ler ? 'guardando no Drive do escritório e lendo com IA…' : 'guardando no Drive do escritório…', 'busy');
           const leitura = ler ? await PdfLeve.preparar(x.file, { inicio: 30, fim: 10 }) : null; r.leitura = leitura;
-          const up = await apiT('juntar', { empresaKey: e ? e.id : '_classificar', empresa: e ? (e.fantasia || e.razao) : '_A classificar', nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file), ler, leitura });
+          const up = await juntarELer({ empresaKey: e ? e.id : '_classificar', empresa: e ? (e.fantasia || e.razao) : '_A classificar', nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file), ler, leitura }, t => set(t, 'busy'));
           r.link = up.url; r.fileId = up.id; r.ia = up.ia || null; if (up.iaErro) r.iaErro = up.iaErro;
         }
         set(r.iaErro ? (r.link ? 'guardado no Drive' : 'pronto') + ' (IA: ' + r.iaErro.slice(0, 60) + ')' : r.ia ? (r.link ? 'guardado e lido' : 'lido') : r.link ? 'guardado no Drive' : 'pronto', r.iaErro ? 'err' : 'ok');
@@ -2634,7 +2635,7 @@ const Docs = {
       return `<section class="rev" data-i="${i}">
         <header>${icon(ehAditivo ? 'edit' : 'file')}<div><b>${esc(r.nome)}</b><small>${esc(ia.tipo || 'Documento')}${ia.numeroAditivo ? ' · ' + esc(ia.numeroAditivo) : ''}${ia.paginas ? ' · ' + ia.paginas + ' pág.' : ''}${r.link ? ` · <a href="${esc(r.link)}" target="_blank" rel="noopener">abrir no Drive</a>` : ''}</small></div>
           <select data-c="${i}"><option value="__novo">+ Criar novo contrato</option><option value="__nenhum" ${!r.contrato ? '' : ''}>Só registrar o documento (sem contrato)</option>${cs.map(x => `<option value="${esc(x.codigo)}" ${x.codigo === r.contrato ? 'selected' : ''}>${esc(x.codigo)} · ${esc((x.unidade || x.grupo || '').slice(0, 50))}</option>`).join('')}</select></header>
-        <p class="muted small">${r.contrato ? `Ligado a <b>${esc(r.contrato)}</b> por ${esc(r.por)}.` : 'Não encontrei um contrato correspondente — escolha um ou crie um novo.'}${r.iaErro ? ` <span class="t-bad">A IA não conseguiu ler: ${esc(r.iaErro)}</span>` : ''}</p>
+        <p class="muted small">${r.contrato ? `Ligado a <b>${esc(r.contrato)}</b> por ${esc(r.por)}.` : 'Não encontrei um contrato correspondente — escolha um ou crie um novo.'}${r.iaErro && r.fileId ? ` <button type="button" class="btn ghost xs" data-reler="${i}">${icon('sync')} Ler de novo com a IA</button>` : ''}${r.iaErro ? ` <span class="t-bad">A IA não conseguiu ler: ${esc(r.iaErro)}</span>` : ''}</p>
         ${linhas ? `<table class="mini revt"><thead><tr><th></th><th>Campo</th><th>No cadastro</th><th>No documento</th></tr></thead><tbody>${linhas}</tbody></table>` : (r.ia ? '<p class="muted small">Os dados do documento conferem com o cadastro.</p>' : '')}
         ${ia.alteracoes ? `<p class="small"><b>O que o documento altera:</b> ${esc(ia.alteracoes)}</p>` : ''}
         ${postos.length ? `<label class="switch"><input type="checkbox" data-postos="${i}" ${nPostos ? '' : 'checked'}><span></span>Lançar ${postos.length} posto(s) em Mão de obra ${nPostos ? `<em class="divg">já há ${nPostos} lançados — marcar substitui</em>` : ''}</label><div class="muted small pl">${postos.slice(0, 8).map(p => `${esc(p.posto)} (${fmtNum(p.quantidade) || '?'})${num(p.custoMensalTotal) !== null ? ' ' + fmtMoneyShort(p.custoMensalTotal) : ''}`).join(' · ')}${postos.length > 8 ? ' …' : ''}</div>` : ''}
@@ -2649,6 +2650,12 @@ const Docs = {
         ${res.map(card).join('')}
         <label class="switch"><input type="checkbox" id="rvAch" checked><span></span>Registrar as divergências não aplicadas como achados no plano de ação (risco médio)</label>`,
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="rvOk">${icon('check')} Aplicar</button>`
+    });
+    $$('[data-reler]', m).forEach(b => b.onclick = async () => {
+      const r = res[+b.dataset.reler]; b.disabled = true; b.innerHTML = icon('sync', 'spin') + ' Lendo…';
+      try { r.ia = await apiT('reler', { fileId: r.fileId, nome: r.nome, leitura: r.leitura || null }, 300000); delete r.iaErro; UI.toast('Documento lido pela IA.'); }
+      catch (err) { r.iaErro = /demorou/.test(err.message) ? 'a IA demorou demais — tente de novo em alguns minutos' : err.message; UI.toast('IA: ' + r.iaErro, 'warn', 7000); }
+      Docs.revisar(e, res, erros);
     });
     $('#rvOk', m).onclick = async () => {
       const b = $('#rvOk', m); b.disabled = true; b.innerHTML = icon('sync', 'spin') + ' Aplicando…';
@@ -2922,7 +2929,7 @@ const JudDocs = {
           let leitura = null;
           if (opt.ia) { set('preparando a leitura…', 'busy'); leitura = await PdfLeve.preparar(x.file, { modo: 'processo', inicio: 25, fim: 15 }); r.leitura = leitura; }
           set(opt.ia ? 'guardando no Drive e lendo com IA…' : 'guardando no Drive…', 'busy');
-          const up = await apiT('juntar', { modo: 'processo', destino: destinoAlvo, nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file), ler: opt.ia, leitura, contexto: { escritorio: e0.nome || 'Amorim Firmo', advogado: e0.advogado || '', oab: e0.oab || '' } });
+          const up = await juntarELer({ modo: 'processo', destino: destinoAlvo, nome: x.file.name, mime: x.file.type || 'application/pdf', base64: await Docs.b64(x.file), ler: opt.ia, leitura, contexto: { escritorio: e0.nome || 'Amorim Firmo', advogado: e0.advogado || '', oab: e0.oab || '' } }, t => set(t, 'busy'));
           r.link = up.url; r.fileId = up.id; r.ia = up.ia || null; if (up.iaErro) r.iaErro = up.iaErro; if (up.pasta) r.pasta = up.pasta;
         }
         r.num = onlyDigits(r.ia?.numero || ''); if (r.num.length !== 20) { const mm = x.file.name.match(/\d{7}[-.\s_]?\d{2}[-.\s_]?\d{4}[-.\s_]?\d[-.\s_]?\d{2}[-.\s_]?\d{4}/); r.num = mm ? onlyDigits(mm[0]) : ''; }
@@ -3248,6 +3255,19 @@ const PdfLeve = {
 /** chamada ao servidor com tempo-limite (como no Meus Concursos): não deixa botão preso */
 function apiT(action, payload, ms = 300000) {
   return Promise.race([api(action, payload), new Promise((_, falha) => setTimeout(() => falha(new Error('o servidor demorou demais para responder — tente de novo')), ms))]);
+}
+
+/**
+ * Guarda o arquivo no Drive do escritório e, numa segunda chamada, pede a leitura à IA.
+ * Assim o arquivo nunca se perde por demora da IA: se a leitura falhar, fica guardado e dá para “Ler de novo”.
+ */
+async function juntarELer(p, aviso) {
+  const up = await apiT('juntar', { ...p, ler: false, leitura: null }, 240000);
+  if (!p.ler) return up;
+  aviso && aviso('guardado no Drive; lendo com a IA…');
+  try { up.ia = await apiT('reler', { fileId: up.id, nome: p.nome, modo: p.modo, leitura: p.leitura || null, contexto: p.contexto }, 300000); }
+  catch (e) { up.iaErro = /demorou/.test(e.message) ? 'a IA demorou demais (documento grande ou IA do Google ocupada) — use “Ler de novo” em alguns minutos' : e.message; }
+  return up;
 }
 /* =====================================================================
    DJEN — Diário de Justiça Eletrônico Nacional (API pública do CNJ)
@@ -3874,7 +3894,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
       try {
         if (f.size > 30 * 1048576) throw new Error('arquivo acima de 30 MB');
         const leitura = await PdfLeve.preparar(f, { inicio: 20, fim: 10 });
-        const r = await apiT('juntar', { modo: 'atendimento', destino: { key: a.id, nome: `${c?.nome || 'Cliente'} — ${a.assunto || ''}`.slice(0, 120) }, nome: f.name, mime: f.type || 'application/octet-stream', base64: await Docs.b64(f), ler: /pdf|image|text/.test(f.type || f.name), leitura });
+        const r = await juntarELer({ modo: 'atendimento', destino: { key: a.id, nome: `${c?.nome || 'Cliente'} — ${a.assunto || ''}`.slice(0, 120) }, nome: f.name, mime: f.type || 'application/octet-stream', base64: await Docs.b64(f), ler: /pdf|image|text/.test(f.type || f.name), leitura });
         d.fileId = r.id; d.link = r.url; if (r.pasta) a.pastaLink = r.pasta;
         if (r.ia) { d.tipo = r.ia.tipoDocumento || ''; d.resumo = r.ia.resumo || ''; d.datas = r.ia.datas || []; d.valores = r.ia.valores || []; d.pessoas = r.ia.pessoas || []; }
         if (r.iaErro) d.erro = 'Guardado no Drive; a IA não leu agora (' + r.iaErro + ').';
