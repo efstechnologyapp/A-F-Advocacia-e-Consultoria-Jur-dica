@@ -6,10 +6,11 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.9.0';
+const APP_VERSAO = '1.10.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)', 'Achados de auditoria: painel próprio (clique no cartão da Visão geral ou no menu) com o que cada achado significa — critério, causa, risco, contrato, valor e o que fazer — e ações para resolver: em andamento, responsável e prazo, concluir com evidência'] },
+  { numero: '1.10.0', data: '10/11/2026', itens: ['Link de consulta para os clientes (…/#/consulta), para o Instagram, Linktree e WhatsApp: o cliente informa CPF/CNPJ, telefone ou e-mail do cadastro, recebe um código no e-mail cadastrado e vê só os próprios processos — sem precisar de conta Google nem de liberação manual', 'Link pronto para copiar em Gestão do App › Sistema'] },
+  { numero: '1.9.0', data: '10/11/2026', itens: ['Nova seção ATENDIMENTOS (Judicial › Atendimentos, ou “Novo atendimento” no cadastro do cliente): do primeiro contato ao ajuizamento, em 4 etapas', 'Contrato de honorários: modelo padrão completo (objeto, honorários fixos, de êxito ou mistos com valor por extenso, sucumbência, despesas, revogação, título executivo, LGPD, foro, assinaturas) gerado com a qualificação do cliente e do advogado, editável e impresso em papel timbrado', 'Relato e documentos: relato livre + documentos no Drive do escritório; a IA resume o que cada documento prova e organiza o caso (fatos em ordem, parte contrária, ação sugerida, competência, fundamentos, pedidos, documentos a pedir, perguntas ao cliente e riscos)', 'Petição inicial redigida pela IA com base nos fatos revisados, sem jurisprudência inventada (marca [INSERIR PRECEDENTE] e [COMPLETAR]); editor no app e impressão em papel timbrado', 'Registrar ajuizamento: informe o número e o processo é criado já vinculado ao cliente, com os documentos', 'Cadastro do cliente com nacionalidade, estado civil, profissão, RG e representante legal (para a qualificação)', 'Achados de auditoria: painel próprio (clique no cartão da Visão geral ou no menu) com o que cada achado significa — critério, causa, risco, contrato, valor e o que fazer — e ações para resolver: em andamento, responsável e prazo, concluir com evidência', 'Cabeçalhos com o nome curto do escritório (a legenda já diz “Advocacia e Consultoria Jurídica”) e OAB no formato “OAB/PB 33.255”', 'Botão Voltar também no celular'] },
   { numero: '1.8.2', data: '10/11/2026', itens: ['Corrigida a duplicação de processos: a lista de processos encontrados pela OAB passava do limite de 50 mil caracteres por célula da planilha e não era gravada no servidor — agora registros grandes são gravados em partes; o cadastro nunca cria um processo com número já existente; duplicados existentes são unificados sozinhos (movimentações, prazos, partes e arquivos)', 'Decisões, sentenças, acórdãos e despachos publicados mostram só a PARTE DISPOSITIVA; a íntegra fica em “ler inteiro teor” (também no portal do cliente)', 'Intimações com texto longo agora são guardadas inteiras (antes eram cortadas em 6 mil caracteres, perdendo o dispositivo) — a próxima consulta completa os textos antigos', 'Cartão Partes no topo do processo, antes das movimentações', 'Botão Voltar nas páginas de detalhe', 'Advogado responsável aparece com o nome (não só o nº da OAB)', 'Revisão dos processos encontrados pela OAB: nenhum vem marcado — você marca os que o escritório acompanha, e o botão mostra quantos serão cadastrados (“Cadastrar 3 de 34”)', 'Processos cadastrados pela OAB: lista para desfazer em lote — devolver para a revisão ou remover e ignorar', 'Dados do processo logo abaixo das Partes, antes das movimentações', 'Textos longos: botão “▲ recolher” depois de ler tudo', 'Valor das causas: o cartão mostra em quantos processos há valor e abre uma tela para informar os demais (DJEN e DataJud não trazem esse dado); “50.000” passa a ser lido como cinquenta mil', 'Partes: nomes limpos (sem “1.” e com o papel — agravante, agravado… — à parte) e sem os advogados do escritório listados como parte', 'Botão “é o cliente” em cada parte: troca o cliente do processo com um clique (acerta polo e parte contrária; o cliente criado por engano sai do cadastro) — e o cartão Partes passa a refletir o cliente escolhido em Editar', 'Impressão da relação de processos (ícone ao lado do filtro de situação): todos ou por área, respeitando filtro e busca — cabeçalho com brasão, dados do escritório, indicadores, agrupamento por área, paginação e aviso de sigilo; pronto para imprimir ou salvar em PDF', 'Cadastro de cliente: ao digitar um CNPJ válido, os dados da Receita entram sozinhos (razão social, endereço, telefone, e-mail)', 'E-mail do cliente direto na página do processo: informar/alterar, ligar o aviso automático de andamento e convidar para o portal'] },
   { numero: '1.8.1', data: '10/11/2026', itens: ['Cadastro de advogado só com o número da OAB e a seccional: o nome vem do próprio DJEN na primeira consulta', 'Ao cadastrar uma OAB, a busca começa na hora e traz todo o histórico de intimações do advogado no DJEN (depois, só as novas)', 'Consulta ao DJEN mais robusta: quando a API responde “sistema muito ocupado”, o app espera e tenta de novo, respeitando o limite de consultas por minuto', 'Consulta testada com a OAB real: a API do DJEN às vezes falha em páginas com registros defeituosos (“sistema muito ocupado”) — o app agora tenta de novo e, se preciso, lê a página em partes e pula só o trecho defeituoso', 'Cliente: vinculado sozinho quando uma parte já é cliente cadastrado; nos demais casos, a revisão mostra as partes de cada processo para escolher o cliente (com sugestão quando as intimações dão sinal claro) — testes com os processos reais mostraram que o lado do escritório não dá para deduzir com segurança só pelo DJEN'] },
   { numero: '1.8.0', data: '10/11/2026', itens: ['Partes em campos próprios: polo ativo e polo passivo, cada parte com seus advogados (OAB/UF) e o selo “escritório” nos advogados da casa', 'Cliente automático: a parte do lado em que atua o advogado do escritório vira o cliente — vinculada se já existir, criada se não existir', 'Na revisão dos processos encontrados pela OAB, a coluna “Cliente do escritório” mostra o lado detectado e permite corrigir', 'Processos já cadastrados sem cliente recebem partes e cliente a cada nova intimação'] },
@@ -1142,14 +1143,15 @@ const App = {
             <p class="muted">Entre com sua conta Google. No primeiro acesso em cada aparelho, enviamos um código ao seu e-mail para confirmar que ele é seu.</p>
             <div id="gbtn" class="gbtn"></div>
             <p class="note" id="lgStatus">${pronto ? 'Carregando o login do Google…' : 'O login ainda não foi configurado: preencha o ID do cliente Google e a URL do Apps Script no arquivo <b>config.js</b> (veja CONFIGURAR-LOGIN.md).'}</p>
-            ${apiUrl() ? `<button class="link small" id="lgSemGoogle">Sou cliente e não tenho conta Google</button>` : ''}
+            ${apiUrl() ? `<button class="btn ghost block lg-cli" id="lgSemGoogle">${icon('search')} Sou cliente — consultar meus processos</button>` : ''}
           </div>
           <form id="lgStepEmail" class="stack" hidden>
-            <h1>Acesso do cliente</h1>
-            <p class="muted">Informe o e-mail cadastrado pelo escritório. Enviaremos um código de acesso.</p>
-            <div class="fld"><label for="lgMail">E-mail</label><input type="email" id="lgMail" required autocomplete="email" placeholder="seu@email.com"></div>
-            <button class="btn primary block">${icon('mail')} Receber código</button>
-            <button type="button" class="link small" data-lgback>Voltar ao login com Google</button>
+            <h1>Consulte seus processos</h1>
+            <p class="muted">Informe o <b>CPF</b> (ou CNPJ), o <b>telefone com DDD</b> ou o <b>e-mail</b> que você informou ao escritório. Para proteger seus dados, enviamos um código de acesso ao e-mail do seu cadastro.</p>
+            <div class="fld"><label for="lgMail">CPF, telefone ou e-mail</label><input id="lgMail" required autocomplete="username" placeholder="000.000.000-00 · (83) 99999-9999 · seu@email.com"></div>
+            <button class="btn primary block">${icon('mail')} Receber código no e-mail</button>
+            <p class="note" id="lgCliSt"></p>
+            <button type="button" class="link small" data-lgback>Sou do escritório — entrar com Google</button>
           </form>
           <form id="lgStepCode" class="stack" hidden>
             <h1 id="lgCodTit">Confirme seu e-mail</h1>
@@ -1164,7 +1166,7 @@ const App = {
         </div>
       </section>
     </div>`;
-    const L = { email: '', nome: '', foto: '', idToken: null, viaGoogle: true };
+    const L = { email: '', nome: '', foto: '', idToken: null, viaGoogle: true, ref: '', ident: '' };
     const step = s => ['Google', 'Email', 'Code'].forEach(k => $('#lgStep' + k).hidden = k !== s);
     const aparelho = () => ls.get('aparelho', {});
     const entrar = async r => {
@@ -1172,7 +1174,18 @@ const App = {
       const a = aparelho(); a[Session.user.email] = r.token; ls.set('aparelho', a);
       await DB.init(); try { await DB.pull(); } catch (e) { UI.toast(e.message, 'bad'); } App.boot(); UI.toast('Bem-vindo(a)!');
     };
+    const pedirConsulta = async () => {
+      const st = $('#lgCliSt'); st.textContent = 'Procurando seu cadastro…';
+      try {
+        const r = await api('consultaPedir', { ident: L.ident });
+        L.ref = r.ref; L.email = r.destino;
+        $('#lgCodTit').textContent = r.nome ? `Olá, ${r.nome}!` : 'Confirme seu acesso';
+        $('#lgCodTxt').innerHTML = `Enviamos um código de 6 dígitos para o e-mail do seu cadastro, <b>${esc(r.destino)}</b>. Digite-o abaixo para ver seus processos.`;
+        $('#lgCod').disabled = false; $('#lgCodOk').disabled = false; $('#lgCodSt').textContent = `O código vale por ${r.validadeMin || 10} minutos; confira também a caixa de spam.`; step('Code'); $('#lgCod').focus(); st.textContent = '';
+      } catch (e) { st.textContent = e.message; if (!$('#lgStepEmail').hidden) return; step('Email'); }
+    };
     const pedirCodigo = async () => {
+      if (L.ref) return pedirConsulta();
       const st = $('#lgCodSt'); st.textContent = 'Enviando o código para o seu e-mail…';
       $('#lgCodTxt').innerHTML = `Enviamos um código de 6 dígitos para <b>${esc(L.email)}</b>. Digite-o abaixo para liberar o acesso.`;
       $('#lgCodTit').textContent = 'Confirme seu e-mail'; $('#lgCod').disabled = false; $('#lgCodOk').disabled = false; step('Code');
@@ -1203,12 +1216,14 @@ const App = {
       e.preventDefault(); const st = $('#lgCodSt'), cod = $('#lgCod').value;
       if (cod.length !== 6) { st.textContent = 'Digite os 6 dígitos do código.'; return; }
       $('#lgCodOk').disabled = true; st.textContent = 'Conferindo…';
-      try { await entrar(await api('verifyCode', { email: L.email, code: cod })); } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
+      try { await entrar(L.ref ? await api('consultaVerificar', { ref: L.ref, code: cod }) : await api('verifyCode', { email: L.email, code: cod })); } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
     };
     $('#lgReenv').onclick = pedirCodigo;
-    $$('[data-lgback]').forEach(b => b.onclick = () => { try { google.accounts.id.disableAutoSelect(); } catch { } step('Google'); });
+    $$('[data-lgback]').forEach(b => b.onclick = () => { try { google.accounts.id.disableAutoSelect(); } catch { } L.ref = ''; step('Google'); });
     $('#lgSemGoogle') && ($('#lgSemGoogle').onclick = () => step('Email'));
-    $('#lgStepEmail').onsubmit = e => { e.preventDefault(); L.email = $('#lgMail').value.trim().toLowerCase(); L.viaGoogle = false; L.idToken = null; if (L.email) pedirCodigo(); };
+    $('#lgStepEmail').onsubmit = e => { e.preventDefault(); L.ident = $('#lgMail').value.trim(); L.viaGoogle = false; L.idToken = null; if (L.ident) pedirConsulta(); };
+    // link público (Instagram/Linktree): …/#/consulta abre direto a consulta do cliente
+    if (/^#\/?consulta/.test(location.hash) && apiUrl()) step('Email');
     $('#lgLocal') && ($('#lgLocal').onclick = async () => {
       Session.mode = 'local'; Session.token = null; Session.user = { email: 'local', nome: 'Administrador', papel: 'admin' }; Session.save();
       await DB.init(); App.boot();
@@ -1533,7 +1548,11 @@ const Gestao = {
   },
   sistema(el) {
     const e = escritorio();
-    el.innerHTML = `<div class="grid2">
+    const linkCli = location.origin + location.pathname + '#/consulta';
+    el.innerHTML = `<section class="card link-cli"><header><h2>${icon('search')} Link de consulta para os clientes</h2></header>
+      <p class="muted small">Coloque este link no Instagram, no Linktree, no WhatsApp ou no cartão de visitas. O cliente informa o CPF, o telefone ou o e-mail do cadastro, recebe um código no e-mail cadastrado e vê só os próprios processos (apenas as movimentações marcadas como visíveis). O cadastro do cliente precisa ter e-mail.</p>
+      <div class="btn-row"><input class="input mono" id="lkCli" value="${esc(linkCli)}" readonly><button class="btn primary sm" id="lkCopy">${icon('link')} Copiar</button><a class="btn ghost sm" href="${esc(linkCli)}" target="_blank" rel="noopener">${icon('eye')} Abrir</a></div></section>
+      <div class="grid2">
       <section class="card"><header><h2>${icon('link')} Conexões</h2></header>
         <div class="conn"><span class="dot ${apiUrl() ? 'ok' : 'off'}"></span><div><b>Servidor (Google Apps Script)</b><small>${apiUrl() ? esc(apiUrl().slice(0, 60)) + '…' : 'não configurado — preencha APPS_SCRIPT_URL no config.js'}</small></div>${apiUrl() ? `<button class="btn ghost sm" id="tstSrv">Testar</button>` : ''}</div>
         <div class="conn"><span class="dot ${CONFIG.GOOGLE_CLIENT_ID ? 'ok' : 'off'}"></span><div><b>Login com Google</b><small>${CONFIG.GOOGLE_CLIENT_ID ? 'Client ID configurado' : 'não configurado — preencha GOOGLE_CLIENT_ID no config.js'}</small></div></div>
@@ -1581,6 +1600,7 @@ const Gestao = {
         UI.toast('Backup restaurado.'); App.render();
       } catch (err) { UI.toast(err.message, 'bad'); }
     };
+    $('#lkCopy', el)?.addEventListener('click', async () => { try { await navigator.clipboard.writeText($('#lkCli', el).value); UI.toast('Link copiado.'); } catch { $('#lkCli', el).select(); UI.toast('Selecione e copie o link (Ctrl+C).', 'warn'); } });
   },
   async auditoria(el) {
     if (!Session.remote) { el.innerHTML = `<section class="card"><div class="empty">${icon('history')}<p>A trilha de auditoria é registrada no servidor. Conecte o Apps Script para ativá-la.</p></div></section>`; return; }
