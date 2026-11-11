@@ -5,7 +5,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.13.7';
+const APP_VERSAO = '1.13.8';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
   { numero: '1.13.8', data: '11/11/2026', itens: ['Painel da empresa: “+ outros” em Contratos por tomador expande e recolhe a lista.', 'Achados em aberto: tocar num risco ou numa área abre a página de achados já filtrada para resolver.', 'Vencimentos: tocar num mês (gráfico ou tabela) lista os contratos que vencem nele; “Ver todos” mostra os 12 meses, e cada contrato abre a ficha.'] },
