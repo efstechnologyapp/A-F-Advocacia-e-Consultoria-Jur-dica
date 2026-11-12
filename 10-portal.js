@@ -163,7 +163,7 @@ const Portal = {
         <div class="right"><button class="btn primary" data-rep="${e.id}">${icon('printer')} Relatório completo</button></div></section>`; }).join('');
     } else {
       body = `<section class="card contact"><img src="${BRAND.logoDark}" alt="" class="about-logo"><div class="caption dark">${BRAND.caption}</div>
-        <p>${esc(esc0.nome || 'Amorim Firmo')}${esc0.advogado ? ' — ' + esc(esc0.advogado) : ''}${esc0.oab ? ' · ' + esc(esc0.oab) : ''}</p>
+        <p>${esc(esc0.nome || 'Amorim Firmo')}</p>
         <div class="btn-row center">${wa ? `<a class="btn primary" href="https://wa.me/55${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${esc0.email ? `<a class="btn ghost" href="mailto:${esc(esc0.email)}">${icon('mail')} ${esc(esc0.email)}</a>` : ''}</div>
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }

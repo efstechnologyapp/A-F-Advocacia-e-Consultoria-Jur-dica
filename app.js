@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.21.1';
+const APP_VERSAO = '1.21.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -25,6 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.21.2', data: '12/11/2026', itens: ['Portal › Fale com o escritório: sem o nome do advogado e a OAB.'] },
   { numero: '1.21.1', data: '12/11/2026', itens: ['Empresa: o logo passa a ser escolhido dentro de “Empresa” (edição), com prévia; “Ver como a empresa” fica só na aba Acessos ao portal.'] },
   { numero: '1.21.0', data: '12/11/2026', itens: ['A página Gestão do App (sistema, usuários do escritório, log, conexão do Drive e chave de IA) passa a ser exclusiva do desenvolvedor (EFS Technology). Os demais administradores continuam cuidando dos acessos de clientes nas empresas.'] },
   { numero: '1.20.5', data: '12/11/2026', itens: ['Portal da empresa › Acessos: a coluna “Pessoa” mostra “Nome (e-mail / telefone)” de cada usuário autorizado, com o WhatsApp clicável. Nome completo e WhatsApp podem ser informados no convite (pelo escritório ou no pedido do gerente) e a própria pessoa completa ou corrige em “Meus dados”.'] },
@@ -3053,7 +3054,7 @@ const Portal = {
         <div class="right"><button class="btn primary" data-rep="${e.id}">${icon('printer')} Relatório completo</button></div></section>`; }).join('');
     } else {
       body = `<section class="card contact"><img src="${BRAND.logoDark}" alt="" class="about-logo"><div class="caption dark">${BRAND.caption}</div>
-        <p>${esc(esc0.nome || 'Amorim Firmo')}${esc0.advogado ? ' — ' + esc(esc0.advogado) : ''}${esc0.oab ? ' · ' + esc(esc0.oab) : ''}</p>
+        <p>${esc(esc0.nome || 'Amorim Firmo')}</p>
         <div class="btn-row center">${wa ? `<a class="btn primary" href="https://wa.me/55${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${esc0.email ? `<a class="btn ghost" href="mailto:${esc(esc0.email)}">${icon('mail')} ${esc(esc0.email)}</a>` : ''}</div>
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }
