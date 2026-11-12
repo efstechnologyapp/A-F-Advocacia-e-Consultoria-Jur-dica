@@ -19,6 +19,8 @@ const App = {
     if (!Session.load()) return App.loginScreen();
     await DB.init();
     App.boot();
+    // confirma no servidor se este usuário é o desenvolvedor (mostra ou esconde a Gestão do App)
+    if (Session.remote && Session.isAdmin) api('whoami').then(w => { const d = !!w.dev; if (d !== (Session.user.dev === true)) { Session.user = { ...Session.user, dev: d }; Session.save(); if (Session.isStaff) { App.shell(); App.render(true); } } }).catch(() => {});
     if (Session.remote) DB.pull().then(() => { App.render(true); DB.flush(); }).catch(e => { if (e.code === 'AUTH') App.logout(); else UI.toast('Trabalhando com os dados guardados neste aparelho (sem conexão).', 'warn'); });
   },
   boot() {
@@ -27,14 +29,14 @@ const App = {
     App.shell(); App._nav = 0; window.onhashchange = () => { App._nav++; App.render(); }; App.render();
     App.checkPendentes();
     Escritorio.check().then(() => {
-      const pend = ls.get('escPend'); if (pend && Session.isAdmin) { ls.del('escPend'); if (pend.error) UI.toast('Conexão cancelada.', 'warn'); else return Escritorio.receber(pend.code, pend.state); }
+      const pend = ls.get('escPend'); if (pend && Session.isDev) { ls.del('escPend'); if (pend.error) UI.toast('Conexão cancelada.', 'warn'); else return Escritorio.receber(pend.code, pend.state); }
       App.render(true);
       DJEN.auto();
     });
     if (!Session.remote) DJEN.auto();
   },
   async checkPendentes() {
-    if (!Session.isAdmin || !Session.remote) return;
+    if (!Session.isDev || !Session.remote) return;
     try { const us = await api('users'); App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge(); } catch { }
   },
   badge() { $$('.pend-badge').forEach(b => { b.textContent = App.pendentes; b.hidden = !App.pendentes; }); },
@@ -205,7 +207,7 @@ const App = {
         <nav class="nav" id="nav"></nav>
         <div class="side-foot">
           <div id="conexSlot"></div>
-          ${Session.isAdmin ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
+          ${Session.isDev ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
           <button class="side-btn danger" id="btnOut">${icon('logout')}<span>Sair</span></button>
           <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><span class="dev-cred">por ${DEV.nome}</span><br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
         </div>
@@ -290,7 +292,7 @@ const App = {
       else if (a === 'empresas') Consult.list(v);
       else if (a === 'empresa') Consult.workspace(v, b, c || 'painel');
       else if (a === 'clientes') Views.clientes(v);
-      else if (a === 'gestao' && Session.isAdmin) Gestao.render(v, b || 'info');
+      else if (a === 'gestao' && Session.isDev) Gestao.render(v, b || 'info');
       else Views.painel(v);
     } catch (e) { console.error(e); v.innerHTML = `<div class="empty">${icon('alert')}<p>Erro ao abrir esta tela: ${esc(e.message)}</p></div>`; }
     if (keepScroll) scrollTo(0, y); else scrollTo(0, 0);
@@ -504,7 +506,7 @@ const Gestao = {
     const us = Gestao.users; App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge();
     const papel = { admin: 'Administrador', equipe: 'Equipe', cliente: 'Cliente' };
     const cliOpts = sel => `<option value="">— cliente —</option>${DB.all('clientes').sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}`;
-    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(String(u.clienteId).split(',').map(x => { const [id, pf] = x.split(':'); const n = DB.get('clientes', id)?.nome; return n ? n + (u.papel === 'cliente' ? ' · ' + ({ func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' }[pf || 'func']) : '') : ''; }).filter(Boolean).join(' + ')) : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
+    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.pessoa || (u.papel === 'cliente' ? u.email : u.nome) || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(String(u.clienteId).split(',').map(x => { const [id, pf] = x.split(':'); const n = DB.get('clientes', id)?.nome; return n ? n + (u.papel === 'cliente' ? ' · ' + ({ func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' }[pf || 'func']) : '') : ''; }).filter(Boolean).join(' + ')) : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
     const pend = us.filter(u => u.status === 'pendente'), ok = us.filter(u => u.status === 'autorizado'), bloq = us.filter(u => u.status === 'bloqueado');
     el.innerHTML = `
       <section class="card"><header><h2>⏳ Pedidos de acesso <span class="count">${pend.length}</span></h2></header>

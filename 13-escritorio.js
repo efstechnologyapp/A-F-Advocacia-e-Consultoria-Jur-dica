@@ -45,7 +45,7 @@ const Escritorio = {
   /** tela de bloqueio enquanto o escritório não estiver conectado */
   gate(v) {
     App.crumbs([{ t: 'Conectar ao escritório' }]);
-    const adm = Session.isAdmin, des = Escritorio.st?.desatualizado;
+    const adm = Session.isDev, des = Escritorio.st?.desatualizado;
     v.innerHTML = `<div class="gate"><img src="${BRAND.logoDark}" alt="" class="gate-logo"><div class="caption dark">${BRAND.caption}</div>
       <h1>Conectar ao escritório</h1>
       ${des ? `<div class="notice">${icon('alert')}<div>O servidor (Apps Script) ainda está na versão anterior. Cole o novo <b>Codigo.gs</b> e publique uma <b>Nova versão</b> da implantação.</div></div>` : ''}

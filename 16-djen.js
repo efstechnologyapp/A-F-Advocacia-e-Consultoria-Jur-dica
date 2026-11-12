@@ -237,7 +237,7 @@ const DJEN = {
 
   /* ---------- cartão do painel / judicial ---------- */
   cardHtml() {
-    if (!DJEN.advogados().length) return Session.isAdmin ? `<section class="card djen-card"><header><h2>${icon('mail')} Intimações pela OAB (DJEN)</h2></header><p class="muted small">Cadastre os advogados do escritório em <a href="#/gestao/sistema">Gestão do App › Sistema</a> e o app passa a buscar sozinho, todo dia, as intimações e os processos em que eles atuam.</p></section>` : '';
+    if (!DJEN.advogados().length) return Session.isDev ? `<section class="card djen-card"><header><h2>${icon('mail')} Intimações pela OAB (DJEN)</h2></header><p class="muted small">Cadastre os advogados do escritório em <a href="#/gestao/sistema">Gestão do App › Sistema</a> e o app passa a buscar sozinho, todo dia, as intimações e os processos em que eles atuam.</p></section>` : '';
     const s = DJEN.estado(), existe = new Set(DB.all('processos').map(p => onlyDigits(p.numero))), pend = (s.pendentes || []).filter(q => !existe.has(q.numero));
     const recentes = DB.where('movimentos', m => m.origem === 'djen').sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 5);
     return `<section class="card djen-card"><header><h2>${icon('mail')} Intimações pela OAB (DJEN)</h2><span class="muted small" data-djen-st>${DJEN.rodando ? icon('sync', 'spin') + ' consultando…' : DJEN.status()}</span></header>

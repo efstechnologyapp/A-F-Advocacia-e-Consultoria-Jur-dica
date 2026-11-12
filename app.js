@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.20.3';
+const APP_VERSAO = '1.21.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -25,6 +25,9 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.21.0', data: '12/11/2026', itens: ['A página Gestão do App (sistema, usuários do escritório, log, conexão do Drive e chave de IA) passa a ser exclusiva do desenvolvedor (EFS Technology). Os demais administradores continuam cuidando dos acessos de clientes nas empresas.'] },
+  { numero: '1.20.5', data: '12/11/2026', itens: ['Portal da empresa › Acessos: a coluna “Pessoa” mostra “Nome (e-mail / telefone)” de cada usuário autorizado, com o WhatsApp clicável. Nome completo e WhatsApp podem ser informados no convite (pelo escritório ou no pedido do gerente) e a própria pessoa completa ou corrige em “Meus dados”.'] },
+  { numero: '1.20.4', data: '12/11/2026', itens: ['Portal da empresa › Acessos: cada pessoa aparece uma vez, pelo e-mail e pelo nome que ela mesma informou (não mais o nome da empresa), com o perfil nesta empresa e a linha “Também acessa” para as outras empresas dela.', 'Servidor: registros repetidos do mesmo e-mail são juntados automaticamente.'] },
   { numero: '1.20.3', data: '12/11/2026', itens: ['Crédito do desenvolvedor (EFS Technology, WhatsApp e e-mail) no login, no menu, em “Sobre o App” e no portal do cliente.', 'Proteção: o app só roda nos endereços autorizados; uma cópia publicada em outro domínio mostra o aviso de cópia não autorizada. Aviso de direitos autorais no código.'] },
   { numero: '1.20.2', data: '12/11/2026', itens: ['Portal: quem tem acesso a várias empresas vê uma abertura própria — o cartão percorre os logos das empresas, acendendo um ponto para cada uma, e termina na tela de escolha.'] },
   { numero: '1.20.1', data: '12/11/2026', itens: ['Portal: quem tem perfil mais alto pode atuar num perfil abaixo (Diretoria → Gerente ou Funcionário; Gerente → Funcionário), pelo menu em “Atuar como”. Uma faixa avisa o perfil em uso e tem “Voltar ao meu perfil”.'] },
@@ -233,6 +236,8 @@ const Session = {
   clear() { this.mode = this.token = this.user = null; ls.del('session'); },
   get isStaff() { return this.user && (this.user.papel === 'admin' || this.user.papel === 'equipe'); },
   get isAdmin() { return this.user && this.user.papel === 'admin'; },
+  /** desenvolvedor do sistema: único com acesso à Gestão do App (no modo local, quem usa o app) */
+  get isDev() { return !!this.user && this.user.papel === 'admin' && (this.mode === 'local' || this.user.dev === true); },
   get remote() { return this.mode === 'remote'; }
 };
 
@@ -1191,6 +1196,8 @@ const App = {
     if (!Session.load()) return App.loginScreen();
     await DB.init();
     App.boot();
+    // confirma no servidor se este usuário é o desenvolvedor (mostra ou esconde a Gestão do App)
+    if (Session.remote && Session.isAdmin) api('whoami').then(w => { const d = !!w.dev; if (d !== (Session.user.dev === true)) { Session.user = { ...Session.user, dev: d }; Session.save(); if (Session.isStaff) { App.shell(); App.render(true); } } }).catch(() => {});
     if (Session.remote) DB.pull().then(() => { App.render(true); DB.flush(); }).catch(e => { if (e.code === 'AUTH') App.logout(); else UI.toast('Trabalhando com os dados guardados neste aparelho (sem conexão).', 'warn'); });
   },
   boot() {
@@ -1199,14 +1206,14 @@ const App = {
     App.shell(); App._nav = 0; window.onhashchange = () => { App._nav++; App.render(); }; App.render();
     App.checkPendentes();
     Escritorio.check().then(() => {
-      const pend = ls.get('escPend'); if (pend && Session.isAdmin) { ls.del('escPend'); if (pend.error) UI.toast('Conexão cancelada.', 'warn'); else return Escritorio.receber(pend.code, pend.state); }
+      const pend = ls.get('escPend'); if (pend && Session.isDev) { ls.del('escPend'); if (pend.error) UI.toast('Conexão cancelada.', 'warn'); else return Escritorio.receber(pend.code, pend.state); }
       App.render(true);
       DJEN.auto();
     });
     if (!Session.remote) DJEN.auto();
   },
   async checkPendentes() {
-    if (!Session.isAdmin || !Session.remote) return;
+    if (!Session.isDev || !Session.remote) return;
     try { const us = await api('users'); App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge(); } catch { }
   },
   badge() { $$('.pend-badge').forEach(b => { b.textContent = App.pendentes; b.hidden = !App.pendentes; }); },
@@ -1377,7 +1384,7 @@ const App = {
         <nav class="nav" id="nav"></nav>
         <div class="side-foot">
           <div id="conexSlot"></div>
-          ${Session.isAdmin ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
+          ${Session.isDev ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
           <button class="side-btn danger" id="btnOut">${icon('logout')}<span>Sair</span></button>
           <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><span class="dev-cred">por ${DEV.nome}</span><br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
         </div>
@@ -1462,7 +1469,7 @@ const App = {
       else if (a === 'empresas') Consult.list(v);
       else if (a === 'empresa') Consult.workspace(v, b, c || 'painel');
       else if (a === 'clientes') Views.clientes(v);
-      else if (a === 'gestao' && Session.isAdmin) Gestao.render(v, b || 'info');
+      else if (a === 'gestao' && Session.isDev) Gestao.render(v, b || 'info');
       else Views.painel(v);
     } catch (e) { console.error(e); v.innerHTML = `<div class="empty">${icon('alert')}<p>Erro ao abrir esta tela: ${esc(e.message)}</p></div>`; }
     if (keepScroll) scrollTo(0, y); else scrollTo(0, 0);
@@ -1676,7 +1683,7 @@ const Gestao = {
     const us = Gestao.users; App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge();
     const papel = { admin: 'Administrador', equipe: 'Equipe', cliente: 'Cliente' };
     const cliOpts = sel => `<option value="">— cliente —</option>${DB.all('clientes').sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}`;
-    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(String(u.clienteId).split(',').map(x => { const [id, pf] = x.split(':'); const n = DB.get('clientes', id)?.nome; return n ? n + (u.papel === 'cliente' ? ' · ' + ({ func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' }[pf || 'func']) : '') : ''; }).filter(Boolean).join(' + ')) : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
+    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.pessoa || (u.papel === 'cliente' ? u.email : u.nome) || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(String(u.clienteId).split(',').map(x => { const [id, pf] = x.split(':'); const n = DB.get('clientes', id)?.nome; return n ? n + (u.papel === 'cliente' ? ' · ' + ({ func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' }[pf || 'func']) : '') : ''; }).filter(Boolean).join(' + ')) : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
     const pend = us.filter(u => u.status === 'pendente'), ok = us.filter(u => u.status === 'autorizado'), bloq = us.filter(u => u.status === 'bloqueado');
     el.innerHTML = `
       <section class="card"><header><h2>⏳ Pedidos de acesso <span class="count">${pend.length}</span></h2></header>
@@ -2170,12 +2177,15 @@ const Consult = {
     try { [us, ped] = await Promise.all([api('users'), api('pedidosEquipe', { empresaId: e.id })]); } catch (err) { host.innerHTML = `<section class="card"><p class="muted">${esc(err.message)}</p></section>`; return; }
     const cid = e.clienteId, entr = u => String(u.clienteId || '').split(/[,;\s]+/).find(x => x.split(':')[0] === cid);
     const ms = cid ? us.filter(u => u.papel === 'cliente' && entr(u)).map(u => ({ ...u, perfil: (entr(u).split(':')[1] || 'func') })) : [];
+    const outras = u => String(u.clienteId || '').split(/[,;\s]+/).filter(x => x && x.split(':')[0] !== cid).map(x => { const [id, pf] = x.split(':'), em = DB.where('empresas', z => z.clienteId === id)[0]; return (em ? em.fantasia || em.razao : DB.get('clientes', id)?.nome || '') + ' · ' + ({ func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' }[pf || 'func']); }).filter(z => !z.startsWith(' ·')).join('; ');
+    const nomesEmp = new Set([...DB.all('clientes').map(c => norm(c.nome || '')), ...DB.all('empresas').flatMap(z => [norm(z.razao || ''), norm(z.fantasia || '')])]);
+    const nomeP = u => u.pessoa || (u.nome && !nomesEmp.has(norm(u.nome)) ? u.nome : '');
     const opt = sel => Consult.PERFIS.map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
     host.innerHTML = `<section class="card"><header><h2>${icon('key')} Acessos ao portal <small class="muted">${ms.length}</small></h2><button class="btn ghost sm" id="ppVer">${icon('eye')} Ver como a empresa</button></header>
         <p class="muted small"><b>Funcionário</b>: contratos (lista), pendências atribuídas e remessa. <b>Gerente</b>: contratos (lista), plano de ação, revisa e envia a remessa, pede acessos de funcionários. <b>Diretoria</b>: painel com carteira, receita, custos e margem (só consulta).</p>
-        ${ms.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>${ms.map(u => `<tr><td><b>${esc(u.nome || '—')}</b><small class="muted" style="display:block">${esc(u.email)}</small></td><td><select class="input sm" data-pf="${esc(u.email)}">${opt(u.perfil)}</select></td><td><small>${u.status !== 'autorizado' ? esc(u.status) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'convidado, ainda não entrou'}${u.temSenha ? ' · senha criada' : ''}</small></td><td class="right nowrap"><button class="link small" data-conv="${esc(u.email)}">reenviar convite</button>${u.temSenha ? ` · <button class="link small" data-zs="${esc(u.email)}">zerar senha</button>` : ''} · <button class="link small danger-text" data-rmv="${esc(u.email)}">remover</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Ninguém tem acesso ainda.</p>'}</section>
-      ${ped.length ? `<section class="card"><header><h2>⏳ Pedidos do gerente <small class="muted">${ped.length}</small></h2></header>${ped.map(p => `<div class="u-row"><div class="u-who"><b>${p.tipo === 'remover' ? 'Remover' : 'Incluir como funcionário'}: ${esc(p.nome || p.email)}</b><small>${esc(p.email)} · pedido por ${esc(p.por)} em ${fmtDateTime(p.em)}</small></div><div class="u-act"><button class="btn primary sm" data-apr="${p.id}">Aprovar</button><button class="btn ghost sm" data-rec="${p.id}">Recusar</button></div></div>`).join('')}</section>` : ''}
-      <section class="card"><header><h2>${icon('plus')} Adicionar acesso</h2></header><form class="grid-form" id="ppF"><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld"><label>Nome (opcional)</label><input name="nome"></div><div class="fld"><label>Perfil</label><select name="pf">${opt('func')}</select></div><div class="fld right" style="align-self:end"><button class="btn primary" id="ppAdd">${icon('mail')} Liberar e enviar convite</button></div></form></section>
+        ${ms.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil nesta empresa</th><th>Situação</th><th></th></tr></thead><tbody>${ms.map(u => `<tr><td>${nomeP(u) ? `<b>${esc(nomeP(u))}</b>` : '<b class="muted">nome ainda não informado</b>'} <span class="muted">(${esc(u.email)}${u.telefone ? ` / ${zapLink(u.telefone)}` : ''})</span>${outras(u) ? `<small class="muted" style="display:block">Também acessa: ${esc(outras(u))}</small>` : ''}</td><td><select class="input sm" data-pf="${esc(u.email)}">${opt(u.perfil)}</select></td><td><small>${u.status !== 'autorizado' ? esc(u.status) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'convidado, ainda não entrou'}${u.temSenha ? ' · senha criada' : ''}</small></td><td class="right nowrap"><button class="link small" data-conv="${esc(u.email)}">reenviar convite</button>${u.temSenha ? ` · <button class="link small" data-zs="${esc(u.email)}">zerar senha</button>` : ''} · <button class="link small danger-text" data-rmv="${esc(u.email)}">remover</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Ninguém tem acesso ainda.</p>'}</section>
+      ${ped.length ? `<section class="card"><header><h2>⏳ Pedidos do gerente <small class="muted">${ped.length}</small></h2></header>${ped.map(p => `<div class="u-row"><div class="u-who"><b>${p.tipo === 'remover' ? 'Remover' : 'Incluir como funcionário'}: ${esc(p.nome || p.email)}</b><small>${esc(p.email)}${p.telefone ? ' / ' + esc(p.telefone) : ''} · pedido por ${esc(p.por)} em ${fmtDateTime(p.em)}</small></div><div class="u-act"><button class="btn primary sm" data-apr="${p.id}">Aprovar</button><button class="btn ghost sm" data-rec="${p.id}">Recusar</button></div></div>`).join('')}</section>` : ''}
+      <section class="card"><header><h2>${icon('plus')} Adicionar acesso</h2></header><form class="grid-form" id="ppF"><div class="fld"><label>Nome completo</label><input name="nome" autocomplete="off"></div><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld"><label>WhatsApp</label><input name="tel" inputmode="tel" placeholder="83 99999.9999"></div><div class="fld"><label>Perfil</label><select name="pf">${opt('func')}</select></div><p class="muted small full">Nome e WhatsApp são opcionais aqui; a própria pessoa pode completar ou corrigir em “Meus dados”, no portal.</p><div class="fld right" style="align-self:end"><button class="btn primary" id="ppAdd">${icon('mail')} Liberar e enviar convite</button></div></form></section>
       ${achBox}`;
     const salvar = async (user, invite, btn, msg) => {
       const h0 = btn?.innerHTML; if (btn) { btn.disabled = true; btn.innerHTML = `${icon('sync', 'spin')} Enviando…`; }
@@ -2184,13 +2194,13 @@ const Consult = {
     };
     const garanteCli = async () => (await Consult.clientePortal(DB.get('empresas', e.id))).id;
     $('#ppVer', host).onclick = async () => Portal.preview(await garanteCli());
-    $('#ppF', host).onsubmit = async ev => { ev.preventDefault(); const f = ev.target, c = await garanteCli(); salvar({ email: f.email.value.trim().toLowerCase(), nome: f.nome.value.trim() || undefined, papel: 'cliente', clienteId: c + ':' + f.pf.value, status: 'autorizado' }, true, $('#ppAdd', host), `Acesso liberado e convite enviado para ${f.email.value.trim()}.`); };
+    $('#ppF', host).onsubmit = async ev => { ev.preventDefault(); const f = ev.target, c = await garanteCli(); salvar({ email: f.email.value.trim().toLowerCase(), pessoaNome: f.nome.value.trim(), pessoaTel: f.tel.value.trim(), papel: 'cliente', clienteId: c + ':' + f.pf.value, status: 'autorizado' }, true, $('#ppAdd', host), `Acesso liberado e convite enviado para ${f.email.value.trim()}.`); };
     $$('[data-pf]', host).forEach(s => s.onchange = () => salvar({ email: s.dataset.pf, papel: 'cliente', clienteId: cid + ':' + s.value, status: 'autorizado' }, false, null, 'Perfil alterado. Vale a partir do próximo acesso da pessoa.'));
     $$('[data-conv]', host).forEach(b => b.onclick = () => salvar({ email: b.dataset.conv, papel: 'cliente', clienteId: cid + ':' + ms.find(u => u.email === b.dataset.conv).perfil, status: 'autorizado' }, true, b, 'Convite reenviado.'));
     $$('[data-zs]', host).forEach(b => b.onclick = async () => { if (!confirm(`Zerar a senha de ${b.dataset.zs}?`)) return; try { await api('senhaZerar', { email: b.dataset.zs }); UI.toast('Senha zerada.', 'ok'); Consult.portalTab(host, e); } catch (err) { UI.toast(err.message, 'bad'); } });
     $$('[data-rmv]', host).forEach(b => b.onclick = () => confirm(`Remover o acesso de ${b.dataset.rmv} a esta empresa? As outras empresas dele não mudam.`) && salvar({ email: b.dataset.rmv, papel: 'cliente', clienteId: '', removerCliente: cid, status: 'autorizado' }, false, b, 'Acesso removido.'));
     $$('[data-apr]', host).forEach(b => b.onclick = async () => { const p = ped.find(x => x.id === b.dataset.apr), c = await garanteCli(); b.disabled = true;
-      try { await api('userSave', p.tipo === 'remover' ? { user: { email: p.email, papel: 'cliente', clienteId: '', removerCliente: c, status: 'autorizado' } } : { user: { email: p.email, nome: p.nome || undefined, papel: 'cliente', clienteId: c + ':func', status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname });
+      try { await api('userSave', p.tipo === 'remover' ? { user: { email: p.email, papel: 'cliente', clienteId: '', removerCliente: c, status: 'autorizado' } } : { user: { email: p.email, pessoaNome: p.nome || '', pessoaTel: p.telefone || '', papel: 'cliente', clienteId: c + ':func', status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname });
         await api('pedidoResolver', { id: p.id, aprovado: true }); UI.toast(p.tipo === 'remover' ? 'Acesso removido.' : 'Aprovado e convite enviado.', 'ok'); Consult.portalTab(host, e); } catch (err) { b.disabled = false; UI.toast(err.message, 'bad'); } });
     $$('[data-rec]', host).forEach(b => b.onclick = async () => { try { await api('pedidoResolver', { id: b.dataset.rec, aprovado: false }); UI.toast('Pedido recusado.'); Consult.portalTab(host, e); } catch (err) { UI.toast(err.message, 'bad'); } });
     $('#ppPub', host).onclick = () => Consult.publicar(e);
@@ -2220,7 +2230,7 @@ const Consult = {
     if (!enviar.length) return;
     const html0 = btn?.innerHTML; if (btn) { btn.disabled = true; btn.classList.add('busy'); }
     const prog = (i) => { if (btn) btn.innerHTML = `${icon('sync', 'spin')} Enviando convite${enviar.length > 1 ? ` ${i}/${enviar.length}` : ''}…`; };
-    try { let i = 0; for (const m of enviar) { prog(++i); await api('userSave', { user: { email: m, nome: c.nome, papel: 'cliente', clienteId: c.id, status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname }); }
+    try { let i = 0; for (const m of enviar) { prog(++i); await api('userSave', { user: { email: m, papel: 'cliente', clienteId: c.id, status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname }); }
       await DB.save('empresas', { ...DB.get('empresas', e.id), portalConvite: new Date().toISOString(), portalEmails: [...new Set([...ja, ...enviar])] });
       App.render(true);
       UI.modal({ title: 'Portal habilitado', sub: esc(e.fantasia || e.razao), body: `<div class="notice ok">${icon('check')}<div>Convite enviado para:<br><b>${enviar.map(esc).join('<br>')}</b></div></div><p class="muted">Cada pessoa abre o link do app, toca em <b>“Sou cliente — consultar meus processos”</b>, informa o próprio e-mail e digita o código que chega por e-mail.</p>`, foot: '<span class="sp"></span><button class="btn primary" data-close>Entendi</button>' });
@@ -3432,7 +3442,7 @@ const Escritorio = {
   /** tela de bloqueio enquanto o escritório não estiver conectado */
   gate(v) {
     App.crumbs([{ t: 'Conectar ao escritório' }]);
-    const adm = Session.isAdmin, des = Escritorio.st?.desatualizado;
+    const adm = Session.isDev, des = Escritorio.st?.desatualizado;
     v.innerHTML = `<div class="gate"><img src="${BRAND.logoDark}" alt="" class="gate-logo"><div class="caption dark">${BRAND.caption}</div>
       <h1>Conectar ao escritório</h1>
       ${des ? `<div class="notice">${icon('alert')}<div>O servidor (Apps Script) ainda está na versão anterior. Cole o novo <b>Codigo.gs</b> e publique uma <b>Nova versão</b> da implantação.</div></div>` : ''}
@@ -4127,7 +4137,7 @@ const DJEN = {
 
   /* ---------- cartão do painel / judicial ---------- */
   cardHtml() {
-    if (!DJEN.advogados().length) return Session.isAdmin ? `<section class="card djen-card"><header><h2>${icon('mail')} Intimações pela OAB (DJEN)</h2></header><p class="muted small">Cadastre os advogados do escritório em <a href="#/gestao/sistema">Gestão do App › Sistema</a> e o app passa a buscar sozinho, todo dia, as intimações e os processos em que eles atuam.</p></section>` : '';
+    if (!DJEN.advogados().length) return Session.isDev ? `<section class="card djen-card"><header><h2>${icon('mail')} Intimações pela OAB (DJEN)</h2></header><p class="muted small">Cadastre os advogados do escritório em <a href="#/gestao/sistema">Gestão do App › Sistema</a> e o app passa a buscar sozinho, todo dia, as intimações e os processos em que eles atuam.</p></section>` : '';
     const s = DJEN.estado(), existe = new Set(DB.all('processos').map(p => onlyDigits(p.numero))), pend = (s.pendentes || []).filter(q => !existe.has(q.numero));
     const recentes = DB.where('movimentos', m => m.origem === 'djen').sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 5);
     return `<section class="card djen-card"><header><h2>${icon('mail')} Intimações pela OAB (DJEN)</h2><span class="muted small" data-djen-st>${DJEN.rodando ? icon('sync', 'spin') + ' consultando…' : DJEN.status()}</span></header>
@@ -5576,6 +5586,8 @@ ConnSplash.escolherLogo = e => {
    dia a dia) · dir = Diretoria (visão estratégica, só consulta).
    O servidor já entrega só os dados de cada perfil; aqui ficam as telas.
    ===================================================================== */
+/** telefone no formato 83 99999.9999 com o ícone do WhatsApp clicável */
+function zapLink(t) { const d = onlyDigits(t).replace(/^55(?=\d{10,11}$)/, ''); const f = d.length === 11 ? `${d.slice(0, 2)} ${d.slice(2, 7)}.${d.slice(7)}` : d.length === 10 ? `${d.slice(0, 2)} ${d.slice(2, 6)}.${d.slice(6)}` : t; return `${esc(f)} <a class="wa-ic" href="https://wa.me/55${d}" target="_blank" rel="noopener" title="Conversar no WhatsApp">${icon('whatsapp')}</a>`; }
 const Perfis = {
   NOMES: { func: 'Funcionário', ger: 'Gerente / Administrador', dir: 'Diretoria' },
   CURTO: { func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' },
@@ -5648,12 +5660,12 @@ const Perfis = {
     let d; try { d = await api('equipe', { empresaId: e.id }); } catch (err) { host.innerHTML = `<section class="card"><p class="muted">${esc(err.message)}</p></section>`; return; }
     const desenha = () => {
       host.innerHTML = `<section class="card"><header><h2>${icon('users')} Equipe com acesso <small class="muted">${d.membros.length}</small></h2></header>
-        <div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Último acesso</th><th></th></tr></thead><tbody>${d.membros.map(m => `<tr><td><b>${esc(m.nome || '—')}</b><small class="muted" style="display:block">${esc(m.email)}</small></td><td>${esc(Perfis.CURTO[m.perfil] || m.perfil)}</td><td>${m.ultimoAcesso ? fmtDateTime(m.ultimoAcesso) : 'ainda não entrou'}</td><td>${m.perfil === 'func' && m.email !== Session.user.email ? `<button class="link small" data-rem="${esc(m.email)}">pedir remoção</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Último acesso</th><th></th></tr></thead><tbody>${d.membros.map(m => `<tr><td><b>${esc(m.nome || 'nome ainda não informado')}</b> <span class="muted">(${esc(m.email)}${m.telefone ? ` / ${zapLink(m.telefone)}` : ''})</span></td><td>${esc(Perfis.CURTO[m.perfil] || m.perfil)}</td><td>${m.ultimoAcesso ? fmtDateTime(m.ultimoAcesso) : 'ainda não entrou'}</td><td>${m.perfil === 'func' && m.email !== Session.user.email ? `<button class="link small" data-rem="${esc(m.email)}">pedir remoção</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>
         <section class="card"><header><h2>${icon('plus')} Pedir acesso para um funcionário</h2></header><p class="muted small">O escritório aprova o pedido e o funcionário recebe o convite por e-mail.</p>
-          <form class="grid-form" id="eqF"><div class="fld"><label>Nome</label><input name="nome" required></div><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld full right"><button class="btn primary">${icon('upload')} Enviar pedido ao escritório</button></div></form></section>
+          <form class="grid-form" id="eqF"><div class="fld"><label>Nome completo</label><input name="nome" required></div><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld"><label>WhatsApp</label><input name="tel" inputmode="tel" placeholder="83 99999.9999"></div><div class="fld full right"><button class="btn primary">${icon('upload')} Enviar pedido ao escritório</button></div></form></section>
         ${d.pedidos.length ? `<section class="card"><header><h2>⏳ Pedidos aguardando o escritório</h2></header><ul class="plain">${d.pedidos.map(p => `<li>${p.tipo === 'remover' ? 'Remover' : 'Incluir'} <b>${esc(p.nome || p.email)}</b> (${esc(p.email)}) · ${fmtDateTime(p.em)} <button class="link small" data-cancel="${p.id}">cancelar</button></li>`).join('')}</ul></section>` : ''}`;
       const pedir = async (o, btn) => { if (btn) btn.disabled = true; try { d.pedidos = await api('equipePedido', { empresaId: e.id, ...o }); UI.toast('Pedido enviado ao escritório.', 'ok'); desenha(); } catch (err) { if (btn) btn.disabled = false; UI.toast(err.message, 'bad'); } };
-      $('#eqF', host).onsubmit = ev => { ev.preventDefault(); const f = ev.target; pedir({ nome: f.nome.value.trim(), email: f.email.value.trim(), tipo: 'incluir' }, $('button', f)); };
+      $('#eqF', host).onsubmit = ev => { ev.preventDefault(); const f = ev.target; pedir({ nome: f.nome.value.trim(), email: f.email.value.trim(), telefone: f.tel.value.trim(), tipo: 'incluir' }, $('button', f)); };
       $$('[data-rem]', host).forEach(b => b.onclick = () => confirm(`Pedir ao escritório a remoção do acesso de ${b.dataset.rem}?`) && pedir({ email: b.dataset.rem, tipo: 'remover' }, b));
       $$('[data-cancel]', host).forEach(b => b.onclick = () => pedir({ cancelar: b.dataset.cancel }, b));
     };

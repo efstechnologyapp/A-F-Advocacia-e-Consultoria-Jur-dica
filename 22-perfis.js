@@ -4,6 +4,8 @@
    dia a dia) · dir = Diretoria (visão estratégica, só consulta).
    O servidor já entrega só os dados de cada perfil; aqui ficam as telas.
    ===================================================================== */
+/** telefone no formato 83 99999.9999 com o ícone do WhatsApp clicável */
+function zapLink(t) { const d = onlyDigits(t).replace(/^55(?=\d{10,11}$)/, ''); const f = d.length === 11 ? `${d.slice(0, 2)} ${d.slice(2, 7)}.${d.slice(7)}` : d.length === 10 ? `${d.slice(0, 2)} ${d.slice(2, 6)}.${d.slice(6)}` : t; return `${esc(f)} <a class="wa-ic" href="https://wa.me/55${d}" target="_blank" rel="noopener" title="Conversar no WhatsApp">${icon('whatsapp')}</a>`; }
 const Perfis = {
   NOMES: { func: 'Funcionário', ger: 'Gerente / Administrador', dir: 'Diretoria' },
   CURTO: { func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' },
@@ -76,12 +78,12 @@ const Perfis = {
     let d; try { d = await api('equipe', { empresaId: e.id }); } catch (err) { host.innerHTML = `<section class="card"><p class="muted">${esc(err.message)}</p></section>`; return; }
     const desenha = () => {
       host.innerHTML = `<section class="card"><header><h2>${icon('users')} Equipe com acesso <small class="muted">${d.membros.length}</small></h2></header>
-        <div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Último acesso</th><th></th></tr></thead><tbody>${d.membros.map(m => `<tr><td><b>${esc(m.nome || '—')}</b><small class="muted" style="display:block">${esc(m.email)}</small></td><td>${esc(Perfis.CURTO[m.perfil] || m.perfil)}</td><td>${m.ultimoAcesso ? fmtDateTime(m.ultimoAcesso) : 'ainda não entrou'}</td><td>${m.perfil === 'func' && m.email !== Session.user.email ? `<button class="link small" data-rem="${esc(m.email)}">pedir remoção</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Último acesso</th><th></th></tr></thead><tbody>${d.membros.map(m => `<tr><td><b>${esc(m.nome || 'nome ainda não informado')}</b> <span class="muted">(${esc(m.email)}${m.telefone ? ` / ${zapLink(m.telefone)}` : ''})</span></td><td>${esc(Perfis.CURTO[m.perfil] || m.perfil)}</td><td>${m.ultimoAcesso ? fmtDateTime(m.ultimoAcesso) : 'ainda não entrou'}</td><td>${m.perfil === 'func' && m.email !== Session.user.email ? `<button class="link small" data-rem="${esc(m.email)}">pedir remoção</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>
         <section class="card"><header><h2>${icon('plus')} Pedir acesso para um funcionário</h2></header><p class="muted small">O escritório aprova o pedido e o funcionário recebe o convite por e-mail.</p>
-          <form class="grid-form" id="eqF"><div class="fld"><label>Nome</label><input name="nome" required></div><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld full right"><button class="btn primary">${icon('upload')} Enviar pedido ao escritório</button></div></form></section>
+          <form class="grid-form" id="eqF"><div class="fld"><label>Nome completo</label><input name="nome" required></div><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld"><label>WhatsApp</label><input name="tel" inputmode="tel" placeholder="83 99999.9999"></div><div class="fld full right"><button class="btn primary">${icon('upload')} Enviar pedido ao escritório</button></div></form></section>
         ${d.pedidos.length ? `<section class="card"><header><h2>⏳ Pedidos aguardando o escritório</h2></header><ul class="plain">${d.pedidos.map(p => `<li>${p.tipo === 'remover' ? 'Remover' : 'Incluir'} <b>${esc(p.nome || p.email)}</b> (${esc(p.email)}) · ${fmtDateTime(p.em)} <button class="link small" data-cancel="${p.id}">cancelar</button></li>`).join('')}</ul></section>` : ''}`;
       const pedir = async (o, btn) => { if (btn) btn.disabled = true; try { d.pedidos = await api('equipePedido', { empresaId: e.id, ...o }); UI.toast('Pedido enviado ao escritório.', 'ok'); desenha(); } catch (err) { if (btn) btn.disabled = false; UI.toast(err.message, 'bad'); } };
-      $('#eqF', host).onsubmit = ev => { ev.preventDefault(); const f = ev.target; pedir({ nome: f.nome.value.trim(), email: f.email.value.trim(), tipo: 'incluir' }, $('button', f)); };
+      $('#eqF', host).onsubmit = ev => { ev.preventDefault(); const f = ev.target; pedir({ nome: f.nome.value.trim(), email: f.email.value.trim(), telefone: f.tel.value.trim(), tipo: 'incluir' }, $('button', f)); };
       $$('[data-rem]', host).forEach(b => b.onclick = () => confirm(`Pedir ao escritório a remoção do acesso de ${b.dataset.rem}?`) && pedir({ email: b.dataset.rem, tipo: 'remover' }, b));
       $$('[data-cancel]', host).forEach(b => b.onclick = () => pedir({ cancelar: b.dataset.cancel }, b));
     };

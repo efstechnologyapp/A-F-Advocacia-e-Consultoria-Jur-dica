@@ -5,7 +5,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.20.3';
+const APP_VERSAO = '1.21.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -14,6 +14,9 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.21.0', data: '12/11/2026', itens: ['A página Gestão do App (sistema, usuários do escritório, log, conexão do Drive e chave de IA) passa a ser exclusiva do desenvolvedor (EFS Technology). Os demais administradores continuam cuidando dos acessos de clientes nas empresas.'] },
+  { numero: '1.20.5', data: '12/11/2026', itens: ['Portal da empresa › Acessos: a coluna “Pessoa” mostra “Nome (e-mail / telefone)” de cada usuário autorizado, com o WhatsApp clicável. Nome completo e WhatsApp podem ser informados no convite (pelo escritório ou no pedido do gerente) e a própria pessoa completa ou corrige em “Meus dados”.'] },
+  { numero: '1.20.4', data: '12/11/2026', itens: ['Portal da empresa › Acessos: cada pessoa aparece uma vez, pelo e-mail e pelo nome que ela mesma informou (não mais o nome da empresa), com o perfil nesta empresa e a linha “Também acessa” para as outras empresas dela.', 'Servidor: registros repetidos do mesmo e-mail são juntados automaticamente.'] },
   { numero: '1.20.3', data: '12/11/2026', itens: ['Crédito do desenvolvedor (EFS Technology, WhatsApp e e-mail) no login, no menu, em “Sobre o App” e no portal do cliente.', 'Proteção: o app só roda nos endereços autorizados; uma cópia publicada em outro domínio mostra o aviso de cópia não autorizada. Aviso de direitos autorais no código.'] },
   { numero: '1.20.2', data: '12/11/2026', itens: ['Portal: quem tem acesso a várias empresas vê uma abertura própria — o cartão percorre os logos das empresas, acendendo um ponto para cada uma, e termina na tela de escolha.'] },
   { numero: '1.20.1', data: '12/11/2026', itens: ['Portal: quem tem perfil mais alto pode atuar num perfil abaixo (Diretoria → Gerente ou Funcionário; Gerente → Funcionário), pelo menu em “Atuar como”. Uma faixa avisa o perfil em uso e tem “Voltar ao meu perfil”.'] },
@@ -222,6 +225,8 @@ const Session = {
   clear() { this.mode = this.token = this.user = null; ls.del('session'); },
   get isStaff() { return this.user && (this.user.papel === 'admin' || this.user.papel === 'equipe'); },
   get isAdmin() { return this.user && this.user.papel === 'admin'; },
+  /** desenvolvedor do sistema: único com acesso à Gestão do App (no modo local, quem usa o app) */
+  get isDev() { return !!this.user && this.user.papel === 'admin' && (this.mode === 'local' || this.user.dev === true); },
   get remote() { return this.mode === 'remote'; }
 };
 
