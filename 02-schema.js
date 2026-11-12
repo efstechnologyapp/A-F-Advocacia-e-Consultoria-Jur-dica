@@ -88,6 +88,7 @@ const SCHEMAS = {
       F('endereco', 'Endereço', 'text', { w: 'full' }),
       F('socios', 'Quadro de sócios e administradores', 'long'),
       F('sigla', 'Prefixo dos IDs de contrato', 'text', { hint: 'Ex.: JSP (gera JSP-001, JSP-002…)' }),
+      F('diaRemessa', 'Dia limite da remessa mensal', 'num', { hint: 'A empresa envia, pelo portal, os números e documentos do mês anterior até este dia (padrão: 15).' }),
       F('contato', 'Contato principal', 'text'),
       F('email', 'E-mail', 'email'),
       F('telefone', 'Telefone', 'tel'),

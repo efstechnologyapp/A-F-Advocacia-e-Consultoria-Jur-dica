@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.16.2';
+const APP_VERSAO = '1.17.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.17.0', data: '12/11/2026', itens: ['Remessa mensal: no portal, a empresa informa por contrato o faturado, o recebido, os postos ocupados, faltas e ocorrências, e anexa os documentos do mês (folha, benefícios, FGTS/INSS, notas, recebimentos, ponto, aditivos/apólices).', 'Tudo o que a empresa envia entra na fila “Remessas mensais” do escritório e só alimenta os dados gerais quando aprovado: divergências automáticas (faturado × contrato, recebido × faturado, postos, documentos obrigatórios) viram achados; números vão para Financeiro e Mão de obra; arquivos para Documentos.', 'Aba “Remessas mensais” em cada empresa, indicador na Visão geral e prazo mensal configurável no cadastro da empresa.', 'Portal: abertura com o cartão de conexão (brasão × logo da empresa). Botão “Logo” na página da empresa.'] },
   { numero: '1.16.2', data: '11/11/2026', itens: ['Páginas do menu (áreas do Judicial, Agenda, Empresas, Achados, Clientes…) ganharam o botão “Visão geral” no topo; ao voltar, a visão geral abre no card da seção de onde você veio (Judicial ou Consultoria).'] },
   { numero: '1.16.1', data: '11/11/2026', itens: ['Visão geral: as abas Judicial e Consultoria viraram dois cards com resumo (processos e compromissos; empresas e achados de risco alto); o card escolhido fica destacado.'] },
   { numero: '1.16.0', data: '11/11/2026', itens: ['Visão geral separada em duas abas, Judicial e Consultoria; o app lembra a última aba aberta.', 'Judicial: processos em andamento, compromissos em 7 dias, intimações novas do DJEN, próximos compromissos, processos por área e últimas movimentações.', 'Consultoria: empresas, contratos auditados, contratos vencendo em 90 dias (com a lista), achados de risco alto e alertas.'] },
@@ -207,7 +208,7 @@ const Session = {
 };
 
 /* ---------- Banco de dados local + sincronização ---------- */
-const COLLS = ['clientes', 'processos', 'movimentos', 'prazos', 'empresas', 'contratos', 'obrigacoes', 'maoDeObra', 'materiais', 'financeiro', 'medicoes', 'indicadores', 'achados', 'documentos', 'aditivos', 'config', 'atendimentos', 'supervenientes'];
+const COLLS = ['clientes', 'processos', 'movimentos', 'prazos', 'empresas', 'contratos', 'obrigacoes', 'maoDeObra', 'materiais', 'financeiro', 'medicoes', 'indicadores', 'achados', 'documentos', 'aditivos', 'config', 'atendimentos', 'supervenientes', 'remessas'];
 const DB = {
   data: {}, outbox: [], syncing: false, lastSync: null,
   key() { return 'db:' + (Session.mode || 'x') + ':' + (Session.user?.email || 'local'); },

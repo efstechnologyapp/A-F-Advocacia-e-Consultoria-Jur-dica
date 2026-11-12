@@ -8,6 +8,8 @@ const Portal = {
     document.getElementById('root').innerHTML = `<div class="portal" id="portal"></div>`;
     window.onhashchange = null;
     Portal.render();
+    const u0 = Session.user, emp0 = DB.where('empresas', e => e.clienteId === u0.clienteId)[0];
+    ConnSplash.show(emp0, (DB.get('clientes', u0.clienteId) || {}).nome || u0.nome);
   },
   render() { Portal.draw($('#portal'), Session.user.clienteId, false); },
   preview(clienteId, procId) {
@@ -25,7 +27,7 @@ const Portal = {
     const emps = DB.where('empresas', e => e.clienteId === clienteId);
     const vis = id => DB.where('movimentos', m => m.processoId === id && m.visivelCliente).sort((a, b) => String(b.data).localeCompare(String(a.data)));
     const ag = DB.where('prazos', x => procs.some(p => p.id === x.processoId) && x.visivelCliente && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data));
-    const tabs = [['processos', 'Meus processos'], ['agenda', 'Agenda'], ...(emps.length ? [['consultoria', 'Consultoria']] : []), ['contato', 'Fale com o escritório']];
+    const tabs = [['processos', 'Meus processos'], ['agenda', 'Agenda'], ...(emps.length ? [['consultoria', 'Consultoria'], ['remessa', 'Remessa mensal']] : []), ['contato', 'Fale com o escritório']];
     const wa = onlyDigits(esc0.whatsapp);
     let body = '';
     if (st.tab === 'processos' && st.proc) {
@@ -38,6 +40,8 @@ const Portal = {
       body = procs.length ? `<div class="p-cards">${procs.map(p => { const m = vis(p.id)[0]; return `<button class="p-card" data-proc="${p.id}"><div class="p-card-h">${icon(AREAS[p.area]?.icon || 'scale')}<span>${esc(AREAS[p.area]?.nome || '')}</span>${pill(p.status || 'Ativo')}</div><b class="mono">${esc(fmtCNJ(p.numero))}</b><small>${esc(p.classe || '')}</small><div class="p-last">${m ? `<time>${esc(fmtDate(m.data))}</time> ${esc(m.titulo)}` : 'Sem movimentações ainda'}</div><span class="p-more">Ver andamento ${icon('chevR')}</span></button>`; }).join('')}</div>` : `<div class="empty">${icon('scale')}<p>Nenhum processo vinculado ao seu cadastro.</p></div>`;
     } else if (st.tab === 'agenda') {
       body = ag.length ? `<section class="card"><ul class="agenda-list">${ag.map(x => { const p = DB.get('processos', x.processoId); return `<li><div class="ag-date"><b>${fmtDate(x.data).slice(0, 5)}</b><small>${esc(x.hora || '')}</small></div><div class="ag-body"><span class="pill info">${esc(x.tipo)}</span> <b>${esc(x.descricao)}</b><small>${esc(x.local || '')} · ${esc(fmtCNJ(p?.numero))}</small></div></li>`; }).join('')}</ul></section>` : `<div class="empty">${icon('calendar')}<p>Nenhum compromisso agendado.</p></div>`;
+    } else if (st.tab === 'remessa') {
+      body = '<div id="pRem"></div>';
     } else if (st.tab === 'consultoria') {
       body = emps.map(e => { const S = Consult.stats(e), ins = Consult.insights(S); return `<section class="card"><header><h2>${icon('building')} ${esc(e.fantasia || e.razao)}</h2></header>
         <div class="kpis sm">${kpi('Contratos vigentes', `${S.at.length}/${S.cs.length}`)}${kpi('Completude documental', fmtPct(S.compl))}${kpi('Conformidade', fmtPct(S.conf))}${kpi('Ações em aberto', S.achAbertos.length)}</div>
@@ -61,6 +65,7 @@ const Portal = {
     $$('[data-back]', root).forEach(b => b.onclick = () => { st.proc = null; redraw(); });
     $$('[data-rep]', root).forEach(b => b.onclick = () => Report.open(DB.get('empresas', b.dataset.rep), { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: esc0.advogado, oab: esc0.oab, conf: true }));
     $('#pOut', root)?.addEventListener('click', () => App.logout());
+    if ($('#pRem', root)) Remessa.portal($('#pRem', root), emps, redraw);
   }
 };
 

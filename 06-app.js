@@ -207,6 +207,7 @@ const App = {
       ${item('/agenda', 'calendar', 'Agenda e prazos', DB.where('prazos', p => !p.concluido && daysUntil(p.data) !== null && daysUntil(p.data) <= 7).length || '')}
       <div class="nav-h">Consultoria jurídica</div>
       ${item('/empresas', 'building', 'Empresas', DB.all('empresas').length || '')}
+      ${item('/remessas', 'upload', 'Remessas mensais', Remessa.fila().length || '')}
       ${DB.all('achados').length ? item('/achados', 'alert', 'Achados de auditoria', DB.where('achados', x => achadoAberto(x) && /alto|cr[ií]tico/i.test(x.risco || '')).length || '') : ''}
       ${DB.all('empresas').sort((a, b) => (a.fantasia || a.razao).localeCompare(b.fantasia || b.razao)).map(e => `<a href="#/empresa/${e.id}" class="sub ${route.startsWith('/empresa/' + e.id) ? 'on' : ''}"><span>${esc(e.fantasia || e.razao)}</span></a>`).join('')}
       <div class="nav-h">Cadastros</div>
@@ -214,14 +215,14 @@ const App = {
     $('#lnkGestao')?.classList.toggle('on', route.startsWith('/gestao'));
   },
   /** páginas de primeiro nível (menu) não têm "Voltar"; as de detalhe têm */
-  TOPO: /^#?\/?(painel|judicial\/[a-z]+|agenda|atendimentos|clientes|empresas|achados|consulta|gestao(\/[a-z]+)?)?$/,
+  TOPO: /^#?\/?(painel|judicial\/[a-z]+|agenda|atendimentos|clientes|empresas|achados|remessas|consulta|gestao(\/[a-z]+)?)?$/,
   voltar(parts) {
     if (App._nav > 0) { App._nav -= 2; history.back(); return; }
     const pai = [...parts].reverse().slice(1).find(p => p.href); location.hash = '#' + (pai ? pai.href : '/painel');
   },
   crumbs(parts) {
     const topo = App.TOPO.test(location.hash), h = location.hash, inicio = !h || /^#\/?(painel)?$/.test(h);
-    const sec = /^#\/(judicial|processo|agenda|atendimentos)/.test(h) ? 'jud' : /^#\/(empresa|achados|contrato)/.test(h) ? 'con' : '';
+    const sec = /^#\/(judicial|processo|agenda|atendimentos)/.test(h) ? 'jud' : /^#\/(empresa|achados|contrato|remessas)/.test(h) ? 'con' : '';
     if (sec) try { localStorage.setItem('af-painel-aba', sec); } catch (_) {}
     $('#crumbs').innerHTML = (topo ? (inicio ? '' : `<a class="back-btn" href="#/painel" title="Voltar à visão geral">${icon('chevL')}<span>Visão geral</span></a>`) : `<button class="back-btn" id="btnVoltar" title="Voltar à página anterior">${icon('chevL')}<span>Voltar</span></button>`) + parts.map((p, i) => i < parts.length - 1 && p.href ? `<a href="#${p.href}">${esc(p.t)}</a>` : `<b>${esc(p.t)}</b>`).join(`<span class="sep">/</span>`);
     $('#btnVoltar')?.addEventListener('click', () => App.voltar(parts));
@@ -242,6 +243,7 @@ const App = {
       else if (a === 'atendimentos') Atend.list(v);
       else if (a === 'atendimento') Atend.detail(v, b, c || 'caso');
       else if (a === 'achados') Achados.view(v);
+      else if (a === 'remessas') Remessa.view(v);
       else if (a === 'empresas') Consult.list(v);
       else if (a === 'empresa') Consult.workspace(v, b, c || 'painel');
       else if (a === 'clientes') Views.clientes(v);
@@ -335,6 +337,7 @@ const Views = {
       ${kpi('Contratos auditados', DB.all('contratos').length, `nas ${empresas.length} empresa(s)`, '', '#/empresas')}
       ${kpi('Contratos vencendo (90 dias)', venc90.length, venc90.length ? '<u>ver lista</u>' : 'renovação ou encerramento', venc90.length ? 'warn' : '', venc90.length ? '#/painel?v90=1' : '')}
       ${kpi('Achados de risco alto', achAlt.length, achAlt.length ? 'em aberto · <u>ver e resolver</u>' : 'em aberto nos planos de ação', achAlt.length ? 'bad' : '', '#/achados')}
+      ${kpi('Remessas para analisar', Remessa.fila().length, Remessa.fila().length ? '<u>abrir a fila</u>' : 'enviadas pelas empresas', Remessa.fila().length ? 'warn' : '', '#/remessas')}
     </div>
     <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>`;
     v.innerHTML = `
