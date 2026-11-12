@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.15.0';
+const APP_VERSAO = '1.16.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.16.0', data: '11/11/2026', itens: ['Visão geral separada em duas abas, Judicial e Consultoria; o app lembra a última aba aberta.', 'Judicial: processos em andamento, compromissos em 7 dias, intimações novas do DJEN, próximos compromissos, processos por área e últimas movimentações.', 'Consultoria: empresas, contratos auditados, contratos vencendo em 90 dias (com a lista), achados de risco alto e alertas.'] },
   { numero: '1.15.0', data: '11/11/2026', itens: ['Judicial: cada área (e “Todos os processos”) tem os cards “Pessoas físicas” e “Pessoas jurídicas”; tocar num card mostra só os processos daquele tipo, com as relações do escritório e em parceria. O tipo vem do cadastro do cliente (ou do CNPJ).', 'Card “Cliente a definir” aparece quando há processos sem cliente vinculado.'] },
   { numero: '1.14.3', data: '11/11/2026', itens: ['Judicial: botão “Alterar representação” nas relações de processos do escritório e em parceria, para corrigir em lote se o processo é próprio ou em parceria (e com quem).', 'Ficha do processo: campo “Representação” para trocar entre próprio e os parceiros.'] },
   { numero: '1.14.2', data: '11/11/2026', itens: ['Processos encontrados pela OAB: a tabela rola dentro da janela, com a barra de rolagem lateral sempre visível embaixo e o cabeçalho fixo no topo.'] },
@@ -1441,30 +1442,47 @@ const Views = {
     const achAlt = DB.where('achados', a => achadoAberto(a) && /alto|cr[ií]tico/i.test(a.risco || ''));
     const movs = DB.all('movimentos').sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
     const esc0 = escritorio();
-    v.innerHTML = `
-    <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${saudacao()}, ${esc((Session.user.nome || '').split(' ')[0] || 'Dr.')}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div>
-      <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn ghost" id="nProcDocs">${icon('upload')} Processo pelos arquivos</button><button class="btn primary" id="nEmp">${icon('building')} Nova empresa</button></div></div>
+    const empresas = DB.all('empresas'), djPend = DJEN.pendentes().length;
+    let aba = 'jud'; try { aba = localStorage.getItem('af-painel-aba') || 'jud'; } catch (_) {}
+    const jud = `
+    <div class="pn-sec jud"><h2>${icon('scale')} Judicial</h2></div>
+    <div class="pn-btns"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn ghost" id="nProcDocs">${icon('upload')} Processo pelos arquivos</button></div>
     <div class="kpis">
-      ${kpi('Processos em andamento', procs.length, Object.entries(AREAS).map(([k, a]) => `${a.nome} ${procs.filter(p => p.area === k).length}`).join(' · '), '', '#/judicial/todos')}
+      ${kpi('Processos em andamento', procs.length, Object.entries(AREAS).map(([k, a]) => [a.nome, procs.filter(p => p.area === k).length]).filter(x => x[1]).map(x => x.join(' ')).join(' · ') || 'nenhum', '', '#/judicial/todos')}
       ${kpi('Compromissos em 7 dias', prox7.length, atras.length ? `<b class="t-bad">${atras.length} em atraso</b>` : 'nenhum em atraso', atras.length ? 'bad' : '', '#/agenda')}
-      ${kpi('Empresas em consultoria', DB.all('empresas').length, `${DB.all('contratos').length} contratos auditados`, '', '#/empresas')}
-      ${kpi('Contratos vencendo (90 dias)', venc90.length, 'renovação ou encerramento', venc90.length ? 'warn' : '')}
+      ${kpi('Intimações novas (DJEN)', djPend, djPend ? '<u>revisar e cadastrar</u>' : 'nenhum processo novo', djPend ? 'warn' : '', djPend ? '#/painel?dj=1' : '')}
+    </div>
+    <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
+      ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
+    ${DJEN.cardHtml()}
+    <div class="grid2">
+      <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a]) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
+      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
+        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>
+    </div>`;
+    const con = `
+    <div class="pn-sec con"><h2>${icon('building')} Consultoria</h2></div>
+    <div class="pn-btns"><button class="btn primary" id="nEmp">${icon('building')} Nova empresa</button></div>
+    <div class="kpis">
+      ${kpi('Empresas em consultoria', empresas.length, esc(empresas.map(e => e.sigla || (e.fantasia || e.razao || '').split(' ')[0]).slice(0, 5).join(' · ')) || 'nenhuma', '', '#/empresas')}
+      ${kpi('Contratos auditados', DB.all('contratos').length, `nas ${empresas.length} empresa(s)`, '', '#/empresas')}
+      ${kpi('Contratos vencendo (90 dias)', venc90.length, venc90.length ? '<u>ver lista</u>' : 'renovação ou encerramento', venc90.length ? 'warn' : '', venc90.length ? '#/painel?v90=1' : '')}
       ${kpi('Achados de risco alto', achAlt.length, achAlt.length ? 'em aberto · <u>ver e resolver</u>' : 'em aberto nos planos de ação', achAlt.length ? 'bad' : '', '#/achados')}
     </div>
-      <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
-        ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
-    <div class="grid2">
-      <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a], i) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
-      <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>
-    </div>
-    ${DJEN.cardHtml()}
-      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
-        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>`;
-    DJEN.bindCard(v);
-    $('#nProc').onclick = () => Judicial.edit(null, 'civil');
-    $('#nProcDocs').onclick = () => JudDocs.open();
-    $('#nEmp').onclick = () => Consult.editEmpresa(null);
-    $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
+    <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>`;
+    v.innerHTML = `
+    <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${saudacao()}, ${esc((Session.user.nome || '').split(' ')[0] || 'Dr.')}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div></div>
+    <div class="pn-tabs"><button type="button" data-aba="jud" class="${aba === 'jud' ? 'on' : ''}">${icon('scale')} Judicial</button><button type="button" data-aba="con" class="${aba === 'con' ? 'on' : ''}">${icon('building')} Consultoria</button></div>
+    ${aba === 'con' ? con : jud}`;
+    $$('[data-aba]', v).forEach(b => b.onclick = () => { try { localStorage.setItem('af-painel-aba', b.dataset.aba); } catch (_) {} App.render(true); });
+    $$('a[href="#/painel?dj=1"]', v).forEach(a => a.onclick = ev => { ev.preventDefault(); DJEN.revisarPendentes(); });
+    $$('a[href="#/painel?v90=1"]', v).forEach(a => a.onclick = ev => { ev.preventDefault(); Consult.vencLista(null, venc90, null, 90); });
+    if (aba === 'jud') {
+      DJEN.bindCard(v);
+      $('#nProc').onclick = () => Judicial.edit(null, 'civil');
+      $('#nProcDocs').onclick = () => JudDocs.open();
+      $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
+    } else $('#nEmp').onclick = () => Consult.editEmpresa(null);
   },
   alertasConsultoria(empresaId) {
     const items = [];
@@ -2311,13 +2329,13 @@ const Consult = {
   },
 
   /** lista dos contratos que vencem num mês (k = 'AAAA-MM') ou nos próximos 12 meses (k = null) */
-  vencLista(e, cs, k) {
+  vencLista(e, cs, k, nDias) {
     const ini = todayISO().slice(0, 7), d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 11); const fimP = d.toISOString().slice(0, 7);
-    const l = cs.filter(c => isISO(c.fim) && (k ? c.fim.slice(0, 7) === k : c.fim.slice(0, 7) >= ini && c.fim.slice(0, 7) <= fimP)).sort((a, b) => a.fim.localeCompare(b.fim));
+    const l = nDias ? cs.slice().sort((a, b) => a.fim.localeCompare(b.fim)) : cs.filter(c => isISO(c.fim) && (k ? c.fim.slice(0, 7) === k : c.fim.slice(0, 7) >= ini && c.fim.slice(0, 7) <= fimP)).sort((a, b) => a.fim.localeCompare(b.fim));
     const dias = c => { const n = daysUntil(c.fim); return n < 0 ? `<span class="bad">venceu há ${-n} dia(s)</span>` : n === 0 ? '<b>vence hoje</b>' : `faltam ${n} dia(s)`; };
-    const m = UI.modal({ title: k ? 'Contratos que vencem em ' + fmtComp(k) : 'Vencimentos nos próximos 12 meses', sub: `${l.length} contrato(s) · toque para abrir a ficha`, wide: true,
-      body: l.length ? `<div class="venc-l">${l.map(c => `<button type="button" class="venc-i" data-vc="${c.id}"><span><b>${esc(c.codigo || '')}</b> ${esc(c.tomador || '')}<small class="muted">${esc([c.unidade, c.numero && 'nº ' + c.numero].filter(Boolean).join(' · '))}</small></span><span class="r">${fmtDate(c.fim)}<small>${dias(c)}</small></span></button>`).join('')}</div>` : '<div class="empty"><p>Nenhum contrato.</p></div>' });
-    $$('[data-vc]', m).forEach(b => b.onclick = () => { UI.closeModal(); Consult.contrato360(e, DB.get('contratos', b.dataset.vc)); });
+    const m = UI.modal({ title: nDias ? `Contratos vencendo nos próximos ${nDias} dias` : k ? 'Contratos que vencem em ' + fmtComp(k) : 'Vencimentos nos próximos 12 meses', sub: `${l.length} contrato(s) · toque para abrir a ficha`, wide: true,
+      body: l.length ? `<div class="venc-l">${l.map(c => `<button type="button" class="venc-i" data-vc="${c.id}"><span><b>${esc(c.codigo || '')}</b> ${esc(c.tomador || '')}${e ? '' : `<small class="muted">${esc((x => x?.fantasia || x?.razao || '')(DB.get('empresas', c.empresaId)))}</small>`}<small class="muted">${esc([c.unidade, c.numero && 'nº ' + c.numero].filter(Boolean).join(' · '))}</small></span><span class="r">${fmtDate(c.fim)}<small>${dias(c)}</small></span></button>`).join('')}</div>` : '<div class="empty"><p>Nenhum contrato.</p></div>' });
+    $$('[data-vc]', m).forEach(b => b.onclick = () => { UI.closeModal(); const c = DB.get('contratos', b.dataset.vc); Consult.contrato360(e || DB.get('empresas', c.empresaId), c); });
   },
 
   /* ---------------- IMPORTAÇÃO DA PLANILHA ---------------- */

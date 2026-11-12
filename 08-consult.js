@@ -296,13 +296,13 @@ const Consult = {
   },
 
   /** lista dos contratos que vencem num mês (k = 'AAAA-MM') ou nos próximos 12 meses (k = null) */
-  vencLista(e, cs, k) {
+  vencLista(e, cs, k, nDias) {
     const ini = todayISO().slice(0, 7), d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 11); const fimP = d.toISOString().slice(0, 7);
-    const l = cs.filter(c => isISO(c.fim) && (k ? c.fim.slice(0, 7) === k : c.fim.slice(0, 7) >= ini && c.fim.slice(0, 7) <= fimP)).sort((a, b) => a.fim.localeCompare(b.fim));
+    const l = nDias ? cs.slice().sort((a, b) => a.fim.localeCompare(b.fim)) : cs.filter(c => isISO(c.fim) && (k ? c.fim.slice(0, 7) === k : c.fim.slice(0, 7) >= ini && c.fim.slice(0, 7) <= fimP)).sort((a, b) => a.fim.localeCompare(b.fim));
     const dias = c => { const n = daysUntil(c.fim); return n < 0 ? `<span class="bad">venceu há ${-n} dia(s)</span>` : n === 0 ? '<b>vence hoje</b>' : `faltam ${n} dia(s)`; };
-    const m = UI.modal({ title: k ? 'Contratos que vencem em ' + fmtComp(k) : 'Vencimentos nos próximos 12 meses', sub: `${l.length} contrato(s) · toque para abrir a ficha`, wide: true,
-      body: l.length ? `<div class="venc-l">${l.map(c => `<button type="button" class="venc-i" data-vc="${c.id}"><span><b>${esc(c.codigo || '')}</b> ${esc(c.tomador || '')}<small class="muted">${esc([c.unidade, c.numero && 'nº ' + c.numero].filter(Boolean).join(' · '))}</small></span><span class="r">${fmtDate(c.fim)}<small>${dias(c)}</small></span></button>`).join('')}</div>` : '<div class="empty"><p>Nenhum contrato.</p></div>' });
-    $$('[data-vc]', m).forEach(b => b.onclick = () => { UI.closeModal(); Consult.contrato360(e, DB.get('contratos', b.dataset.vc)); });
+    const m = UI.modal({ title: nDias ? `Contratos vencendo nos próximos ${nDias} dias` : k ? 'Contratos que vencem em ' + fmtComp(k) : 'Vencimentos nos próximos 12 meses', sub: `${l.length} contrato(s) · toque para abrir a ficha`, wide: true,
+      body: l.length ? `<div class="venc-l">${l.map(c => `<button type="button" class="venc-i" data-vc="${c.id}"><span><b>${esc(c.codigo || '')}</b> ${esc(c.tomador || '')}${e ? '' : `<small class="muted">${esc((x => x?.fantasia || x?.razao || '')(DB.get('empresas', c.empresaId)))}</small>`}<small class="muted">${esc([c.unidade, c.numero && 'nº ' + c.numero].filter(Boolean).join(' · '))}</small></span><span class="r">${fmtDate(c.fim)}<small>${dias(c)}</small></span></button>`).join('')}</div>` : '<div class="empty"><p>Nenhum contrato.</p></div>' });
+    $$('[data-vc]', m).forEach(b => b.onclick = () => { UI.closeModal(); const c = DB.get('contratos', b.dataset.vc); Consult.contrato360(e || DB.get('empresas', c.empresaId), c); });
   },
 
   /* ---------------- IMPORTAÇÃO DA PLANILHA ---------------- */

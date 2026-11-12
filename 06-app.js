@@ -307,30 +307,47 @@ const Views = {
     const achAlt = DB.where('achados', a => achadoAberto(a) && /alto|cr[ií]tico/i.test(a.risco || ''));
     const movs = DB.all('movimentos').sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
     const esc0 = escritorio();
-    v.innerHTML = `
-    <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${saudacao()}, ${esc((Session.user.nome || '').split(' ')[0] || 'Dr.')}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div>
-      <div class="actions"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn ghost" id="nProcDocs">${icon('upload')} Processo pelos arquivos</button><button class="btn primary" id="nEmp">${icon('building')} Nova empresa</button></div></div>
+    const empresas = DB.all('empresas'), djPend = DJEN.pendentes().length;
+    let aba = 'jud'; try { aba = localStorage.getItem('af-painel-aba') || 'jud'; } catch (_) {}
+    const jud = `
+    <div class="pn-sec jud"><h2>${icon('scale')} Judicial</h2></div>
+    <div class="pn-btns"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn ghost" id="nProcDocs">${icon('upload')} Processo pelos arquivos</button></div>
     <div class="kpis">
-      ${kpi('Processos em andamento', procs.length, Object.entries(AREAS).map(([k, a]) => `${a.nome} ${procs.filter(p => p.area === k).length}`).join(' · '), '', '#/judicial/todos')}
+      ${kpi('Processos em andamento', procs.length, Object.entries(AREAS).map(([k, a]) => [a.nome, procs.filter(p => p.area === k).length]).filter(x => x[1]).map(x => x.join(' ')).join(' · ') || 'nenhum', '', '#/judicial/todos')}
       ${kpi('Compromissos em 7 dias', prox7.length, atras.length ? `<b class="t-bad">${atras.length} em atraso</b>` : 'nenhum em atraso', atras.length ? 'bad' : '', '#/agenda')}
-      ${kpi('Empresas em consultoria', DB.all('empresas').length, `${DB.all('contratos').length} contratos auditados`, '', '#/empresas')}
-      ${kpi('Contratos vencendo (90 dias)', venc90.length, 'renovação ou encerramento', venc90.length ? 'warn' : '')}
+      ${kpi('Intimações novas (DJEN)', djPend, djPend ? '<u>revisar e cadastrar</u>' : 'nenhum processo novo', djPend ? 'warn' : '', djPend ? '#/painel?dj=1' : '')}
+    </div>
+    <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
+      ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
+    ${DJEN.cardHtml()}
+    <div class="grid2">
+      <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a]) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
+      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
+        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>
+    </div>`;
+    const con = `
+    <div class="pn-sec con"><h2>${icon('building')} Consultoria</h2></div>
+    <div class="pn-btns"><button class="btn primary" id="nEmp">${icon('building')} Nova empresa</button></div>
+    <div class="kpis">
+      ${kpi('Empresas em consultoria', empresas.length, esc(empresas.map(e => e.sigla || (e.fantasia || e.razao || '').split(' ')[0]).slice(0, 5).join(' · ')) || 'nenhuma', '', '#/empresas')}
+      ${kpi('Contratos auditados', DB.all('contratos').length, `nas ${empresas.length} empresa(s)`, '', '#/empresas')}
+      ${kpi('Contratos vencendo (90 dias)', venc90.length, venc90.length ? '<u>ver lista</u>' : 'renovação ou encerramento', venc90.length ? 'warn' : '', venc90.length ? '#/painel?v90=1' : '')}
       ${kpi('Achados de risco alto', achAlt.length, achAlt.length ? 'em aberto · <u>ver e resolver</u>' : 'em aberto nos planos de ação', achAlt.length ? 'bad' : '', '#/achados')}
     </div>
-      <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
-        ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
-    <div class="grid2">
-      <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a], i) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
-      <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>
-    </div>
-    ${DJEN.cardHtml()}
-      <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
-        ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>`;
-    DJEN.bindCard(v);
-    $('#nProc').onclick = () => Judicial.edit(null, 'civil');
-    $('#nProcDocs').onclick = () => JudDocs.open();
-    $('#nEmp').onclick = () => Consult.editEmpresa(null);
-    $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
+    <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>`;
+    v.innerHTML = `
+    <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${saudacao()}, ${esc((Session.user.nome || '').split(' ')[0] || 'Dr.')}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div></div>
+    <div class="pn-tabs"><button type="button" data-aba="jud" class="${aba === 'jud' ? 'on' : ''}">${icon('scale')} Judicial</button><button type="button" data-aba="con" class="${aba === 'con' ? 'on' : ''}">${icon('building')} Consultoria</button></div>
+    ${aba === 'con' ? con : jud}`;
+    $$('[data-aba]', v).forEach(b => b.onclick = () => { try { localStorage.setItem('af-painel-aba', b.dataset.aba); } catch (_) {} App.render(true); });
+    $$('a[href="#/painel?dj=1"]', v).forEach(a => a.onclick = ev => { ev.preventDefault(); DJEN.revisarPendentes(); });
+    $$('a[href="#/painel?v90=1"]', v).forEach(a => a.onclick = ev => { ev.preventDefault(); Consult.vencLista(null, venc90, null, 90); });
+    if (aba === 'jud') {
+      DJEN.bindCard(v);
+      $('#nProc').onclick = () => Judicial.edit(null, 'civil');
+      $('#nProcDocs').onclick = () => JudDocs.open();
+      $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
+    } else $('#nEmp').onclick = () => Consult.editEmpresa(null);
   },
   alertasConsultoria(empresaId) {
     const items = [];
