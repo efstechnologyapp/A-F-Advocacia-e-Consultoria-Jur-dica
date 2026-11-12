@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.18.0';
+const APP_VERSAO = '1.18.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.18.1', data: '12/11/2026', itens: ['Portal: botão do menu e painel lateral passam para o lado esquerdo; no topo do painel, a empresa e, abaixo, o nome do usuário, e-mail, cidade, data e hora do acesso.', '“Meus dados”: cada funcionário da empresa preenche os próprios dados (nome completo, cargo, telefone e endereço); o cadastro da empresa continua com o escritório.'] },
   { numero: '1.18.0', data: '12/11/2026', itens: ['Portal do cliente: senha própria. No 1º acesso, depois de confirmar o código do e-mail, a pessoa cria a senha; nos próximos, entra com e-mail e senha (com “Esqueci minha senha”). 5 tentativas erradas bloqueiam por 15 minutos.', 'Portal: menu do usuário (toque nas iniciais, no topo) com empresa, atalhos (Consultoria, Remessa mensal com prazo/situação, relatório), Meu perfil, Alterar senha, instalar o app, falar com o escritório e Sair.', 'Gestão › Usuários: mostra se o cliente já criou senha e tem o botão “Zerar senha”.'] },
   { numero: '1.17.3', data: '12/11/2026', itens: ['Habilitar portal: o botão mostra “Enviando convite…” girando enquanto envia e, no fim, uma janela confirma para quais e-mails o convite foi e como o cliente entra.'] },
   { numero: '1.17.2', data: '12/11/2026', itens: ['Portal da empresa: vários e-mails de acesso (separados por vírgula); “Habilitar portal” convida cada um e, depois, só os e-mails novos.'] },
@@ -2799,6 +2800,7 @@ const Portal = {
     const u = Session.user;
     document.getElementById('root').innerHTML = `<div class="portal" id="portal"></div>`;
     window.onhashchange = null;
+    Portal.acesso();
     Portal.render();
     const u0 = Session.user, emp0 = DB.where('empresas', e => e.clienteId === u0.clienteId)[0];
     ConnSplash.show(emp0, (DB.get('clientes', u0.clienteId) || {}).nome || u0.nome);
@@ -2815,16 +2817,17 @@ const Portal = {
   ini: n => `<span class="p-ava">${esc(((n || '?').split(/\s+/).filter(w => w.length > 2).map(w => w[0]).slice(0, 2).join('') || (n || '?')[0]).toUpperCase())}</span>`,
   /** painel lateral do usuário do portal */
   menu(root, o) {
-    const u = o.preview ? { nome: o.cli.nome, email: o.cli.email || '' } : Session.user, st = Portal.st;
+    const u = o.preview ? { email: o.cli.email || '' } : Session.user, st = Portal.st, pe = Portal.pessoa(o.preview, o.cli), ac = (!o.preview && Session.user.acesso) || { em: new Date().toISOString(), local: Portal.localFuso() };
+    const e0 = o.emps[0];
     const rm = o.emps.map(e => { const comp = Remessa.compPadrao(), r = Remessa.get(e.id, comp); return { e, comp, r, pz: Remessa.prazo(e, comp) }; });
     const ov = document.createElement('div'); ov.className = 'p-drawer-ov';
     ov.innerHTML = `<aside class="p-drawer" role="dialog" aria-label="Meu menu">
-      <div class="pd-h">${Portal.ini(u.nome)}<div><b>${esc(u.nome || '')}</b><small>${esc(u.email || '')}</small></div><button class="icon-btn" data-x aria-label="Fechar">${icon('x')}</button></div>
-      ${o.emps.map(e => `<div class="pd-emp">${e.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span class="pd-emp-i">${esc(e.sigla || (e.fantasia || e.razao || '?').slice(0, 2))}</span>`}<div><b>${esc(e.fantasia || e.razao)}</b><small>${e.cnpj ? 'CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}</small></div></div>`).join('')}
+      <div class="pd-h"><div class="pd-emp">${e0?.logo ? `<img src="${esc(e0.logo)}" alt="">` : `<span class="pd-emp-i">${esc(e0?.sigla || (e0?.fantasia || e0?.razao || o.cli.nome || '?').slice(0, 2))}</span>`}<div><b>${esc(e0 ? e0.fantasia || e0.razao : o.cli.nome || '')}</b><small>${e0?.cnpj ? 'CNPJ ' + esc(fmtDoc(e0.cnpj)) : ''}</small></div></div><button class="icon-btn" data-x aria-label="Fechar">${icon('x')}</button></div>
+      <div class="pd-user">${Portal.ini(pe.nome || u.email)}<div><b>${pe.nome ? esc(pe.nome) : '<button class="link small" data-perfil2>Complete seu perfil</button>'}</b>${pe.cargo ? `<small>${esc(pe.cargo)}</small>` : ''}<small>${esc(u.email || '')}</small><small class="pd-acc">${icon('clock')} ${esc(ac.local ? ac.local + ' · ' : '')}${fmtDate(ac.em)} às ${new Date(ac.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></div></div>
       <nav class="pd-nav">${o.tabs.map(([k, l]) => `<button data-go="${k}" class="${st.tab === k ? 'on' : ''}">${icon({ processos: 'scale', agenda: 'calendar', consultoria: 'building', remessa: 'upload', contato: 'whatsapp' }[k] || 'file')}<span>${l}</span>${k === 'remessa' && rm[0] ? `<em class="pill ${Remessa.ST[rm[0].r?.status || 'aberta'][1]}">${rm[0].r?.status && rm[0].r.status !== 'aberta' ? Remessa.ST[rm[0].r.status][0].split(' ·')[0] : 'até ' + fmtDate(rm[0].pz).slice(0, 5)}</em>` : ''}</button>`).join('')}
         ${o.emps.length ? `<button data-relat>${icon('printer')}<span>Relatório da consultoria</span></button>` : ''}</nav>
       <div class="pd-sec">Minha conta</div>
-      <nav class="pd-nav"><button data-perfil>${icon('user')}<span>Meu perfil</span></button><button data-senha>${icon('key')}<span>${o.preview || Session.user?.temSenha !== false ? 'Alterar senha' : 'Criar senha'}</span></button>
+      <nav class="pd-nav"><button data-perfil>${icon('user')}<span>Meus dados</span></button><button data-senha>${icon('key')}<span>${o.preview || Session.user?.temSenha !== false ? 'Alterar senha' : 'Criar senha'}</span></button>
         ${window.__afInstall ? `<button data-inst>${icon('download')}<span>Instalar o app no celular</span></button>` : /iphone|ipad/i.test(navigator.userAgent) ? `<div class="pd-hint">${icon('download')} Para instalar: toque em <b>Compartilhar</b> › <b>Adicionar à Tela de Início</b>.</div>` : ''}</nav>
       <div class="pd-sec">Escritório</div>
       <div class="pd-fale">${o.wa ? `<a class="btn ghost sm" href="https://wa.me/55${o.wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${o.esc0.email ? `<a class="btn ghost sm" href="mailto:${esc(o.esc0.email)}">${icon('mail')} E-mail</a>` : ''}</div>
@@ -2839,15 +2842,30 @@ const Portal = {
     $('[data-sair]', ov)?.addEventListener('click', () => { ov.remove(); App.logout(); });
     $('[data-inst]', ov)?.addEventListener('click', async () => { const p = window.__afInstall; window.__afInstall = null; fechar(); try { p.prompt(); await p.userChoice; } catch (_) {} });
     const soCliente = () => { UI.toast('Disponível só para o cliente (fora da pré-visualização).', 'warn'); return o.preview; };
-    $('[data-perfil]', ov).onclick = () => { if (soCliente()) return; fechar(); Portal.perfil(o.redraw); };
+    $$('[data-perfil],[data-perfil2]', ov).forEach(b => b.onclick = () => { if (soCliente()) return; fechar(); Portal.perfil(o.redraw); });
     $('[data-senha]', ov).onclick = () => { if (soCliente()) return; fechar(); Portal.senha(); };
   },
+  /** dados pessoais do usuário (funcionário da empresa) — não confundir com o cadastro da empresa */
+  pessoa: (preview, cli) => preview ? {} : (Session.user?.pessoa || {}),
+  localFuso: () => '', // a cidade vem da consulta por IP; o fuso horário não diz a cidade com segurança
+  /** registra o acesso (data/hora e cidade aproximada) ao abrir o portal */
+  async acesso() {
+    try { if (sessionStorage.getItem('af-acc')) return; sessionStorage.setItem('af-acc', '1'); } catch (_) {}
+    Session.user = { ...Session.user, acesso: { em: new Date().toISOString(), local: Portal.localFuso() } }; Session.save();
+    try { const ct = new AbortController(), t = setTimeout(() => ct.abort(), 4000), j = await (await fetch('https://ipapi.co/json/', { signal: ct.signal })).json(); clearTimeout(t);
+      if (j.city) { Session.user.acesso.local = j.city + (j.region_code ? '/' + j.region_code : ''); Session.save(); } } catch (_) {}
+  },
   perfil(redraw) {
-    const u = Session.user;
-    const m = UI.modal({ title: 'Meu perfil', sub: esc(u.email), body: `<form class="grid-form" id="pfF"><div class="fld full"><label>Nome</label><input name="nome" value="${esc(u.nome || '')}" required></div><div class="fld full"><label>Telefone / WhatsApp</label><input name="tel" inputmode="tel" value="${esc(u.telefone || '')}" placeholder="(81) 99999-9999"></div><div class="fld full"><label>E-mail de acesso</label><input value="${esc(u.email)}" disabled><small class="muted">Para trocar o e-mail, fale com o escritório.</small></div></form>`,
+    const u = Session.user, pe = u.pessoa || {};
+    const m = UI.modal({ title: 'Meus dados', sub: 'Seus dados pessoais — o cadastro da empresa é mantido pelo escritório.', body: `<form class="grid-form" id="pfF">
+      <div class="fld full"><label>Nome completo</label><input name="nome" value="${esc(pe.nome || '')}" required autocomplete="name"></div>
+      <div class="fld"><label>Cargo / função na empresa</label><input name="cargo" value="${esc(pe.cargo || '')}" placeholder="Ex.: Gerente financeiro"></div>
+      <div class="fld"><label>Telefone / WhatsApp</label><input name="tel" inputmode="tel" autocomplete="tel" value="${esc(pe.telefone || u.telefone || '')}" placeholder="(81) 99999-9999"></div>
+      <div class="fld full"><label>Endereço</label><input name="end" autocomplete="street-address" value="${esc(pe.endereco || '')}" placeholder="Rua, número, bairro, cidade/UF"></div>
+      <div class="fld full"><label>E-mail de acesso</label><input value="${esc(u.email)}" disabled><small class="muted">Para trocar o e-mail, fale com o escritório.</small></div></form>`,
       foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="pfOk">${icon('check')} Salvar</button>` });
-    $('#pfOk', m).onclick = async () => { const f = $('#pfF', m), b = $('#pfOk', m); b.disabled = true;
-      try { const r = await api('perfilSalvar', { nome: f.nome.value, telefone: f.tel.value }); Session.user = { ...Session.user, nome: r.nome, telefone: r.telefone }; Session.save(); UI.closeModal(); UI.toast('Perfil atualizado.', 'ok'); redraw(); } catch (e) { b.disabled = false; UI.toast(e.message, 'bad'); } };
+    $('#pfOk', m).onclick = async () => { const f = $('#pfF', m), b = $('#pfOk', m); if (!f.nome.value.trim()) return UI.toast('Informe seu nome completo.', 'warn'); b.disabled = true;
+      try { const r = await api('perfilSalvar', { nome: f.nome.value, cargo: f.cargo.value, telefone: f.tel.value, endereco: f.end.value }); Session.user = { ...Session.user, nome: r.nome || Session.user.nome, telefone: r.telefone, pessoa: r }; Session.save(); UI.closeModal(); UI.toast('Dados salvos.', 'ok'); redraw(); } catch (e) { b.disabled = false; UI.toast(e.message, 'bad'); } };
   },
   senha() {
     const tem = Session.user?.temSenha !== false;
@@ -2894,7 +2912,7 @@ const Portal = {
         <div class="btn-row center">${wa ? `<a class="btn primary" href="https://wa.me/55${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${esc0.email ? `<a class="btn ghost" href="mailto:${esc(esc0.email)}">${icon('mail')} ${esc(esc0.email)}</a>` : ''}</div>
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }
-    root.innerHTML = `<header class="p-top"><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span><button class="p-me" id="pMe" title="Meu menu">${Portal.ini(preview ? cli.nome : Session.user?.nome || cli.nome)}<span>${icon('menu')}</span></button></header>
+    root.innerHTML = `<header class="p-top"><button class="p-me" id="pMe" title="Meu menu"><span>${icon('menu')}</span>${Portal.ini(Portal.pessoa(preview, cli).nome || cli.nome)}</button><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span></header>
       <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá, ${esc((cli.nome || '').split(' ')[0])}</h1><p>Acompanhe aqui o andamento dos seus processos${emps.length ? ' e da consultoria da sua empresa' : ''}. As informações são atualizadas pelo escritório.</p></div>
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
       <main class="p-main">${body}</main>
