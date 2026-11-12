@@ -220,8 +220,10 @@ const App = {
     const pai = [...parts].reverse().slice(1).find(p => p.href); location.hash = '#' + (pai ? pai.href : '/painel');
   },
   crumbs(parts) {
-    const topo = App.TOPO.test(location.hash);
-    $('#crumbs').innerHTML = (topo ? '' : `<button class="back-btn" id="btnVoltar" title="Voltar à página anterior">${icon('chevL')}<span>Voltar</span></button>`) + parts.map((p, i) => i < parts.length - 1 && p.href ? `<a href="#${p.href}">${esc(p.t)}</a>` : `<b>${esc(p.t)}</b>`).join(`<span class="sep">/</span>`);
+    const topo = App.TOPO.test(location.hash), h = location.hash, inicio = !h || /^#\/?(painel)?$/.test(h);
+    const sec = /^#\/(judicial|processo|agenda|atendimentos)/.test(h) ? 'jud' : /^#\/(empresa|achados|contrato)/.test(h) ? 'con' : '';
+    if (sec) try { localStorage.setItem('af-painel-aba', sec); } catch (_) {}
+    $('#crumbs').innerHTML = (topo ? (inicio ? '' : `<a class="back-btn" href="#/painel" title="Voltar à visão geral">${icon('chevL')}<span>Visão geral</span></a>`) : `<button class="back-btn" id="btnVoltar" title="Voltar à página anterior">${icon('chevL')}<span>Voltar</span></button>`) + parts.map((p, i) => i < parts.length - 1 && p.href ? `<a href="#${p.href}">${esc(p.t)}</a>` : `<b>${esc(p.t)}</b>`).join(`<span class="sep">/</span>`);
     $('#btnVoltar')?.addEventListener('click', () => App.voltar(parts));
   },
   render(keepScroll) {
