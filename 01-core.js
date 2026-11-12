@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.18.1';
+const APP_VERSAO = '1.18.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.18.2', data: '12/11/2026', itens: ['Portal: o cartão de conexão (escritório × empresa) aparece em todo login e toda vez que o app é aberto, no lugar da abertura padrão.'] },
   { numero: '1.18.1', data: '12/11/2026', itens: ['Portal: botão do menu e painel lateral passam para o lado esquerdo; no topo do painel, a empresa e, abaixo, o nome do usuário, e-mail, cidade, data e hora do acesso.', '“Meus dados”: cada funcionário da empresa preenche os próprios dados (nome completo, cargo, telefone e endereço); o cadastro da empresa continua com o escritório.'] },
   { numero: '1.18.0', data: '12/11/2026', itens: ['Portal do cliente: senha própria. No 1º acesso, depois de confirmar o código do e-mail, a pessoa cria a senha; nos próximos, entra com e-mail e senha (com “Esqueci minha senha”). 5 tentativas erradas bloqueiam por 15 minutos.', 'Portal: menu do usuário (toque nas iniciais, no topo) com empresa, atalhos (Consultoria, Remessa mensal com prazo/situação, relatório), Meu perfil, Alterar senha, instalar o app, falar com o escritório e Sair.', 'Gestão › Usuários: mostra se o cliente já criou senha e tem o botão “Zerar senha”.'] },
   { numero: '1.17.3', data: '12/11/2026', itens: ['Habilitar portal: o botão mostra “Enviando convite…” girando enquanto envia e, no fim, uma janela confirma para quais e-mails o convite foi e como o cliente entra.'] },

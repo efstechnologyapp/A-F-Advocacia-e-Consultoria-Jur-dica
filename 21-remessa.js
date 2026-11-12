@@ -170,7 +170,8 @@ const Remessa = {
 const ConnSplash = {
   logo: e => e?.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span>${esc(e?.sigla || ((e?.fantasia || e?.razao || Session.user?.nome || 'Cliente').split(/\s+/).filter(w => w.length > 2).map(w => w[0]).slice(0, 2).join('') || 'C').toUpperCase())}</span>`,
   show(e, nomeCli) {
-    try { if (sessionStorage.getItem('af-conn')) return; sessionStorage.setItem('af-conn', '1'); } catch (_) {}
+    if (document.querySelector('.conn-splash')) return;
+    document.getElementById('splash')?.remove(); // a abertura do cliente substitui a abertura padrão
     const esc0 = escritorio(), ov = document.createElement('div'); ov.className = 'conn-splash';
     ov.innerHTML = `<div class="cs-card"><div class="cs-pair"><img src="${BRAND.logoDark}" alt="" class="cs-af"><span class="cs-x">×</span><div class="cs-cli">${ConnSplash.logo(e)}</div></div>
       <div class="cs-t">${esc((esc0.nome || 'Amorim Firmo').split(/ Advocacia| e Consultoria/)[0])} × ${esc(e ? e.fantasia || e.razao : nomeCli || '')}</div><div class="cs-s">Área exclusiva ${e ? 'da empresa' : 'do cliente'}</div>
