@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.17.2';
+const APP_VERSAO = '1.17.3';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.17.3', data: '12/11/2026', itens: ['Habilitar portal: o botão mostra “Enviando convite…” girando enquanto envia e, no fim, uma janela confirma para quais e-mails o convite foi e como o cliente entra.'] },
   { numero: '1.17.2', data: '12/11/2026', itens: ['Portal da empresa: vários e-mails de acesso (separados por vírgula); “Habilitar portal” convida cada um e, depois, só os e-mails novos.'] },
   { numero: '1.17.1', data: '12/11/2026', itens: ['Empresas: o portal passa a ser da própria empresa. No cadastro, “E-mail de acesso ao portal” substitui a escolha entre clientes dos processos; o app cria o cliente pessoa jurídica com os dados da empresa.', 'Página da empresa: botões “Habilitar portal” (envia o convite; depois mostra “Portal habilitado”) e “Ver como a empresa”.', 'Portal de empresa sem processos judiciais abre direto na Consultoria.'] },
   { numero: '1.17.0', data: '12/11/2026', itens: ['Remessa mensal: no portal, a empresa informa por contrato o faturado, o recebido, os postos ocupados, faltas e ocorrências, e anexa os documentos do mês (folha, benefícios, FGTS/INSS, notas, recebimentos, ponto, aditivos/apólices).', 'Tudo o que a empresa envia entra na fila “Remessas mensais” do escritório e só alimenta os dados gerais quando aprovado: divergências automáticas (faturado × contrato, recebido × faturado, postos, documentos obrigatórios) viram achados; números vão para Financeiro e Mão de obra; arquivos para Documentos.', 'Aba “Remessas mensais” em cada empresa, indicador na Visão geral e prazo mensal configurável no cadastro da empresa.', 'Portal: abertura com o cartão de conexão (brasão × logo da empresa). Botão “Logo” na página da empresa.'] },

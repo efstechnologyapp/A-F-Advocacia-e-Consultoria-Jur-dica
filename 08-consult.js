@@ -37,7 +37,7 @@ const Consult = {
     if (e.clienteId !== c.id) await DB.save('empresas', { ...DB.get('empresas', e.id), clienteId: c.id });
     return c;
   },
-  async habilitarPortal(e) {
+  async habilitarPortal(e, btn) {
     const mails = Consult.emailsPortal(e);
     if (!mails.length) { UI.toast('Informe ao menos um e-mail de acesso ao portal no cadastro da empresa.', 'warn'); return Consult.editEmpresa(e); }
     const c = await Consult.clientePortal(e);
@@ -45,10 +45,13 @@ const Consult = {
     const ja = DB.get('empresas', e.id).portalEmails || [], novos = mails.filter(x => !ja.includes(x));
     const enviar = novos.length ? novos : (confirm('Todos os e-mails já foram convidados. Reenviar o convite para todos?\n\n' + mails.join('\n')) ? mails : []);
     if (!enviar.length) return;
-    try { for (const m of enviar) await api('userSave', { user: { email: m, nome: c.nome, papel: 'cliente', clienteId: c.id, status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname });
+    const html0 = btn?.innerHTML; if (btn) { btn.disabled = true; btn.classList.add('busy'); }
+    const prog = (i) => { if (btn) btn.innerHTML = `${icon('sync', 'spin')} Enviando convite${enviar.length > 1 ? ` ${i}/${enviar.length}` : ''}…`; };
+    try { let i = 0; for (const m of enviar) { prog(++i); await api('userSave', { user: { email: m, nome: c.nome, papel: 'cliente', clienteId: c.id, status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname }); }
       await DB.save('empresas', { ...DB.get('empresas', e.id), portalConvite: new Date().toISOString(), portalEmails: [...new Set([...ja, ...enviar])] });
-      UI.toast(`Portal habilitado. Convite enviado para ${enviar.join(', ')}.`, 'ok', 7000); App.render(true);
-    } catch (err) { UI.toast(err.message, 'bad'); }
+      App.render(true);
+      UI.modal({ title: 'Portal habilitado', sub: esc(e.fantasia || e.razao), body: `<div class="notice ok">${icon('check')}<div>Convite enviado para:<br><b>${enviar.map(esc).join('<br>')}</b></div></div><p class="muted">Cada pessoa abre o link do app, toca em <b>“Sou cliente — consultar meus processos”</b>, informa o próprio e-mail e digita o código que chega por e-mail.</p>`, foot: '<span class="sp"></span><button class="btn primary" data-close>Entendi</button>' });
+    } catch (err) { if (btn) { btn.disabled = false; btn.classList.remove('busy'); btn.innerHTML = html0; } UI.toast('Não foi possível enviar o convite: ' + err.message, 'bad', 7000); }
   },
 
 
@@ -65,7 +68,7 @@ const Consult = {
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
-    $('#wPortal').onclick = () => Consult.habilitarPortal(e);
+    $('#wPortal').onclick = ev => Consult.habilitarPortal(e, ev.currentTarget);
     $('#wVer').onclick = async () => { const c = e.clienteId && DB.get('clientes', e.clienteId)?.tipo === 'Pessoa jurídica' ? DB.get('clientes', e.clienteId) : await Consult.clientePortal(e); Portal.preview(c.id); };
     $('#wLogo').onclick = () => ConnSplash.escolherLogo(e);
     $('#wDocs').onclick = () => Docs.open(e);
