@@ -5,9 +5,11 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.17.0';
+const APP_VERSAO = '1.17.2';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.17.2', data: '12/11/2026', itens: ['Portal da empresa: vários e-mails de acesso (separados por vírgula); “Habilitar portal” convida cada um e, depois, só os e-mails novos.'] },
+  { numero: '1.17.1', data: '12/11/2026', itens: ['Empresas: o portal passa a ser da própria empresa. No cadastro, “E-mail de acesso ao portal” substitui a escolha entre clientes dos processos; o app cria o cliente pessoa jurídica com os dados da empresa.', 'Página da empresa: botões “Habilitar portal” (envia o convite; depois mostra “Portal habilitado”) e “Ver como a empresa”.', 'Portal de empresa sem processos judiciais abre direto na Consultoria.'] },
   { numero: '1.17.0', data: '12/11/2026', itens: ['Remessa mensal: no portal, a empresa informa por contrato o faturado, o recebido, os postos ocupados, faltas e ocorrências, e anexa os documentos do mês (folha, benefícios, FGTS/INSS, notas, recebimentos, ponto, aditivos/apólices).', 'Tudo o que a empresa envia entra na fila “Remessas mensais” do escritório e só alimenta os dados gerais quando aprovado: divergências automáticas (faturado × contrato, recebido × faturado, postos, documentos obrigatórios) viram achados; números vão para Financeiro e Mão de obra; arquivos para Documentos.', 'Aba “Remessas mensais” em cada empresa, indicador na Visão geral e prazo mensal configurável no cadastro da empresa.', 'Portal: abertura com o cartão de conexão (brasão × logo da empresa). Botão “Logo” na página da empresa.'] },
   { numero: '1.16.2', data: '11/11/2026', itens: ['Páginas do menu (áreas do Judicial, Agenda, Empresas, Achados, Clientes…) ganharam o botão “Visão geral” no topo; ao voltar, a visão geral abre no card da seção de onde você veio (Judicial ou Consultoria).'] },
   { numero: '1.16.1', data: '11/11/2026', itens: ['Visão geral: as abas Judicial e Consultoria viraram dois cards com resumo (processos e compromissos; empresas e achados de risco alto); o card escolhido fica destacado.'] },
@@ -370,7 +372,7 @@ const SCHEMAS = {
       F('telefone', 'Telefone', 'tel'),
       F('inicio', 'Início da consultoria', 'date'),
       F('honorario', 'Honorário mensal (R$)', 'money'),
-      F('clienteId', 'Cliente com acesso ao portal', 'cliente', { hint: 'Permite à empresa ver painel e plano de ação no portal' }),
+      F('emailPortal', 'E-mails de acesso ao portal', 'text', { w: 'full', hint: 'Um ou mais e-mails, separados por vírgula: cada pessoa entra no portal com o próprio e-mail (consultoria e remessa mensal). A própria empresa vira o cliente do portal; depois de salvar, toque em “Habilitar portal” na página da empresa.' }),
       F('obs', 'Observações', 'long')
     ]
   },
@@ -2072,7 +2074,31 @@ const Consult = {
     $('#nEmpDocs').onclick = () => Docs.open(null);
     $('#nEmpDocs2') && ($('#nEmpDocs2').onclick = () => Docs.open(null));
   },
-  editEmpresa(e) { UI.editRecord('empresas', e, { onSaved: s => { location.hash = '#/empresa/' + s.id; App.render(); } }); },
+  editEmpresa(e) { UI.editRecord('empresas', e, { onSaved: async s => { if (s.emailPortal) await Consult.clientePortal(s); location.hash = '#/empresa/' + s.id; App.render(); } }); },
+  emailsPortal: e => [...new Set(String(e.emailPortal || '').toLowerCase().split(/[\s,;]+/).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)))],
+  /** a própria empresa é o cliente do portal: cria/atualiza o cliente pessoa jurídica e liga à empresa */
+  async clientePortal(e) {
+    const cnpj = onlyDigits(e.cnpj), atual = DB.get('clientes', e.clienteId);
+    let c = atual && atual.tipo === 'Pessoa jurídica' && (!cnpj || onlyDigits(atual.doc) === cnpj) ? atual : (cnpj && DB.where('clientes', x => onlyDigits(x.doc) === cnpj)[0]) || null;
+    const dados = { nome: e.razao || e.fantasia, tipo: 'Pessoa jurídica', doc: e.cnpj || '', email: Consult.emailsPortal(e)[0] || '', telefone: e.telefone || '', endereco: e.endereco || '', origem: 'consultoria' };
+    [c] = await DB.save('clientes', c ? { ...c, ...dados, nome: c.nome || dados.nome } : dados);
+    if (e.clienteId !== c.id) await DB.save('empresas', { ...DB.get('empresas', e.id), clienteId: c.id });
+    return c;
+  },
+  async habilitarPortal(e) {
+    const mails = Consult.emailsPortal(e);
+    if (!mails.length) { UI.toast('Informe ao menos um e-mail de acesso ao portal no cadastro da empresa.', 'warn'); return Consult.editEmpresa(e); }
+    const c = await Consult.clientePortal(e);
+    if (!Session.remote) { UI.toast('Empresa ligada ao portal. No modo local, use “Ver como o cliente” para testar.', 'ok', 6000); return App.render(true); }
+    const ja = DB.get('empresas', e.id).portalEmails || [], novos = mails.filter(x => !ja.includes(x));
+    const enviar = novos.length ? novos : (confirm('Todos os e-mails já foram convidados. Reenviar o convite para todos?\n\n' + mails.join('\n')) ? mails : []);
+    if (!enviar.length) return;
+    try { for (const m of enviar) await api('userSave', { user: { email: m, nome: c.nome, papel: 'cliente', clienteId: c.id, status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname });
+      await DB.save('empresas', { ...DB.get('empresas', e.id), portalConvite: new Date().toISOString(), portalEmails: [...new Set([...ja, ...enviar])] });
+      UI.toast(`Portal habilitado. Convite enviado para ${enviar.join(', ')}.`, 'ok', 7000); App.render(true);
+    } catch (err) { UI.toast(err.message, 'bad'); }
+  },
+
 
   workspace(v, eid, tab) {
     const e = DB.get('empresas', eid);
@@ -2080,11 +2106,15 @@ const Consult = {
     const T = TABS.find(t => t[0] === tab) || TABS[0];
     App.crumbs([{ t: 'Consultoria', href: '/empresas' }, { t: e.fantasia || e.razao, href: '/empresa/' + eid }, { t: T[1] }]);
     const count = c => empRecs(c, eid).length;
+    const pEm = e.portalEmails || [], pNovo = Consult.emailsPortal(e).some(x => !pEm.includes(x));
+    const portalBtn = `<button class="btn ghost" id="wPortal" title="${e.portalConvite ? esc(`Convite enviado em ${fmtDateTime(e.portalConvite)} para ${pEm.join(', ')}. ${pNovo ? 'Há e-mail novo: toque para convidar.' : 'Toque para reenviar.'}`) : 'A empresa passa a entrar no portal com os e-mails cadastrados'}">${icon('key')} ${!e.portalConvite ? 'Habilitar portal' : pNovo ? 'Convidar novo(s) e-mail(s)' : `Portal habilitado <span class="dot-ok"></span> <small class="muted">${pEm.length || 1} acesso(s)</small>`}</button>`;
     v.innerHTML = `<div class="ws-h"><div class="emp-ini lg">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div><span class="eyebrow">Consultoria jurídica</span><h1>${esc(e.fantasia || e.razao)}</h1><p class="muted">${esc(e.razao)}${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${e.segmento ? ' · ' + esc(e.segmento) : ''}</p></div>
-      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button><button class="btn ghost" id="wLogo" title="Logo da empresa (aparece na abertura do portal)">${e.logo ? `<img src="${esc(e.logo)}" alt="" class="logo-mini">` : icon('image')} Logo</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
+      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wVer" title="Ver o portal como a empresa vê">${icon('eye')} Ver como a empresa</button><button class="btn ghost" id="wLogo" title="Logo da empresa (aparece na abertura do portal)">${e.logo ? `<img src="${esc(e.logo)}" alt="" class="logo-mini">` : icon('image')} Logo</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
+    $('#wPortal').onclick = () => Consult.habilitarPortal(e);
+    $('#wVer').onclick = async () => { const c = e.clienteId && DB.get('clientes', e.clienteId)?.tipo === 'Pessoa jurídica' ? DB.get('clientes', e.clienteId) : await Consult.clientePortal(e); Portal.preview(c.id); };
     $('#wLogo').onclick = () => ConnSplash.escolherLogo(e);
     $('#wDocs').onclick = () => Docs.open(e);
     $('#wExp').onclick = () => Consult.exportar(e);
@@ -2740,7 +2770,8 @@ const Portal = {
     const emps = DB.where('empresas', e => e.clienteId === clienteId);
     const vis = id => DB.where('movimentos', m => m.processoId === id && m.visivelCliente).sort((a, b) => String(b.data).localeCompare(String(a.data)));
     const ag = DB.where('prazos', x => procs.some(p => p.id === x.processoId) && x.visivelCliente && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data));
-    const tabs = [['processos', 'Meus processos'], ['agenda', 'Agenda'], ...(emps.length ? [['consultoria', 'Consultoria'], ['remessa', 'Remessa mensal']] : []), ['contato', 'Fale com o escritório']];
+    const tabs = [...(procs.length || !emps.length ? [['processos', 'Meus processos'], ['agenda', 'Agenda']] : []), ...(emps.length ? [['consultoria', 'Consultoria'], ['remessa', 'Remessa mensal']] : []), ['contato', 'Fale com o escritório']];
+    if (!tabs.some(t => t[0] === st.tab)) { st.tab = tabs[0][0]; st.proc = null; }
     const wa = onlyDigits(esc0.whatsapp);
     let body = '';
     if (st.tab === 'processos' && st.proc) {

@@ -26,7 +26,31 @@ const Consult = {
     $('#nEmpDocs').onclick = () => Docs.open(null);
     $('#nEmpDocs2') && ($('#nEmpDocs2').onclick = () => Docs.open(null));
   },
-  editEmpresa(e) { UI.editRecord('empresas', e, { onSaved: s => { location.hash = '#/empresa/' + s.id; App.render(); } }); },
+  editEmpresa(e) { UI.editRecord('empresas', e, { onSaved: async s => { if (s.emailPortal) await Consult.clientePortal(s); location.hash = '#/empresa/' + s.id; App.render(); } }); },
+  emailsPortal: e => [...new Set(String(e.emailPortal || '').toLowerCase().split(/[\s,;]+/).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)))],
+  /** a própria empresa é o cliente do portal: cria/atualiza o cliente pessoa jurídica e liga à empresa */
+  async clientePortal(e) {
+    const cnpj = onlyDigits(e.cnpj), atual = DB.get('clientes', e.clienteId);
+    let c = atual && atual.tipo === 'Pessoa jurídica' && (!cnpj || onlyDigits(atual.doc) === cnpj) ? atual : (cnpj && DB.where('clientes', x => onlyDigits(x.doc) === cnpj)[0]) || null;
+    const dados = { nome: e.razao || e.fantasia, tipo: 'Pessoa jurídica', doc: e.cnpj || '', email: Consult.emailsPortal(e)[0] || '', telefone: e.telefone || '', endereco: e.endereco || '', origem: 'consultoria' };
+    [c] = await DB.save('clientes', c ? { ...c, ...dados, nome: c.nome || dados.nome } : dados);
+    if (e.clienteId !== c.id) await DB.save('empresas', { ...DB.get('empresas', e.id), clienteId: c.id });
+    return c;
+  },
+  async habilitarPortal(e) {
+    const mails = Consult.emailsPortal(e);
+    if (!mails.length) { UI.toast('Informe ao menos um e-mail de acesso ao portal no cadastro da empresa.', 'warn'); return Consult.editEmpresa(e); }
+    const c = await Consult.clientePortal(e);
+    if (!Session.remote) { UI.toast('Empresa ligada ao portal. No modo local, use “Ver como o cliente” para testar.', 'ok', 6000); return App.render(true); }
+    const ja = DB.get('empresas', e.id).portalEmails || [], novos = mails.filter(x => !ja.includes(x));
+    const enviar = novos.length ? novos : (confirm('Todos os e-mails já foram convidados. Reenviar o convite para todos?\n\n' + mails.join('\n')) ? mails : []);
+    if (!enviar.length) return;
+    try { for (const m of enviar) await api('userSave', { user: { email: m, nome: c.nome, papel: 'cliente', clienteId: c.id, status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname });
+      await DB.save('empresas', { ...DB.get('empresas', e.id), portalConvite: new Date().toISOString(), portalEmails: [...new Set([...ja, ...enviar])] });
+      UI.toast(`Portal habilitado. Convite enviado para ${enviar.join(', ')}.`, 'ok', 7000); App.render(true);
+    } catch (err) { UI.toast(err.message, 'bad'); }
+  },
+
 
   workspace(v, eid, tab) {
     const e = DB.get('empresas', eid);
@@ -34,11 +58,15 @@ const Consult = {
     const T = TABS.find(t => t[0] === tab) || TABS[0];
     App.crumbs([{ t: 'Consultoria', href: '/empresas' }, { t: e.fantasia || e.razao, href: '/empresa/' + eid }, { t: T[1] }]);
     const count = c => empRecs(c, eid).length;
+    const pEm = e.portalEmails || [], pNovo = Consult.emailsPortal(e).some(x => !pEm.includes(x));
+    const portalBtn = `<button class="btn ghost" id="wPortal" title="${e.portalConvite ? esc(`Convite enviado em ${fmtDateTime(e.portalConvite)} para ${pEm.join(', ')}. ${pNovo ? 'Há e-mail novo: toque para convidar.' : 'Toque para reenviar.'}`) : 'A empresa passa a entrar no portal com os e-mails cadastrados'}">${icon('key')} ${!e.portalConvite ? 'Habilitar portal' : pNovo ? 'Convidar novo(s) e-mail(s)' : `Portal habilitado <span class="dot-ok"></span> <small class="muted">${pEm.length || 1} acesso(s)</small>`}</button>`;
     v.innerHTML = `<div class="ws-h"><div class="emp-ini lg">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div><span class="eyebrow">Consultoria jurídica</span><h1>${esc(e.fantasia || e.razao)}</h1><p class="muted">${esc(e.razao)}${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${e.segmento ? ' · ' + esc(e.segmento) : ''}</p></div>
-      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button><button class="btn ghost" id="wLogo" title="Logo da empresa (aparece na abertura do portal)">${e.logo ? `<img src="${esc(e.logo)}" alt="" class="logo-mini">` : icon('image')} Logo</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
+      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wVer" title="Ver o portal como a empresa vê">${icon('eye')} Ver como a empresa</button><button class="btn ghost" id="wLogo" title="Logo da empresa (aparece na abertura do portal)">${e.logo ? `<img src="${esc(e.logo)}" alt="" class="logo-mini">` : icon('image')} Logo</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
+    $('#wPortal').onclick = () => Consult.habilitarPortal(e);
+    $('#wVer').onclick = async () => { const c = e.clienteId && DB.get('clientes', e.clienteId)?.tipo === 'Pessoa jurídica' ? DB.get('clientes', e.clienteId) : await Consult.clientePortal(e); Portal.preview(c.id); };
     $('#wLogo').onclick = () => ConnSplash.escolherLogo(e);
     $('#wDocs').onclick = () => Docs.open(e);
     $('#wExp').onclick = () => Consult.exportar(e);

@@ -94,7 +94,7 @@ const SCHEMAS = {
       F('telefone', 'Telefone', 'tel'),
       F('inicio', 'Início da consultoria', 'date'),
       F('honorario', 'Honorário mensal (R$)', 'money'),
-      F('clienteId', 'Cliente com acesso ao portal', 'cliente', { hint: 'Permite à empresa ver painel e plano de ação no portal' }),
+      F('emailPortal', 'E-mails de acesso ao portal', 'text', { w: 'full', hint: 'Um ou mais e-mails, separados por vírgula: cada pessoa entra no portal com o próprio e-mail (consultoria e remessa mensal). A própria empresa vira o cliente do portal; depois de salvar, toque em “Habilitar portal” na página da empresa.' }),
       F('obs', 'Observações', 'long')
     ]
   },
