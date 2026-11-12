@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.17.3';
+const APP_VERSAO = '1.18.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.18.0', data: '12/11/2026', itens: ['Portal do cliente: senha própria. No 1º acesso, depois de confirmar o código do e-mail, a pessoa cria a senha; nos próximos, entra com e-mail e senha (com “Esqueci minha senha”). 5 tentativas erradas bloqueiam por 15 minutos.', 'Portal: menu do usuário (toque nas iniciais, no topo) com empresa, atalhos (Consultoria, Remessa mensal com prazo/situação, relatório), Meu perfil, Alterar senha, instalar o app, falar com o escritório e Sair.', 'Gestão › Usuários: mostra se o cliente já criou senha e tem o botão “Zerar senha”.'] },
   { numero: '1.17.3', data: '12/11/2026', itens: ['Habilitar portal: o botão mostra “Enviando convite…” girando enquanto envia e, no fim, uma janela confirma para quais e-mails o convite foi e como o cliente entra.'] },
   { numero: '1.17.2', data: '12/11/2026', itens: ['Portal da empresa: vários e-mails de acesso (separados por vírgula); “Habilitar portal” convida cada um e, depois, só os e-mails novos.'] },
   { numero: '1.17.1', data: '12/11/2026', itens: ['Empresas: o portal passa a ser da própria empresa. No cadastro, “E-mail de acesso ao portal” substitui a escolha entre clientes dos processos; o app cria o cliente pessoa jurídica com os dados da empresa.', 'Página da empresa: botões “Habilitar portal” (envia o convite; depois mostra “Portal habilitado”) e “Ver como a empresa”.', 'Portal de empresa sem processos judiciais abre direto na Consultoria.'] },
@@ -189,6 +190,7 @@ const ls = {
 };
 
 /* ---------- API (Apps Script) ---------- */
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__afInstall = e; });
 const apiUrl = () => CONFIG.APPS_SCRIPT_URL || ls.get('apiUrl', '');
 async function api(action, payload = {}) {
   const url = apiUrl(); if (!url) throw new Error('Servidor não configurado.');
@@ -1224,13 +1226,30 @@ const App = {
             <p class="note" id="lgCodSt">Confira também a caixa de spam.</p>
             <div class="row-btns"><button type="button" class="link small" id="lgReenv">Reenviar código</button><button type="button" class="link small" data-lgback>Usar outra conta</button></div>
           </form>
+          <form id="lgStepSenha" class="stack" hidden>
+            <h1 id="lgSenTit">Bem-vindo(a) de volta</h1>
+            <p class="muted" id="lgSenTxt"></p>
+            <div class="fld"><label for="lgSen">Senha</label><div class="pw-wrap"><input id="lgSen" type="password" autocomplete="current-password" required><button type="button" class="pw-eye" data-eye="lgSen" aria-label="Mostrar senha">${icon('eye')}</button></div></div>
+            <button class="btn primary block" id="lgSenOk">${icon('key')} Entrar</button>
+            <p class="note" id="lgSenSt"></p>
+            <div class="row-btns"><button type="button" class="link small" id="lgEsqueci">Esqueci minha senha</button><button type="button" class="link small" data-lgback>Usar outra conta</button></div>
+          </form>
+          <form id="lgStepNova" class="stack" hidden>
+            <h1>Crie sua senha</h1>
+            <p class="muted">E-mail confirmado! Agora crie uma senha para os próximos acessos — assim você não precisa mais esperar o código por e-mail.</p>
+            <div class="fld"><label for="lgN1">Nova senha</label><div class="pw-wrap"><input id="lgN1" type="password" autocomplete="new-password" required><button type="button" class="pw-eye" data-eye="lgN1" aria-label="Mostrar senha">${icon('eye')}</button></div></div>
+            <div class="fld"><label for="lgN2">Repita a senha</label><input id="lgN2" type="password" autocomplete="new-password" required></div>
+            <ul class="pw-rules" id="lgRules"><li data-r="len">Pelo menos 8 caracteres</li><li data-r="let">Letras</li><li data-r="num">Números</li><li data-r="eq">As duas senhas iguais</li></ul>
+            <button class="btn primary block" id="lgNovaOk">${icon('check')} Salvar senha e entrar</button>
+            <p class="note" id="lgNovaSt"></p>
+          </form>
           ${apiUrl() ? '' : `<div class="notice">${icon('alert')}<div><b>Servidor ainda não conectado.</b> Enquanto isso, você pode conhecer e usar o app em <b>modo local</b> (dados apenas neste navegador).</div></div>
           <button class="btn ghost block" id="lgLocal">${icon('layers')} Entrar em modo local</button>`}
         </div>
       </section>
     </div>`;
     const L = { email: '', nome: '', foto: '', idToken: null, viaGoogle: true, ref: '', ident: '' };
-    const step = s => ['Google', 'Email', 'Code'].forEach(k => $('#lgStep' + k).hidden = k !== s);
+    const step = s => ['Google', 'Email', 'Code', 'Senha', 'Nova'].forEach(k => $('#lgStep' + k).hidden = k !== s);
     const aparelho = () => ls.get('aparelho', {});
     const entrar = async r => {
       Session.mode = 'remote'; Session.token = r.token; Session.user = { ...r.user, foto: r.user.foto || L.foto }; Session.save();
@@ -1240,8 +1259,13 @@ const App = {
     const pedirConsulta = async () => {
       const st = $('#lgCliSt'); st.textContent = 'Procurando seu cadastro…';
       try {
-        const r = await api('consultaPedir', { ident: L.ident });
-        L.ref = r.ref; L.email = r.destino;
+        const r = await api('consultaPedir', { ident: L.ident, esqueci: !!L.esqueci });
+        L.ref = r.ref; L.email = r.destino; L.esqueci = false;
+        if (r.status === 'senha') {
+          $('#lgSenTit').textContent = r.nome ? `Olá, ${r.nome}!` : 'Bem-vindo(a) de volta';
+          $('#lgSenTxt').innerHTML = `Digite a senha de <b>${esc(r.destino)}</b>.`; $('#lgSenSt').textContent = ''; $('#lgSen').value = ''; $('#lgSenOk').disabled = false;
+          step('Senha'); $('#lgSen').focus(); st.textContent = ''; return;
+        }
         $('#lgCodTit').textContent = r.nome ? `Olá, ${r.nome}!` : 'Confirme seu acesso';
         $('#lgCodTxt').innerHTML = `Enviamos um código de 6 dígitos para o e-mail do seu cadastro, <b>${esc(r.destino)}</b>. Digite-o abaixo para ver seus processos.`;
         $('#lgCod').disabled = false; $('#lgCodOk').disabled = false; $('#lgCodSt').textContent = `O código vale por ${r.validadeMin || 10} minutos; confira também a caixa de spam.`; step('Code'); $('#lgCod').focus(); st.textContent = '';
@@ -1279,8 +1303,28 @@ const App = {
       e.preventDefault(); const st = $('#lgCodSt'), cod = $('#lgCod').value;
       if (cod.length !== 6) { st.textContent = 'Digite os 6 dígitos do código.'; return; }
       $('#lgCodOk').disabled = true; st.textContent = 'Conferindo…';
-      try { await entrar(L.ref ? await api('consultaVerificar', { ref: L.ref, code: cod }) : await api('verifyCode', { email: L.email, code: cod })); } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
+      try {
+        const r = L.ref ? await api('consultaVerificar', { ref: L.ref, code: cod }) : await api('verifyCode', { email: L.email, code: cod });
+        if (r.criarSenha) { L.sessao = r; $('#lgN1').value = $('#lgN2').value = ''; regras(); step('Nova'); $('#lgN1').focus(); return; }
+        await entrar(r);
+      } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
     };
+    $('#lgStepSenha').onsubmit = async e => {
+      e.preventDefault(); const st = $('#lgSenSt'); $('#lgSenOk').disabled = true; st.textContent = 'Conferindo…';
+      try { await entrar(await api('senhaEntrar', { ref: L.ref, senha: $('#lgSen').value })); } catch (err) { st.textContent = err.message; $('#lgSenOk').disabled = false; $('#lgSen').select(); }
+    };
+    $('#lgEsqueci').onclick = () => { L.esqueci = true; step('Email'); pedirConsulta(); };
+    const okSenha = (a, b) => ({ len: a.length >= 8, let: /[A-Za-zÀ-ú]/.test(a), num: /\d/.test(a), eq: !!a && a === b });
+    const regras = () => { const o = okSenha($('#lgN1').value, $('#lgN2').value); $$('#lgRules li').forEach(li => li.classList.toggle('ok', o[li.dataset.r])); return Object.values(o).every(Boolean); };
+    $('#lgN1').oninput = $('#lgN2').oninput = regras;
+    $('#lgStepNova').onsubmit = async e => {
+      e.preventDefault(); const st = $('#lgNovaSt');
+      if (!regras()) { st.textContent = 'A senha ainda não atende a todos os itens acima.'; return; }
+      $('#lgNovaOk').disabled = true; st.textContent = 'Salvando…';
+      try { await api('senhaDefinir', { token: L.sessao.token, senha: $('#lgN1').value }); L.sessao.user.temSenha = true; await entrar(L.sessao); UI.toast('Senha criada. Nos próximos acessos, entre com e-mail e senha.', 'ok', 6000); }
+      catch (err) { st.textContent = err.message; $('#lgNovaOk').disabled = false; }
+    };
+    $$('[data-eye]').forEach(b => b.onclick = () => { const i = $('#' + b.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; });
     $('#lgReenv').onclick = pedirCodigo;
     $$('[data-lgback]').forEach(b => b.onclick = () => { try { google.accounts.id.disableAutoSelect(); } catch { } L.ref = ''; step('Google'); });
     $('#lgSemGoogle') && ($('#lgSemGoogle').onclick = () => step('Email'));
@@ -1604,14 +1648,14 @@ const Gestao = {
     const us = Gestao.users; App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge();
     const papel = { admin: 'Administrador', equipe: 'Equipe', cliente: 'Cliente' };
     const cliOpts = sel => `<option value="">— cliente —</option>${DB.all('clientes').sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}`;
-    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(DB.get('clientes', u.clienteId)?.nome || '') : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}</small></div><div class="u-act">${acoes}</div></div>`;
+    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(DB.get('clientes', u.clienteId)?.nome || '') : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
     const pend = us.filter(u => u.status === 'pendente'), ok = us.filter(u => u.status === 'autorizado'), bloq = us.filter(u => u.status === 'bloqueado');
     el.innerHTML = `
       <section class="card"><header><h2>⏳ Pedidos de acesso <span class="count">${pend.length}</span></h2></header>
         <p class="muted small">Só entra no app quem você autorizar. Quem tenta entrar sem autorização vira um pedido aqui, e você recebe um e-mail avisando.</p>
         ${pend.length ? pend.map(u => linha(u, `<select data-papel="${esc(u.email)}"><option value="equipe">Equipe</option><option value="cliente">Cliente</option><option value="admin">Administrador</option></select><select data-cli="${esc(u.email)}" hidden>${cliOpts('')}</select><button class="btn primary sm" data-ok="${esc(u.email)}">Autorizar</button><button class="btn ghost sm" data-rm="${esc(u.email)}">Recusar</button>`)).join('') : '<p class="muted small">Nenhum pedido no momento.</p>'}</section>
       <section class="card"><header><h2>✅ Autorizados <span class="count">${ok.length}</span></h2></header>
-        ${ok.map(u => linha(u, `<button class="btn ghost sm" data-ed="${esc(u.email)}">${icon('edit')} Editar</button>${u.email === Session.user.email ? '' : `<button class="btn ghost sm" data-bl="${esc(u.email)}">Bloquear</button>`}`)).join('') || '<p class="muted small">Nenhum.</p>'}</section>
+        ${ok.map(u => linha(u, `${u.papel === 'cliente' && u.temSenha ? `<button class="btn ghost sm" data-zs="${esc(u.email)}" title="No próximo acesso a pessoa recebe código por e-mail e cria uma senha nova">${icon('key')} Zerar senha</button>` : ''}<button class="btn ghost sm" data-ed="${esc(u.email)}">${icon('edit')} Editar</button>${u.email === Session.user.email ? '' : `<button class="btn ghost sm" data-bl="${esc(u.email)}">Bloquear</button>`}`)).join('') || '<p class="muted small">Nenhum.</p>'}</section>
       ${bloq.length ? `<section class="card"><header><h2>⛔ Bloqueados <span class="count">${bloq.length}</span></h2></header>${bloq.map(u => linha(u, `<button class="btn ghost sm" data-ed="${esc(u.email)}">Reativar</button><button class="btn ghost sm danger-text" data-rm="${esc(u.email)}">Remover</button>`)).join('')}</section>` : ''}
       <section class="card"><header><h2>➕ Autorizar antes de a pessoa entrar</h2></header>
         <form class="grid-form" id="uNovo"><div class="fld"><label>E-mail</label><input name="email" type="email" required placeholder="e-mail (conta Google ou e-mail do cliente)"></div><div class="fld"><label>Nome</label><input name="nome"></div>
@@ -1621,6 +1665,7 @@ const Gestao = {
         <div class="right"><button class="btn primary" id="uAdd">${icon('plus')} Autorizar</button></div>
         <p class="muted small">Administradores: e-mails da propriedade <b>DONOS</b> do Apps Script sempre têm acesso. Clientes veem só os próprios processos e, se a empresa estiver vinculada, o painel da consultoria.</p></section>`;
     const salvar = async (user, invite) => { try { await api('userSave', { user, invite, appUrl: location.origin + location.pathname }); UI.toast('Acesso atualizado: ' + user.email); Gestao.usuarios(el); } catch (e) { UI.toast(e.message, 'bad'); } };
+    $$('[data-zs]', el).forEach(b => b.onclick = async () => { if (!confirm(`Zerar a senha de ${b.dataset.zs}?\nNo próximo acesso, a pessoa recebe um código por e-mail e cria uma senha nova.`)) return; try { await api('senhaZerar', { email: b.dataset.zs }); UI.toast('Senha zerada.', 'ok'); App.render(true); } catch (e) { UI.toast(e.message, 'bad'); } });
     $$('[data-papel]', el).forEach(s => s.onchange = () => { $(`[data-cli="${s.dataset.papel}"]`, el).hidden = s.value !== 'cliente'; });
     $$('[data-ok]', el).forEach(b => b.onclick = () => { const em = b.dataset.ok, p = $(`[data-papel="${em}"]`, el).value, c = $(`[data-cli="${em}"]`, el).value; if (p === 'cliente' && !c) return UI.toast('Escolha o cliente vinculado.', 'bad'); const u = us.find(x => x.email === em); salvar({ ...u, papel: p, clienteId: p === 'cliente' ? c : '', status: 'autorizado' }, true); });
     $$('[data-bl]', el).forEach(b => b.onclick = async () => { if (await UI.confirm('Bloquear o acesso de ' + b.dataset.bl + '?', 'Bloquear')) salvar({ ...us.find(x => x.email === b.dataset.bl), status: 'bloqueado' }); });
@@ -2767,6 +2812,53 @@ const Portal = {
     Portal.st = { tab: 'processos', proc: procId || null };
     Portal.draw($('#pvBody'), clienteId, true);
   },
+  ini: n => `<span class="p-ava">${esc(((n || '?').split(/\s+/).filter(w => w.length > 2).map(w => w[0]).slice(0, 2).join('') || (n || '?')[0]).toUpperCase())}</span>`,
+  /** painel lateral do usuário do portal */
+  menu(root, o) {
+    const u = o.preview ? { nome: o.cli.nome, email: o.cli.email || '' } : Session.user, st = Portal.st;
+    const rm = o.emps.map(e => { const comp = Remessa.compPadrao(), r = Remessa.get(e.id, comp); return { e, comp, r, pz: Remessa.prazo(e, comp) }; });
+    const ov = document.createElement('div'); ov.className = 'p-drawer-ov';
+    ov.innerHTML = `<aside class="p-drawer" role="dialog" aria-label="Meu menu">
+      <div class="pd-h">${Portal.ini(u.nome)}<div><b>${esc(u.nome || '')}</b><small>${esc(u.email || '')}</small></div><button class="icon-btn" data-x aria-label="Fechar">${icon('x')}</button></div>
+      ${o.emps.map(e => `<div class="pd-emp">${e.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span class="pd-emp-i">${esc(e.sigla || (e.fantasia || e.razao || '?').slice(0, 2))}</span>`}<div><b>${esc(e.fantasia || e.razao)}</b><small>${e.cnpj ? 'CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}</small></div></div>`).join('')}
+      <nav class="pd-nav">${o.tabs.map(([k, l]) => `<button data-go="${k}" class="${st.tab === k ? 'on' : ''}">${icon({ processos: 'scale', agenda: 'calendar', consultoria: 'building', remessa: 'upload', contato: 'whatsapp' }[k] || 'file')}<span>${l}</span>${k === 'remessa' && rm[0] ? `<em class="pill ${Remessa.ST[rm[0].r?.status || 'aberta'][1]}">${rm[0].r?.status && rm[0].r.status !== 'aberta' ? Remessa.ST[rm[0].r.status][0].split(' ·')[0] : 'até ' + fmtDate(rm[0].pz).slice(0, 5)}</em>` : ''}</button>`).join('')}
+        ${o.emps.length ? `<button data-relat>${icon('printer')}<span>Relatório da consultoria</span></button>` : ''}</nav>
+      <div class="pd-sec">Minha conta</div>
+      <nav class="pd-nav"><button data-perfil>${icon('user')}<span>Meu perfil</span></button><button data-senha>${icon('key')}<span>${o.preview || Session.user?.temSenha !== false ? 'Alterar senha' : 'Criar senha'}</span></button>
+        ${window.__afInstall ? `<button data-inst>${icon('download')}<span>Instalar o app no celular</span></button>` : /iphone|ipad/i.test(navigator.userAgent) ? `<div class="pd-hint">${icon('download')} Para instalar: toque em <b>Compartilhar</b> › <b>Adicionar à Tela de Início</b>.</div>` : ''}</nav>
+      <div class="pd-sec">Escritório</div>
+      <div class="pd-fale">${o.wa ? `<a class="btn ghost sm" href="https://wa.me/55${o.wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${o.esc0.email ? `<a class="btn ghost sm" href="mailto:${esc(o.esc0.email)}">${icon('mail')} E-mail</a>` : ''}</div>
+      <div class="pd-foot">${o.preview ? '<small class="muted">Pré-visualização: perfil, senha e sair ficam disponíveis só para o cliente.</small>' : `<button class="btn ghost block" data-sair>${icon('logout')} Sair</button>`}<small class="muted">Versão ${esc(APP_VERSAO)}</small></div>
+    </aside>`;
+    (o.preview ? root.closest('.portal-preview') || document.body : document.body).appendChild(ov);
+    requestAnimationFrame(() => ov.classList.add('on'));
+    const fechar = () => { ov.classList.remove('on'); setTimeout(() => ov.remove(), 250); };
+    ov.onclick = ev => { if (ev.target === ov || ev.target.closest('[data-x]')) fechar(); };
+    $$('[data-go]', ov).forEach(b => b.onclick = () => { st.tab = b.dataset.go; st.proc = null; fechar(); o.redraw(); scrollTo(0, 0); });
+    $('[data-relat]', ov)?.addEventListener('click', () => { fechar(); Report.open(o.emps[0], { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: o.esc0.advogado, oab: o.esc0.oab, conf: true }); });
+    $('[data-sair]', ov)?.addEventListener('click', () => { ov.remove(); App.logout(); });
+    $('[data-inst]', ov)?.addEventListener('click', async () => { const p = window.__afInstall; window.__afInstall = null; fechar(); try { p.prompt(); await p.userChoice; } catch (_) {} });
+    const soCliente = () => { UI.toast('Disponível só para o cliente (fora da pré-visualização).', 'warn'); return o.preview; };
+    $('[data-perfil]', ov).onclick = () => { if (soCliente()) return; fechar(); Portal.perfil(o.redraw); };
+    $('[data-senha]', ov).onclick = () => { if (soCliente()) return; fechar(); Portal.senha(); };
+  },
+  perfil(redraw) {
+    const u = Session.user;
+    const m = UI.modal({ title: 'Meu perfil', sub: esc(u.email), body: `<form class="grid-form" id="pfF"><div class="fld full"><label>Nome</label><input name="nome" value="${esc(u.nome || '')}" required></div><div class="fld full"><label>Telefone / WhatsApp</label><input name="tel" inputmode="tel" value="${esc(u.telefone || '')}" placeholder="(81) 99999-9999"></div><div class="fld full"><label>E-mail de acesso</label><input value="${esc(u.email)}" disabled><small class="muted">Para trocar o e-mail, fale com o escritório.</small></div></form>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="pfOk">${icon('check')} Salvar</button>` });
+    $('#pfOk', m).onclick = async () => { const f = $('#pfF', m), b = $('#pfOk', m); b.disabled = true;
+      try { const r = await api('perfilSalvar', { nome: f.nome.value, telefone: f.tel.value }); Session.user = { ...Session.user, nome: r.nome, telefone: r.telefone }; Session.save(); UI.closeModal(); UI.toast('Perfil atualizado.', 'ok'); redraw(); } catch (e) { b.disabled = false; UI.toast(e.message, 'bad'); } };
+  },
+  senha() {
+    const tem = Session.user?.temSenha !== false;
+    const m = UI.modal({ title: tem ? 'Alterar senha' : 'Criar senha', body: `<form class="stack" id="psF">${tem ? '<div class="fld"><label>Senha atual</label><input name="a" type="password" autocomplete="current-password" required></div>' : ''}<div class="fld"><label>Nova senha</label><input name="n1" type="password" autocomplete="new-password" required></div><div class="fld"><label>Repita a nova senha</label><input name="n2" type="password" autocomplete="new-password" required></div><ul class="pw-rules"><li data-r="len">Pelo menos 8 caracteres</li><li data-r="let">Letras</li><li data-r="num">Números</li><li data-r="eq">As duas senhas iguais</li></ul><p class="note" id="psSt"></p></form>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="psOk">${icon('key')} Salvar senha</button>` });
+    const f = $('#psF', m), chk = () => { const a = f.n1.value, b = f.n2.value, o = { len: a.length >= 8, let: /[A-Za-zÀ-ú]/.test(a), num: /\d/.test(a), eq: !!a && a === b }; $$('.pw-rules li', m).forEach(li => li.classList.toggle('ok', o[li.dataset.r])); return Object.values(o).every(Boolean); };
+    f.n1.oninput = f.n2.oninput = chk;
+    $('#psOk', m).onclick = async () => { const st = $('#psSt', m); if (!chk()) return st.textContent = 'A nova senha ainda não atende a todos os itens.';
+      $('#psOk', m).disabled = true; st.textContent = 'Salvando…';
+      try { await api('senhaDefinir', { atual: f.a?.value || '', senha: f.n1.value }); Session.user = { ...Session.user, temSenha: true }; Session.save(); UI.closeModal(); UI.toast('Senha alterada.', 'ok'); } catch (e) { st.textContent = e.message; $('#psOk', m).disabled = false; } };
+  },
   draw(root, clienteId, preview) {
     const st = Portal.st, cli = DB.get('clientes', clienteId) || { nome: Session.user?.nome || '' };
     const esc0 = escritorio();
@@ -2802,7 +2894,7 @@ const Portal = {
         <div class="btn-row center">${wa ? `<a class="btn primary" href="https://wa.me/55${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${esc0.email ? `<a class="btn ghost" href="mailto:${esc(esc0.email)}">${icon('mail')} ${esc(esc0.email)}</a>` : ''}</div>
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }
-    root.innerHTML = `<header class="p-top"><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span>${preview ? '' : `<button class="btn ghost sm" id="pOut">${icon('logout')} Sair</button>`}</header>
+    root.innerHTML = `<header class="p-top"><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span><button class="p-me" id="pMe" title="Meu menu">${Portal.ini(preview ? cli.nome : Session.user?.nome || cli.nome)}<span>${icon('menu')}</span></button></header>
       <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá, ${esc((cli.nome || '').split(' ')[0])}</h1><p>Acompanhe aqui o andamento dos seus processos${emps.length ? ' e da consultoria da sua empresa' : ''}. As informações são atualizadas pelo escritório.</p></div>
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
       <main class="p-main">${body}</main>
@@ -2812,7 +2904,7 @@ const Portal = {
     $$('[data-proc]', root).forEach(b => b.onclick = () => { st.proc = b.dataset.proc; redraw(); root.scrollTop = 0; scrollTo(0, 0); });
     $$('[data-back]', root).forEach(b => b.onclick = () => { st.proc = null; redraw(); });
     $$('[data-rep]', root).forEach(b => b.onclick = () => Report.open(DB.get('empresas', b.dataset.rep), { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: esc0.advogado, oab: esc0.oab, conf: true }));
-    $('#pOut', root)?.addEventListener('click', () => App.logout());
+    $('#pMe', root).onclick = () => Portal.menu(root, { cli, emps, procs, tabs, preview, redraw, wa, esc0 });
     if ($('#pRem', root)) Remessa.portal($('#pRem', root), emps, redraw);
   }
 };

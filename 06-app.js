@@ -81,13 +81,30 @@ const App = {
             <p class="note" id="lgCodSt">Confira também a caixa de spam.</p>
             <div class="row-btns"><button type="button" class="link small" id="lgReenv">Reenviar código</button><button type="button" class="link small" data-lgback>Usar outra conta</button></div>
           </form>
+          <form id="lgStepSenha" class="stack" hidden>
+            <h1 id="lgSenTit">Bem-vindo(a) de volta</h1>
+            <p class="muted" id="lgSenTxt"></p>
+            <div class="fld"><label for="lgSen">Senha</label><div class="pw-wrap"><input id="lgSen" type="password" autocomplete="current-password" required><button type="button" class="pw-eye" data-eye="lgSen" aria-label="Mostrar senha">${icon('eye')}</button></div></div>
+            <button class="btn primary block" id="lgSenOk">${icon('key')} Entrar</button>
+            <p class="note" id="lgSenSt"></p>
+            <div class="row-btns"><button type="button" class="link small" id="lgEsqueci">Esqueci minha senha</button><button type="button" class="link small" data-lgback>Usar outra conta</button></div>
+          </form>
+          <form id="lgStepNova" class="stack" hidden>
+            <h1>Crie sua senha</h1>
+            <p class="muted">E-mail confirmado! Agora crie uma senha para os próximos acessos — assim você não precisa mais esperar o código por e-mail.</p>
+            <div class="fld"><label for="lgN1">Nova senha</label><div class="pw-wrap"><input id="lgN1" type="password" autocomplete="new-password" required><button type="button" class="pw-eye" data-eye="lgN1" aria-label="Mostrar senha">${icon('eye')}</button></div></div>
+            <div class="fld"><label for="lgN2">Repita a senha</label><input id="lgN2" type="password" autocomplete="new-password" required></div>
+            <ul class="pw-rules" id="lgRules"><li data-r="len">Pelo menos 8 caracteres</li><li data-r="let">Letras</li><li data-r="num">Números</li><li data-r="eq">As duas senhas iguais</li></ul>
+            <button class="btn primary block" id="lgNovaOk">${icon('check')} Salvar senha e entrar</button>
+            <p class="note" id="lgNovaSt"></p>
+          </form>
           ${apiUrl() ? '' : `<div class="notice">${icon('alert')}<div><b>Servidor ainda não conectado.</b> Enquanto isso, você pode conhecer e usar o app em <b>modo local</b> (dados apenas neste navegador).</div></div>
           <button class="btn ghost block" id="lgLocal">${icon('layers')} Entrar em modo local</button>`}
         </div>
       </section>
     </div>`;
     const L = { email: '', nome: '', foto: '', idToken: null, viaGoogle: true, ref: '', ident: '' };
-    const step = s => ['Google', 'Email', 'Code'].forEach(k => $('#lgStep' + k).hidden = k !== s);
+    const step = s => ['Google', 'Email', 'Code', 'Senha', 'Nova'].forEach(k => $('#lgStep' + k).hidden = k !== s);
     const aparelho = () => ls.get('aparelho', {});
     const entrar = async r => {
       Session.mode = 'remote'; Session.token = r.token; Session.user = { ...r.user, foto: r.user.foto || L.foto }; Session.save();
@@ -97,8 +114,13 @@ const App = {
     const pedirConsulta = async () => {
       const st = $('#lgCliSt'); st.textContent = 'Procurando seu cadastro…';
       try {
-        const r = await api('consultaPedir', { ident: L.ident });
-        L.ref = r.ref; L.email = r.destino;
+        const r = await api('consultaPedir', { ident: L.ident, esqueci: !!L.esqueci });
+        L.ref = r.ref; L.email = r.destino; L.esqueci = false;
+        if (r.status === 'senha') {
+          $('#lgSenTit').textContent = r.nome ? `Olá, ${r.nome}!` : 'Bem-vindo(a) de volta';
+          $('#lgSenTxt').innerHTML = `Digite a senha de <b>${esc(r.destino)}</b>.`; $('#lgSenSt').textContent = ''; $('#lgSen').value = ''; $('#lgSenOk').disabled = false;
+          step('Senha'); $('#lgSen').focus(); st.textContent = ''; return;
+        }
         $('#lgCodTit').textContent = r.nome ? `Olá, ${r.nome}!` : 'Confirme seu acesso';
         $('#lgCodTxt').innerHTML = `Enviamos um código de 6 dígitos para o e-mail do seu cadastro, <b>${esc(r.destino)}</b>. Digite-o abaixo para ver seus processos.`;
         $('#lgCod').disabled = false; $('#lgCodOk').disabled = false; $('#lgCodSt').textContent = `O código vale por ${r.validadeMin || 10} minutos; confira também a caixa de spam.`; step('Code'); $('#lgCod').focus(); st.textContent = '';
@@ -136,8 +158,28 @@ const App = {
       e.preventDefault(); const st = $('#lgCodSt'), cod = $('#lgCod').value;
       if (cod.length !== 6) { st.textContent = 'Digite os 6 dígitos do código.'; return; }
       $('#lgCodOk').disabled = true; st.textContent = 'Conferindo…';
-      try { await entrar(L.ref ? await api('consultaVerificar', { ref: L.ref, code: cod }) : await api('verifyCode', { email: L.email, code: cod })); } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
+      try {
+        const r = L.ref ? await api('consultaVerificar', { ref: L.ref, code: cod }) : await api('verifyCode', { email: L.email, code: cod });
+        if (r.criarSenha) { L.sessao = r; $('#lgN1').value = $('#lgN2').value = ''; regras(); step('Nova'); $('#lgN1').focus(); return; }
+        await entrar(r);
+      } catch (err) { st.textContent = err.message; $('#lgCodOk').disabled = false; }
     };
+    $('#lgStepSenha').onsubmit = async e => {
+      e.preventDefault(); const st = $('#lgSenSt'); $('#lgSenOk').disabled = true; st.textContent = 'Conferindo…';
+      try { await entrar(await api('senhaEntrar', { ref: L.ref, senha: $('#lgSen').value })); } catch (err) { st.textContent = err.message; $('#lgSenOk').disabled = false; $('#lgSen').select(); }
+    };
+    $('#lgEsqueci').onclick = () => { L.esqueci = true; step('Email'); pedirConsulta(); };
+    const okSenha = (a, b) => ({ len: a.length >= 8, let: /[A-Za-zÀ-ú]/.test(a), num: /\d/.test(a), eq: !!a && a === b });
+    const regras = () => { const o = okSenha($('#lgN1').value, $('#lgN2').value); $$('#lgRules li').forEach(li => li.classList.toggle('ok', o[li.dataset.r])); return Object.values(o).every(Boolean); };
+    $('#lgN1').oninput = $('#lgN2').oninput = regras;
+    $('#lgStepNova').onsubmit = async e => {
+      e.preventDefault(); const st = $('#lgNovaSt');
+      if (!regras()) { st.textContent = 'A senha ainda não atende a todos os itens acima.'; return; }
+      $('#lgNovaOk').disabled = true; st.textContent = 'Salvando…';
+      try { await api('senhaDefinir', { token: L.sessao.token, senha: $('#lgN1').value }); L.sessao.user.temSenha = true; await entrar(L.sessao); UI.toast('Senha criada. Nos próximos acessos, entre com e-mail e senha.', 'ok', 6000); }
+      catch (err) { st.textContent = err.message; $('#lgNovaOk').disabled = false; }
+    };
+    $$('[data-eye]').forEach(b => b.onclick = () => { const i = $('#' + b.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; });
     $('#lgReenv').onclick = pedirCodigo;
     $$('[data-lgback]').forEach(b => b.onclick = () => { try { google.accounts.id.disableAutoSelect(); } catch { } L.ref = ''; step('Google'); });
     $('#lgSemGoogle') && ($('#lgSemGoogle').onclick = () => step('Email'));
@@ -461,14 +503,14 @@ const Gestao = {
     const us = Gestao.users; App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge();
     const papel = { admin: 'Administrador', equipe: 'Equipe', cliente: 'Cliente' };
     const cliOpts = sel => `<option value="">— cliente —</option>${DB.all('clientes').sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}`;
-    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(DB.get('clientes', u.clienteId)?.nome || '') : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}</small></div><div class="u-act">${acoes}</div></div>`;
+    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(DB.get('clientes', u.clienteId)?.nome || '') : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
     const pend = us.filter(u => u.status === 'pendente'), ok = us.filter(u => u.status === 'autorizado'), bloq = us.filter(u => u.status === 'bloqueado');
     el.innerHTML = `
       <section class="card"><header><h2>⏳ Pedidos de acesso <span class="count">${pend.length}</span></h2></header>
         <p class="muted small">Só entra no app quem você autorizar. Quem tenta entrar sem autorização vira um pedido aqui, e você recebe um e-mail avisando.</p>
         ${pend.length ? pend.map(u => linha(u, `<select data-papel="${esc(u.email)}"><option value="equipe">Equipe</option><option value="cliente">Cliente</option><option value="admin">Administrador</option></select><select data-cli="${esc(u.email)}" hidden>${cliOpts('')}</select><button class="btn primary sm" data-ok="${esc(u.email)}">Autorizar</button><button class="btn ghost sm" data-rm="${esc(u.email)}">Recusar</button>`)).join('') : '<p class="muted small">Nenhum pedido no momento.</p>'}</section>
       <section class="card"><header><h2>✅ Autorizados <span class="count">${ok.length}</span></h2></header>
-        ${ok.map(u => linha(u, `<button class="btn ghost sm" data-ed="${esc(u.email)}">${icon('edit')} Editar</button>${u.email === Session.user.email ? '' : `<button class="btn ghost sm" data-bl="${esc(u.email)}">Bloquear</button>`}`)).join('') || '<p class="muted small">Nenhum.</p>'}</section>
+        ${ok.map(u => linha(u, `${u.papel === 'cliente' && u.temSenha ? `<button class="btn ghost sm" data-zs="${esc(u.email)}" title="No próximo acesso a pessoa recebe código por e-mail e cria uma senha nova">${icon('key')} Zerar senha</button>` : ''}<button class="btn ghost sm" data-ed="${esc(u.email)}">${icon('edit')} Editar</button>${u.email === Session.user.email ? '' : `<button class="btn ghost sm" data-bl="${esc(u.email)}">Bloquear</button>`}`)).join('') || '<p class="muted small">Nenhum.</p>'}</section>
       ${bloq.length ? `<section class="card"><header><h2>⛔ Bloqueados <span class="count">${bloq.length}</span></h2></header>${bloq.map(u => linha(u, `<button class="btn ghost sm" data-ed="${esc(u.email)}">Reativar</button><button class="btn ghost sm danger-text" data-rm="${esc(u.email)}">Remover</button>`)).join('')}</section>` : ''}
       <section class="card"><header><h2>➕ Autorizar antes de a pessoa entrar</h2></header>
         <form class="grid-form" id="uNovo"><div class="fld"><label>E-mail</label><input name="email" type="email" required placeholder="e-mail (conta Google ou e-mail do cliente)"></div><div class="fld"><label>Nome</label><input name="nome"></div>
@@ -478,6 +520,7 @@ const Gestao = {
         <div class="right"><button class="btn primary" id="uAdd">${icon('plus')} Autorizar</button></div>
         <p class="muted small">Administradores: e-mails da propriedade <b>DONOS</b> do Apps Script sempre têm acesso. Clientes veem só os próprios processos e, se a empresa estiver vinculada, o painel da consultoria.</p></section>`;
     const salvar = async (user, invite) => { try { await api('userSave', { user, invite, appUrl: location.origin + location.pathname }); UI.toast('Acesso atualizado: ' + user.email); Gestao.usuarios(el); } catch (e) { UI.toast(e.message, 'bad'); } };
+    $$('[data-zs]', el).forEach(b => b.onclick = async () => { if (!confirm(`Zerar a senha de ${b.dataset.zs}?\nNo próximo acesso, a pessoa recebe um código por e-mail e cria uma senha nova.`)) return; try { await api('senhaZerar', { email: b.dataset.zs }); UI.toast('Senha zerada.', 'ok'); App.render(true); } catch (e) { UI.toast(e.message, 'bad'); } });
     $$('[data-papel]', el).forEach(s => s.onchange = () => { $(`[data-cli="${s.dataset.papel}"]`, el).hidden = s.value !== 'cliente'; });
     $$('[data-ok]', el).forEach(b => b.onclick = () => { const em = b.dataset.ok, p = $(`[data-papel="${em}"]`, el).value, c = $(`[data-cli="${em}"]`, el).value; if (p === 'cliente' && !c) return UI.toast('Escolha o cliente vinculado.', 'bad'); const u = us.find(x => x.email === em); salvar({ ...u, papel: p, clienteId: p === 'cliente' ? c : '', status: 'autorizado' }, true); });
     $$('[data-bl]', el).forEach(b => b.onclick = async () => { if (await UI.confirm('Bloquear o acesso de ' + b.dataset.bl + '?', 'Bloquear')) salvar({ ...us.find(x => x.email === b.dataset.bl), status: 'bloqueado' }); });

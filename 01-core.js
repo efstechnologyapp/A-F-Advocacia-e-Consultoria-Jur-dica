@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.17.3';
+const APP_VERSAO = '1.18.0';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.18.0', data: '12/11/2026', itens: ['Portal do cliente: senha própria. No 1º acesso, depois de confirmar o código do e-mail, a pessoa cria a senha; nos próximos, entra com e-mail e senha (com “Esqueci minha senha”). 5 tentativas erradas bloqueiam por 15 minutos.', 'Portal: menu do usuário (toque nas iniciais, no topo) com empresa, atalhos (Consultoria, Remessa mensal com prazo/situação, relatório), Meu perfil, Alterar senha, instalar o app, falar com o escritório e Sair.', 'Gestão › Usuários: mostra se o cliente já criou senha e tem o botão “Zerar senha”.'] },
   { numero: '1.17.3', data: '12/11/2026', itens: ['Habilitar portal: o botão mostra “Enviando convite…” girando enquanto envia e, no fim, uma janela confirma para quais e-mails o convite foi e como o cliente entra.'] },
   { numero: '1.17.2', data: '12/11/2026', itens: ['Portal da empresa: vários e-mails de acesso (separados por vírgula); “Habilitar portal” convida cada um e, depois, só os e-mails novos.'] },
   { numero: '1.17.1', data: '12/11/2026', itens: ['Empresas: o portal passa a ser da própria empresa. No cadastro, “E-mail de acesso ao portal” substitui a escolha entre clientes dos processos; o app cria o cliente pessoa jurídica com os dados da empresa.', 'Página da empresa: botões “Habilitar portal” (envia o convite; depois mostra “Portal habilitado”) e “Ver como a empresa”.', 'Portal de empresa sem processos judiciais abre direto na Consultoria.'] },
@@ -189,6 +190,7 @@ const ls = {
 };
 
 /* ---------- API (Apps Script) ---------- */
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__afInstall = e; });
 const apiUrl = () => CONFIG.APPS_SCRIPT_URL || ls.get('apiUrl', '');
 async function api(action, payload = {}) {
   const url = apiUrl(); if (!url) throw new Error('Servidor não configurado.');

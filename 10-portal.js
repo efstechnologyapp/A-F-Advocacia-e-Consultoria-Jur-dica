@@ -20,6 +20,53 @@ const Portal = {
     Portal.st = { tab: 'processos', proc: procId || null };
     Portal.draw($('#pvBody'), clienteId, true);
   },
+  ini: n => `<span class="p-ava">${esc(((n || '?').split(/\s+/).filter(w => w.length > 2).map(w => w[0]).slice(0, 2).join('') || (n || '?')[0]).toUpperCase())}</span>`,
+  /** painel lateral do usuário do portal */
+  menu(root, o) {
+    const u = o.preview ? { nome: o.cli.nome, email: o.cli.email || '' } : Session.user, st = Portal.st;
+    const rm = o.emps.map(e => { const comp = Remessa.compPadrao(), r = Remessa.get(e.id, comp); return { e, comp, r, pz: Remessa.prazo(e, comp) }; });
+    const ov = document.createElement('div'); ov.className = 'p-drawer-ov';
+    ov.innerHTML = `<aside class="p-drawer" role="dialog" aria-label="Meu menu">
+      <div class="pd-h">${Portal.ini(u.nome)}<div><b>${esc(u.nome || '')}</b><small>${esc(u.email || '')}</small></div><button class="icon-btn" data-x aria-label="Fechar">${icon('x')}</button></div>
+      ${o.emps.map(e => `<div class="pd-emp">${e.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span class="pd-emp-i">${esc(e.sigla || (e.fantasia || e.razao || '?').slice(0, 2))}</span>`}<div><b>${esc(e.fantasia || e.razao)}</b><small>${e.cnpj ? 'CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}</small></div></div>`).join('')}
+      <nav class="pd-nav">${o.tabs.map(([k, l]) => `<button data-go="${k}" class="${st.tab === k ? 'on' : ''}">${icon({ processos: 'scale', agenda: 'calendar', consultoria: 'building', remessa: 'upload', contato: 'whatsapp' }[k] || 'file')}<span>${l}</span>${k === 'remessa' && rm[0] ? `<em class="pill ${Remessa.ST[rm[0].r?.status || 'aberta'][1]}">${rm[0].r?.status && rm[0].r.status !== 'aberta' ? Remessa.ST[rm[0].r.status][0].split(' ·')[0] : 'até ' + fmtDate(rm[0].pz).slice(0, 5)}</em>` : ''}</button>`).join('')}
+        ${o.emps.length ? `<button data-relat>${icon('printer')}<span>Relatório da consultoria</span></button>` : ''}</nav>
+      <div class="pd-sec">Minha conta</div>
+      <nav class="pd-nav"><button data-perfil>${icon('user')}<span>Meu perfil</span></button><button data-senha>${icon('key')}<span>${o.preview || Session.user?.temSenha !== false ? 'Alterar senha' : 'Criar senha'}</span></button>
+        ${window.__afInstall ? `<button data-inst>${icon('download')}<span>Instalar o app no celular</span></button>` : /iphone|ipad/i.test(navigator.userAgent) ? `<div class="pd-hint">${icon('download')} Para instalar: toque em <b>Compartilhar</b> › <b>Adicionar à Tela de Início</b>.</div>` : ''}</nav>
+      <div class="pd-sec">Escritório</div>
+      <div class="pd-fale">${o.wa ? `<a class="btn ghost sm" href="https://wa.me/55${o.wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${o.esc0.email ? `<a class="btn ghost sm" href="mailto:${esc(o.esc0.email)}">${icon('mail')} E-mail</a>` : ''}</div>
+      <div class="pd-foot">${o.preview ? '<small class="muted">Pré-visualização: perfil, senha e sair ficam disponíveis só para o cliente.</small>' : `<button class="btn ghost block" data-sair>${icon('logout')} Sair</button>`}<small class="muted">Versão ${esc(APP_VERSAO)}</small></div>
+    </aside>`;
+    (o.preview ? root.closest('.portal-preview') || document.body : document.body).appendChild(ov);
+    requestAnimationFrame(() => ov.classList.add('on'));
+    const fechar = () => { ov.classList.remove('on'); setTimeout(() => ov.remove(), 250); };
+    ov.onclick = ev => { if (ev.target === ov || ev.target.closest('[data-x]')) fechar(); };
+    $$('[data-go]', ov).forEach(b => b.onclick = () => { st.tab = b.dataset.go; st.proc = null; fechar(); o.redraw(); scrollTo(0, 0); });
+    $('[data-relat]', ov)?.addEventListener('click', () => { fechar(); Report.open(o.emps[0], { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: o.esc0.advogado, oab: o.esc0.oab, conf: true }); });
+    $('[data-sair]', ov)?.addEventListener('click', () => { ov.remove(); App.logout(); });
+    $('[data-inst]', ov)?.addEventListener('click', async () => { const p = window.__afInstall; window.__afInstall = null; fechar(); try { p.prompt(); await p.userChoice; } catch (_) {} });
+    const soCliente = () => { UI.toast('Disponível só para o cliente (fora da pré-visualização).', 'warn'); return o.preview; };
+    $('[data-perfil]', ov).onclick = () => { if (soCliente()) return; fechar(); Portal.perfil(o.redraw); };
+    $('[data-senha]', ov).onclick = () => { if (soCliente()) return; fechar(); Portal.senha(); };
+  },
+  perfil(redraw) {
+    const u = Session.user;
+    const m = UI.modal({ title: 'Meu perfil', sub: esc(u.email), body: `<form class="grid-form" id="pfF"><div class="fld full"><label>Nome</label><input name="nome" value="${esc(u.nome || '')}" required></div><div class="fld full"><label>Telefone / WhatsApp</label><input name="tel" inputmode="tel" value="${esc(u.telefone || '')}" placeholder="(81) 99999-9999"></div><div class="fld full"><label>E-mail de acesso</label><input value="${esc(u.email)}" disabled><small class="muted">Para trocar o e-mail, fale com o escritório.</small></div></form>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="pfOk">${icon('check')} Salvar</button>` });
+    $('#pfOk', m).onclick = async () => { const f = $('#pfF', m), b = $('#pfOk', m); b.disabled = true;
+      try { const r = await api('perfilSalvar', { nome: f.nome.value, telefone: f.tel.value }); Session.user = { ...Session.user, nome: r.nome, telefone: r.telefone }; Session.save(); UI.closeModal(); UI.toast('Perfil atualizado.', 'ok'); redraw(); } catch (e) { b.disabled = false; UI.toast(e.message, 'bad'); } };
+  },
+  senha() {
+    const tem = Session.user?.temSenha !== false;
+    const m = UI.modal({ title: tem ? 'Alterar senha' : 'Criar senha', body: `<form class="stack" id="psF">${tem ? '<div class="fld"><label>Senha atual</label><input name="a" type="password" autocomplete="current-password" required></div>' : ''}<div class="fld"><label>Nova senha</label><input name="n1" type="password" autocomplete="new-password" required></div><div class="fld"><label>Repita a nova senha</label><input name="n2" type="password" autocomplete="new-password" required></div><ul class="pw-rules"><li data-r="len">Pelo menos 8 caracteres</li><li data-r="let">Letras</li><li data-r="num">Números</li><li data-r="eq">As duas senhas iguais</li></ul><p class="note" id="psSt"></p></form>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="psOk">${icon('key')} Salvar senha</button>` });
+    const f = $('#psF', m), chk = () => { const a = f.n1.value, b = f.n2.value, o = { len: a.length >= 8, let: /[A-Za-zÀ-ú]/.test(a), num: /\d/.test(a), eq: !!a && a === b }; $$('.pw-rules li', m).forEach(li => li.classList.toggle('ok', o[li.dataset.r])); return Object.values(o).every(Boolean); };
+    f.n1.oninput = f.n2.oninput = chk;
+    $('#psOk', m).onclick = async () => { const st = $('#psSt', m); if (!chk()) return st.textContent = 'A nova senha ainda não atende a todos os itens.';
+      $('#psOk', m).disabled = true; st.textContent = 'Salvando…';
+      try { await api('senhaDefinir', { atual: f.a?.value || '', senha: f.n1.value }); Session.user = { ...Session.user, temSenha: true }; Session.save(); UI.closeModal(); UI.toast('Senha alterada.', 'ok'); } catch (e) { st.textContent = e.message; $('#psOk', m).disabled = false; } };
+  },
   draw(root, clienteId, preview) {
     const st = Portal.st, cli = DB.get('clientes', clienteId) || { nome: Session.user?.nome || '' };
     const esc0 = escritorio();
@@ -27,7 +74,8 @@ const Portal = {
     const emps = DB.where('empresas', e => e.clienteId === clienteId);
     const vis = id => DB.where('movimentos', m => m.processoId === id && m.visivelCliente).sort((a, b) => String(b.data).localeCompare(String(a.data)));
     const ag = DB.where('prazos', x => procs.some(p => p.id === x.processoId) && x.visivelCliente && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data));
-    const tabs = [['processos', 'Meus processos'], ['agenda', 'Agenda'], ...(emps.length ? [['consultoria', 'Consultoria'], ['remessa', 'Remessa mensal']] : []), ['contato', 'Fale com o escritório']];
+    const tabs = [...(procs.length || !emps.length ? [['processos', 'Meus processos'], ['agenda', 'Agenda']] : []), ...(emps.length ? [['consultoria', 'Consultoria'], ['remessa', 'Remessa mensal']] : []), ['contato', 'Fale com o escritório']];
+    if (!tabs.some(t => t[0] === st.tab)) { st.tab = tabs[0][0]; st.proc = null; }
     const wa = onlyDigits(esc0.whatsapp);
     let body = '';
     if (st.tab === 'processos' && st.proc) {
@@ -54,7 +102,7 @@ const Portal = {
         <div class="btn-row center">${wa ? `<a class="btn primary" href="https://wa.me/55${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${esc0.email ? `<a class="btn ghost" href="mailto:${esc(esc0.email)}">${icon('mail')} ${esc(esc0.email)}</a>` : ''}</div>
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }
-    root.innerHTML = `<header class="p-top"><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span>${preview ? '' : `<button class="btn ghost sm" id="pOut">${icon('logout')} Sair</button>`}</header>
+    root.innerHTML = `<header class="p-top"><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span><button class="p-me" id="pMe" title="Meu menu">${Portal.ini(preview ? cli.nome : Session.user?.nome || cli.nome)}<span>${icon('menu')}</span></button></header>
       <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá, ${esc((cli.nome || '').split(' ')[0])}</h1><p>Acompanhe aqui o andamento dos seus processos${emps.length ? ' e da consultoria da sua empresa' : ''}. As informações são atualizadas pelo escritório.</p></div>
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
       <main class="p-main">${body}</main>
@@ -64,7 +112,7 @@ const Portal = {
     $$('[data-proc]', root).forEach(b => b.onclick = () => { st.proc = b.dataset.proc; redraw(); root.scrollTop = 0; scrollTo(0, 0); });
     $$('[data-back]', root).forEach(b => b.onclick = () => { st.proc = null; redraw(); });
     $$('[data-rep]', root).forEach(b => b.onclick = () => Report.open(DB.get('empresas', b.dataset.rep), { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: esc0.advogado, oab: esc0.oab, conf: true }));
-    $('#pOut', root)?.addEventListener('click', () => App.logout());
+    $('#pMe', root).onclick = () => Portal.menu(root, { cli, emps, procs, tabs, preview, redraw, wa, esc0 });
     if ($('#pRem', root)) Remessa.portal($('#pRem', root), emps, redraw);
   }
 };
