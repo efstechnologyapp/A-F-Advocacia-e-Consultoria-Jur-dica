@@ -5,9 +5,10 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.16.0';
+const APP_VERSAO = '1.16.1';
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.16.1', data: '11/11/2026', itens: ['Visão geral: as abas Judicial e Consultoria viraram dois cards com resumo (processos e compromissos; empresas e achados de risco alto); o card escolhido fica destacado.'] },
   { numero: '1.16.0', data: '11/11/2026', itens: ['Visão geral separada em duas abas, Judicial e Consultoria; o app lembra a última aba aberta.', 'Judicial: processos em andamento, compromissos em 7 dias, intimações novas do DJEN, próximos compromissos, processos por área e últimas movimentações.', 'Consultoria: empresas, contratos auditados, contratos vencendo em 90 dias (com a lista), achados de risco alto e alertas.'] },
   { numero: '1.15.0', data: '11/11/2026', itens: ['Judicial: cada área (e “Todos os processos”) tem os cards “Pessoas físicas” e “Pessoas jurídicas”; tocar num card mostra só os processos daquele tipo, com as relações do escritório e em parceria. O tipo vem do cadastro do cliente (ou do CNPJ).', 'Card “Cliente a definir” aparece quando há processos sem cliente vinculado.'] },
   { numero: '1.14.3', data: '11/11/2026', itens: ['Judicial: botão “Alterar representação” nas relações de processos do escritório e em parceria, para corrigir em lote se o processo é próprio ou em parceria (e com quem).', 'Ficha do processo: campo “Representação” para trocar entre próprio e os parceiros.'] },

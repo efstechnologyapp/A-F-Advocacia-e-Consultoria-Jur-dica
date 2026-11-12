@@ -337,7 +337,10 @@ const Views = {
     <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>`;
     v.innerHTML = `
     <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${saudacao()}, ${esc((Session.user.nome || '').split(' ')[0] || 'Dr.')}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div></div>
-    <div class="pn-tabs"><button type="button" data-aba="jud" class="${aba === 'jud' ? 'on' : ''}">${icon('scale')} Judicial</button><button type="button" data-aba="con" class="${aba === 'con' ? 'on' : ''}">${icon('building')} Consultoria</button></div>
+    <div class="pn-tabs">
+      <button type="button" data-aba="jud" class="jud ${aba === 'jud' ? 'on' : ''}">${icon('scale')}<b>Judicial</b><small>${procs.length} processo(s) · ${prox7.length} compromisso(s) em 7 dias</small></button>
+      <button type="button" data-aba="con" class="con ${aba === 'con' ? 'on' : ''}">${icon('building')}<b>Consultoria</b><small>${empresas.length} empresa(s) · ${achAlt.length} achado(s) de risco alto</small></button>
+    </div>
     ${aba === 'con' ? con : jud}`;
     $$('[data-aba]', v).forEach(b => b.onclick = () => { try { localStorage.setItem('af-painel-aba', b.dataset.aba); } catch (_) {} App.render(true); });
     $$('a[href="#/painel?dj=1"]', v).forEach(a => a.onclick = ev => { ev.preventDefault(); DJEN.revisarPendentes(); });
