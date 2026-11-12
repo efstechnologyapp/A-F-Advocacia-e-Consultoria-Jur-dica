@@ -205,6 +205,14 @@ ConnSplash.multi = (emps) => {
   tm.push(setTimeout(fora, fimT + 900)); ov.onclick = fora;
 };
 /** logo da empresa (para o splash do portal): reduz a imagem e guarda no cadastro */
+/** escolhe uma imagem e devolve o logo reduzido (dataURL) */
+ConnSplash.lerLogo = cb => {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => { const f = inp.files[0]; if (!f) return; const img = new Image(), url = URL.createObjectURL(f);
+    img.onload = () => { const s = Math.min(1, 240 / Math.max(img.width, img.height)), cv = document.createElement('canvas'); cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); cb(cv.toDataURL('image/png')); };
+    img.src = url; };
+  inp.click();
+};
 ConnSplash.escolherLogo = e => {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = () => { const f = inp.files[0]; if (!f) return; const img = new Image(), url = URL.createObjectURL(f);

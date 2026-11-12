@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.21.0';
+const APP_VERSAO = '1.21.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -25,6 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.21.1', data: '12/11/2026', itens: ['Empresa: o logo passa a ser escolhido dentro de “Empresa” (edição), com prévia; “Ver como a empresa” fica só na aba Acessos ao portal.'] },
   { numero: '1.21.0', data: '12/11/2026', itens: ['A página Gestão do App (sistema, usuários do escritório, log, conexão do Drive e chave de IA) passa a ser exclusiva do desenvolvedor (EFS Technology). Os demais administradores continuam cuidando dos acessos de clientes nas empresas.'] },
   { numero: '1.20.5', data: '12/11/2026', itens: ['Portal da empresa › Acessos: a coluna “Pessoa” mostra “Nome (e-mail / telefone)” de cada usuário autorizado, com o WhatsApp clicável. Nome completo e WhatsApp podem ser informados no convite (pelo escritório ou no pedido do gerente) e a própria pessoa completa ou corrige em “Meus dados”.'] },
   { numero: '1.20.4', data: '12/11/2026', itens: ['Portal da empresa › Acessos: cada pessoa aparece uma vez, pelo e-mail e pelo nome que ela mesma informou (não mais o nome da empresa), com o perfil nesta empresa e a linha “Também acessa” para as outras empresas dela.', 'Servidor: registros repetidos do mesmo e-mail são juntados automaticamente.'] },
@@ -2155,7 +2156,17 @@ const Consult = {
     $('#nEmpDocs').onclick = () => Docs.open(null);
     $('#nEmpDocs2') && ($('#nEmpDocs2').onclick = () => Docs.open(null));
   },
-  editEmpresa(e) { UI.editRecord('empresas', e, { onSaved: async s => { if (s.emailPortal) await Consult.clientePortal(s); location.hash = '#/empresa/' + s.id; App.render(); } }); },
+  editEmpresa(e) {
+    const rec = e ? { ...e } : {};
+    UI.editRecord('empresas', rec, { onSaved: async s => { if (s.emailPortal) await Consult.clientePortal(s); location.hash = '#/empresa/' + s.id; App.render(); } });
+    // logo da empresa (aparece na abertura do portal): escolhido aqui e gravado ao salvar
+    const f = $('#modal form'); if (!f) return;
+    const box = document.createElement('div'); box.className = 'fld full logo-fld';
+    const desenha = () => { box.innerHTML = `<label>Logo da empresa</label><div class="logo-row"><div class="logo-prev">${rec.logo ? `<img src="${esc(rec.logo)}" alt="">` : `<span>${esc(rec.sigla || (rec.fantasia || rec.razao || '?').slice(0, 2).toUpperCase())}</span>`}</div><button type="button" class="btn ghost sm" id="lgEsc">${icon('image')} ${rec.logo ? 'Trocar logo' : 'Escolher logo'}</button>${rec.logo ? `<button type="button" class="link small danger-text" id="lgRem">remover</button>` : ''}<small class="muted">Aparece na abertura do portal da empresa. Grava ao salvar.</small></div>`;
+      $('#lgEsc', box).onclick = () => ConnSplash.lerLogo(url => { rec.logo = url; desenha(); });
+      $('#lgRem', box)?.addEventListener('click', () => { rec.logo = ''; desenha(); }); };
+    desenha(); f.prepend(box);
+  },
   emailsPortal: e => [...new Set(String(e.emailPortal || '').toLowerCase().split(/[\s,;]+/).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)))],
   /** a própria empresa é o cliente do portal: cria/atualiza o cliente pessoa jurídica e liga à empresa */
   async clientePortal(e) {
@@ -2171,7 +2182,7 @@ const Consult = {
   async portalTab(host, e) {
     const pubN = empRecs('achados', e.id).filter(a => a.visivelEmpresa === 'Sim').length, totN = empRecs('achados', e.id).length;
     const achBox = `<section class="card"><header><h2>${icon('alert')} Plano de ação no portal</h2><button class="btn ghost sm" id="ppPub">${icon('eye')} Escolher o que publicar</button></header><p class="muted small"><b>${pubN}</b> de ${totN} achados visíveis à empresa. O gerente vê todos os publicados; o funcionário, só os atribuídos a ele; a diretoria, só os números.</p></section>`;
-    if (!Session.remote) { host.innerHTML = `<section class="card"><p class="muted">Os acessos ao portal ficam no servidor. No modo local, use “Ver como a empresa”.</p></section>` + achBox; $('#ppPub', host).onclick = () => Consult.publicar(e); return; }
+    if (!Session.remote) { host.innerHTML = `<section class="card"><header><h2>${icon('key')} Acessos ao portal</h2><button class="btn ghost sm" id="ppVer">${icon('eye')} Ver como a empresa</button></header><p class="muted">Os acessos ao portal ficam no servidor. No modo local, use “Ver como a empresa”.</p></section>` + achBox; $('#ppPub', host).onclick = () => Consult.publicar(e); $('#ppVer', host).onclick = async () => Portal.preview((await Consult.clientePortal(DB.get('empresas', e.id))).id); return; }
     host.innerHTML = `<section class="card"><p class="muted">Carregando acessos…</p></section>`;
     let us = [], ped = [];
     try { [us, ped] = await Promise.all([api('users'), api('pedidosEquipe', { empresaId: e.id })]); } catch (err) { host.innerHTML = `<section class="card"><p class="muted">${esc(err.message)}</p></section>`; return; }
@@ -2246,13 +2257,11 @@ const Consult = {
     const count = c => empRecs(c, eid).length;
     const portalBtn = `<button class="btn ghost" id="wPortal" title="Quem acessa o portal desta empresa e com qual perfil">${icon('key')} Acessos ao portal</button>`;
     v.innerHTML = `<div class="ws-h"><div class="emp-ini lg">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div><span class="eyebrow">Consultoria jurídica</span><h1>${esc(e.fantasia || e.razao)}</h1><p class="muted">${esc(e.razao)}${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${e.segmento ? ' · ' + esc(e.segmento) : ''}</p></div>
-      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wVer" title="Ver o portal como a empresa vê">${icon('eye')} Ver como a empresa</button><button class="btn ghost" id="wLogo" title="Logo da empresa (aparece na abertura do portal)">${e.logo ? `<img src="${esc(e.logo)}" alt="" class="logo-mini">` : icon('image')} Logo</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
+      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
     $('#wPortal').onclick = () => location.hash = '#/empresa/' + e.id + '/portal';
-    $('#wVer').onclick = async () => { const c = e.clienteId && DB.get('clientes', e.clienteId)?.tipo === 'Pessoa jurídica' ? DB.get('clientes', e.clienteId) : await Consult.clientePortal(e); Portal.preview(c.id); };
-    $('#wLogo').onclick = () => ConnSplash.escolherLogo(e);
     $('#wDocs').onclick = () => Docs.open(e);
     $('#wExp').onclick = () => Consult.exportar(e);
     $('#wRep').onclick = () => Report.dialog(e);
@@ -5572,6 +5581,14 @@ ConnSplash.multi = (emps) => {
   tm.push(setTimeout(fora, fimT + 900)); ov.onclick = fora;
 };
 /** logo da empresa (para o splash do portal): reduz a imagem e guarda no cadastro */
+/** escolhe uma imagem e devolve o logo reduzido (dataURL) */
+ConnSplash.lerLogo = cb => {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => { const f = inp.files[0]; if (!f) return; const img = new Image(), url = URL.createObjectURL(f);
+    img.onload = () => { const s = Math.min(1, 240 / Math.max(img.width, img.height)), cv = document.createElement('canvas'); cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); cb(cv.toDataURL('image/png')); };
+    img.src = url; };
+  inp.click();
+};
 ConnSplash.escolherLogo = e => {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
   inp.onchange = () => { const f = inp.files[0]; if (!f) return; const img = new Image(), url = URL.createObjectURL(f);
