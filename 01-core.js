@@ -5,7 +5,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.21.3';
+const APP_VERSAO = '1.22.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -14,6 +14,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.22.0', data: '12/11/2026', itens: ['Relatório da consultoria: “Gerar relatório” abre um editor tipo Word já com o conteúdo padrão (gráficos e tabelas protegidos); o advogado acrescenta texto, títulos, listas e observações, salva e imprime/salva em PDF.', 'Cada relatório salvo vai para a pasta da empresa no Drive do escritório (subpasta “Relatórios”) e fica no histórico com “Abrir e continuar editando”.'] },
   { numero: '1.21.3', data: '12/11/2026', itens: ['Listas de pessoas com acesso (escritório e equipe do gerente): quando a pessoa ainda não informou o nome, aparece só o e-mail e o WhatsApp — nunca o nome da empresa.'] },
   { numero: '1.21.2', data: '12/11/2026', itens: ['Portal › Fale com o escritório: sem o nome do advogado e a OAB.'] },
   { numero: '1.21.1', data: '12/11/2026', itens: ['Empresa: o logo passa a ser escolhido dentro de “Empresa” (edição), com prévia; “Ver como a empresa” fica só na aba Acessos ao portal.'] },

@@ -8,8 +8,16 @@ const Report = {
     host.innerHTML = `<section class="card"><header><h2>${icon('printer')} Relatório de auditoria contratual</h2></header>
       <p class="muted">Gera um relatório completo com o brasão do escritório — sumário executivo, carteira de contratos, gráficos de receitas, custos, tributos e pessoal, conformidade, achados e plano de ação — pronto para imprimir ou salvar em PDF e entregar ao cliente.</p>
       <button class="btn primary" id="rGen">${icon('printer')} Gerar relatório</button></section>
-      <section class="card"><header><h2>${icon('history')} Relatórios emitidos</h2></header>${hist.length ? `<ul class="plain">${hist.map(h => `<li>${icon('file')} <b>${esc(h.titulo)}</b> <span class="muted small">— ${esc(fmtDateTime(h.em))} por ${esc(h.por)}${h.periodo ? ' · período ' + esc(h.periodo) : ''}</span></li>`).join('')}</ul>` : '<p class="muted small">Nenhum relatório emitido ainda.</p>'}</section>`;
+      <section class="card"><header><h2>${icon('history')} Relatórios emitidos</h2></header>${hist.length ? `<ul class="plain rel-hist">${hist.map(h => `<li>${icon('file')} <span><b>${esc(h.titulo)}</b> <span class="muted small">— ${esc(fmtDateTime(h.atualizado || h.em))} por ${esc(h.por)}${h.periodo ? ' · período ' + esc(h.periodo) : ''}</span></span><span class="rel-act">${h.url ? `<a class="link small" href="${esc(h.url)}" target="_blank" rel="noopener">${icon('external')} Drive</a>` : ''}${h.driveId || h.html ? `<button class="link small" data-reled="${esc(h.id || '')}">${icon('edit')} Abrir e continuar editando</button>` : ''}</span></li>`).join('')}</ul>` : '<p class="muted small">Nenhum relatório emitido ainda.</p>'}</section>`;
     $('#rGen').onclick = () => Report.dialog(e);
+    $$('[data-reled]', host).forEach(b => b.onclick = async () => {
+      const h = hist.find(x => x.id === b.dataset.reled); if (!h) return;
+      if (h.html) return Report.editar(e, h.html, h);
+      b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} Abrindo…`;
+      try { const r = await api('baixar', { fileId: h.driveId }); Report.editar(e, new TextDecoder().decode(Uint8Array.from(atob(r.base64), c => c.charCodeAt(0))), h); }
+      catch (err) { UI.toast('Não foi possível abrir: ' + err.message, 'bad'); }
+      b.disabled = false; b.innerHTML = `${icon('edit')} Abrir e continuar editando`;
+    });
   },
   dialog(e) {
     const comps = empRecs('indicadores', e.id).map(i => i.competencia).filter(c => /^\d{4}-\d{2}$/.test(c || '')).sort();
@@ -28,10 +36,8 @@ const Report = {
     });
     $('#rOk', m).onclick = async () => {
       const f = $('#rf'); const o = { titulo: f.titulo.value, de: parseComp(f.de.value), ate: parseComp(f.ate.value), resp: f.resp.value, oab: f.oab.value, parecer: f.parecer.value, conf: f.conf.checked, secs: new Set($$('input[name=sec]:checked', f).map(i => i.value)) };
-      UI.closeModal(); Report.open(e, o);
-      const key = 'rel:' + e.id, cur = DB.get('config', key) || { id: key, itens: [] };
-      cur.itens = [...(cur.itens || []), { titulo: o.titulo, em: new Date().toISOString(), por: Session.user.nome || Session.user.email, periodo: o.de ? fmtComp(o.de) + ' a ' + fmtComp(o.ate) : '' }].slice(-50);
-      await DB.save('config', cur);
+      UI.closeModal();
+      Report.editar(e, Report.build(e, o), { titulo: o.titulo, periodo: o.de ? fmtComp(o.de) + ' a ' + fmtComp(o.ate) : '' });
     };
   },
   build(e, o) {
@@ -84,6 +90,64 @@ const Report = {
     <main>${sec.join('')}
     <div class="sign"><div class="line"></div><b>${esc(o.resp || '')}</b><span>${esc(o.oab || '')}</span><span>${esc(nomeMarca())} — ${BRAND.caption}</span></div></main>
     <footer>${esc(nomeMarca())} · ${BRAND.caption}${o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''}</footer></body></html>`;
+  },
+  /** editor do relatório (tipo Word): texto livre, gráficos e tabelas protegidos; salva no Drive da empresa */
+  editar(e, html, reg) {
+    reg = { ...reg }; let sujo = false;
+    const ov = document.createElement('div'); ov.className = 'report-ov rel-ed';
+    const B = (cmd, ic, t, val) => `<button type="button" class="ed-b" data-cmd="${cmd}" ${val ? `data-val="${val}"` : ''} title="${t}">${ic}</button>`;
+    ov.innerHTML = `<div class="report-bar"><b>${icon('edit')} ${esc(reg.titulo || 'Relatório')}</b><span class="ed-st" id="edSt">${reg.driveId ? 'salvo no Drive' : 'ainda não salvo'}</span><span class="sp"></span>
+        <button class="btn primary" id="edSave">${icon('check')} Salvar</button><button class="btn ghost light" id="edPrint">${icon('printer')} Imprimir / salvar PDF</button><button class="icon-btn light" id="edClose" title="Fechar">${icon('x')}</button></div>
+      <div class="ed-tools">${B('undo', '↶', 'Desfazer')}${B('redo', '↷', 'Refazer')}<i></i>${B('formatBlock', 'Título', 'Título de seção', 'h2')}${B('formatBlock', 'Subtítulo', 'Subtítulo', 'h3')}${B('formatBlock', 'Texto', 'Texto normal', 'p')}<i></i>${B('bold', '<b>N</b>', 'Negrito')}${B('italic', '<i>I</i>', 'Itálico')}${B('underline', '<u>S</u>', 'Sublinhado')}<i></i>${B('insertUnorderedList', '• Lista', 'Lista com marcadores')}${B('insertOrderedList', '1. Lista', 'Lista numerada')}<i></i>${B('justifyLeft', '⯇', 'Alinhar à esquerda')}${B('justifyCenter', '≡', 'Centralizar')}${B('justifyFull', '☰', 'Justificar')}<i></i><button type="button" class="ed-b ed-obs" id="edObs" title="Inserir um parágrafo de observação onde está o cursor">＋ Observação</button><button type="button" class="ed-b" id="edPar" title="Inserir um parágrafo novo onde está o cursor">＋ Parágrafo</button></div>
+      <iframe title="Editor do relatório"></iframe>`;
+    document.body.appendChild(ov); document.body.classList.add('noscroll');
+    const fr = $('iframe', ov), st = $('#edSt', ov);
+    const marca = t => { sujo = t; st.textContent = t ? 'alterações não salvas' : (reg.driveId ? 'salvo no Drive' : 'salvo neste aparelho'); st.classList.toggle('sujo', t); };
+    fr.onload = () => {
+      const d = fr.contentDocument;
+      const css = d.createElement('style'); css.id = 'edCss';
+      css.textContent = `body{outline:none}[contenteditable=false]{cursor:default}.r-obs{border-left:4px solid #b08a3e;background:#fbf6ea;padding:8px 12px;margin:10px 0;border-radius:6px}@media screen{body{caret-color:#16213a}[contenteditable=false]:hover{outline:1px dashed #c9a45c;outline-offset:2px}}`;
+      d.head.appendChild(css);
+      d.body.contentEditable = 'true'; d.body.spellcheck = true;
+      d.querySelectorAll('svg, figure, table, img, .r-fig').forEach(x => x.setAttribute('contenteditable', 'false'));
+      d.addEventListener('input', () => marca(true));
+    };
+    fr.srcdoc = html;
+    const doc = () => fr.contentDocument, foco = () => { fr.contentWindow.focus(); };
+    $$('[data-cmd]', ov).forEach(b => b.onmousedown = ev => { ev.preventDefault(); foco(); doc().execCommand(b.dataset.cmd, false, b.dataset.val || null); marca(true); });
+    /** insere um bloco novo logo depois do parágrafo/título onde está o cursor e já seleciona o texto para digitar */
+    const inserir = h => {
+      foco(); const d = doc(), sel = d.getSelection(); let n = sel.rangeCount ? sel.getRangeAt(0).startContainer : d.body.lastChild;
+      while (n && n.parentNode && n.parentNode !== d.body && !/^(P|H[1-6]|LI|DIV|SECTION|FIGURE|TABLE|UL|OL)$/.test(n.nodeName)) n = n.parentNode;
+      if (n && n.nodeName === 'LI') n = n.closest('ul,ol') || n;
+      const t = d.createElement('template'); t.innerHTML = h; const el = t.content.firstElementChild;
+      if (n && n.parentNode) n.parentNode.insertBefore(el, n.nextSibling); else d.body.appendChild(el);
+      const alvo = el.querySelector('[data-txt]') || el, r = d.createRange(); r.selectNodeContents(alvo); sel.removeAllRanges(); sel.addRange(r); marca(true);
+    };
+    $('#edObs', ov).onmousedown = ev => { ev.preventDefault(); inserir('<div class="r-obs"><b>Observação:</b> <span data-txt>escreva aqui…</span></div>'); };
+    $('#edPar', ov).onmousedown = ev => { ev.preventDefault(); inserir('<p>Novo parágrafo…</p>'); };
+    /** HTML final: sem os atributos de edição */
+    const limpo = () => { const c = doc().documentElement.cloneNode(true); c.querySelector('#edCss')?.remove(); c.querySelector('body').removeAttribute('contenteditable'); c.querySelector('body').removeAttribute('spellcheck'); c.querySelectorAll('[contenteditable]').forEach(x => x.removeAttribute('contenteditable')); return '<!doctype html>\n' + c.outerHTML; };
+    const salvar = async () => {
+      const b = $('#edSave', ov), h0 = b.innerHTML; b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} Salvando…`;
+      try {
+        const html2 = limpo(), agora = new Date().toISOString(), nome = `${(reg.em || agora).slice(0, 10)} · ${reg.titulo || 'Relatório'} · ${e.fantasia || e.razao}.html`;
+        if (Session.remote && Escritorio.conectado) { const r = await api('relatorioSalvar', { empresaKey: e.id, empresa: e.fantasia || e.razao, nome, html: html2, fileId: reg.driveId || '' }); if (!r?.id) throw new Error('o Drive não confirmou a gravação'); reg.driveId = r.id; reg.url = r.url; delete reg.html; }
+        else reg.html = html2; // sem o Drive do escritório (modo local): fica guardado no app
+        const key = 'rel:' + e.id, cur = DB.get('config', key) || { id: key, itens: [] };
+        reg.id = reg.id || uid('rl'); reg.em = reg.em || agora; reg.atualizado = agora; reg.por = Session.user.nome || Session.user.email;
+        cur.itens = [...(cur.itens || []).filter(x => x.id !== reg.id), reg].slice(-80);
+        await DB.save('config', cur); marca(false);
+        UI.toast(reg.driveId ? 'Relatório salvo na pasta da empresa no Drive.' : 'Relatório salvo.', 'ok');
+      } catch (err) { UI.toast('Não foi possível salvar: ' + err.message, 'bad', 7000); }
+      b.disabled = false; b.innerHTML = h0;
+    };
+    $('#edSave', ov).onclick = salvar;
+    $('#edPrint', ov).onclick = () => { const d = doc(); d.body.contentEditable = 'false'; fr.contentWindow.print(); setTimeout(() => d.body.contentEditable = 'true', 500); };
+    $('#edClose', ov).onclick = async () => {
+      if (sujo && !await UI.confirm('Há alterações não salvas. Fechar mesmo assim?', 'Fechar sem salvar')) return;
+      ov.remove(); document.body.classList.remove('noscroll'); if (location.hash.includes('/relatorios')) App.render(true);
+    };
   },
   open(e, o) { Report.mostrar(Report.build(e, o), o.titulo, `Relatorio_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.html`); },
   mostrar(html, titulo, arquivo) {
