@@ -5,7 +5,7 @@
 const TABS = [
   ['painel', 'Painel', 'chart'], ['contratos', 'Contratos', 'file'], ['obrigacoes', 'Obrigações', 'check'], ['maoDeObra', 'Mão de obra', 'users'],
   ['materiais', 'Materiais', 'layers'], ['financeiro', 'Financeiro', 'briefcase'], ['medicoes', 'Medições', 'list'], ['indicadores', 'Indicadores', 'chart'],
-  ['achados', 'Achados e plano de ação', 'alert'], ['supervenientes', 'Custos supervenientes', 'briefcase'], ['documentos', 'Documentos', 'file'], ['aditivos', 'Aditivos', 'edit'], ['remessas', 'Remessas mensais', 'upload'], ['relatorios', 'Relatórios', 'printer']
+  ['achados', 'Achados e plano de ação', 'alert'], ['supervenientes', 'Custos supervenientes', 'briefcase'], ['documentos', 'Documentos', 'file'], ['aditivos', 'Aditivos', 'edit'], ['remessas', 'Remessas mensais', 'upload'], ['portal', 'Portal da empresa', 'key'], ['relatorios', 'Relatórios', 'printer']
 ];
 const empRecs = (c, eid) => DB.where(c, r => r.empresaId === eid);
 const tomadorBase = c => String(c.tomador || '').split(/ [–-] /)[0].replace(/\(ver unidade\)/i, '').trim() || 'Não informado';
@@ -37,6 +37,57 @@ const Consult = {
     if (e.clienteId !== c.id) await DB.save('empresas', { ...DB.get('empresas', e.id), clienteId: c.id });
     return c;
   },
+  /* ---------------- ACESSOS AO PORTAL (perfis por empresa) ---------------- */
+  PERFIS: [['func', 'Funcionário'], ['ger', 'Gerente / Administrador'], ['dir', 'Diretoria']],
+  async portalTab(host, e) {
+    const pubN = empRecs('achados', e.id).filter(a => a.visivelEmpresa === 'Sim').length, totN = empRecs('achados', e.id).length;
+    const achBox = `<section class="card"><header><h2>${icon('alert')} Plano de ação no portal</h2><button class="btn ghost sm" id="ppPub">${icon('eye')} Escolher o que publicar</button></header><p class="muted small"><b>${pubN}</b> de ${totN} achados visíveis à empresa. O gerente vê todos os publicados; o funcionário, só os atribuídos a ele; a diretoria, só os números.</p></section>`;
+    if (!Session.remote) { host.innerHTML = `<section class="card"><p class="muted">Os acessos ao portal ficam no servidor. No modo local, use “Ver como a empresa”.</p></section>` + achBox; $('#ppPub', host).onclick = () => Consult.publicar(e); return; }
+    host.innerHTML = `<section class="card"><p class="muted">Carregando acessos…</p></section>`;
+    let us = [], ped = [];
+    try { [us, ped] = await Promise.all([api('users'), api('pedidosEquipe', { empresaId: e.id })]); } catch (err) { host.innerHTML = `<section class="card"><p class="muted">${esc(err.message)}</p></section>`; return; }
+    const cid = e.clienteId, entr = u => String(u.clienteId || '').split(/[,;\s]+/).find(x => x.split(':')[0] === cid);
+    const ms = cid ? us.filter(u => u.papel === 'cliente' && entr(u)).map(u => ({ ...u, perfil: (entr(u).split(':')[1] || 'func') })) : [];
+    const opt = sel => Consult.PERFIS.map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
+    host.innerHTML = `<section class="card"><header><h2>${icon('key')} Acessos ao portal <small class="muted">${ms.length}</small></h2><button class="btn ghost sm" id="ppVer">${icon('eye')} Ver como a empresa</button></header>
+        <p class="muted small"><b>Funcionário</b>: contratos (lista), pendências atribuídas e remessa. <b>Gerente</b>: contratos (lista), plano de ação, revisa e envia a remessa, pede acessos de funcionários. <b>Diretoria</b>: painel com carteira, receita, custos e margem (só consulta).</p>
+        ${ms.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>${ms.map(u => `<tr><td><b>${esc(u.nome || '—')}</b><small class="muted" style="display:block">${esc(u.email)}</small></td><td><select class="input sm" data-pf="${esc(u.email)}">${opt(u.perfil)}</select></td><td><small>${u.status !== 'autorizado' ? esc(u.status) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'convidado, ainda não entrou'}${u.temSenha ? ' · senha criada' : ''}</small></td><td class="right nowrap"><button class="link small" data-conv="${esc(u.email)}">reenviar convite</button>${u.temSenha ? ` · <button class="link small" data-zs="${esc(u.email)}">zerar senha</button>` : ''} · <button class="link small danger-text" data-rmv="${esc(u.email)}">remover</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Ninguém tem acesso ainda.</p>'}</section>
+      ${ped.length ? `<section class="card"><header><h2>⏳ Pedidos do gerente <small class="muted">${ped.length}</small></h2></header>${ped.map(p => `<div class="u-row"><div class="u-who"><b>${p.tipo === 'remover' ? 'Remover' : 'Incluir como funcionário'}: ${esc(p.nome || p.email)}</b><small>${esc(p.email)} · pedido por ${esc(p.por)} em ${fmtDateTime(p.em)}</small></div><div class="u-act"><button class="btn primary sm" data-apr="${p.id}">Aprovar</button><button class="btn ghost sm" data-rec="${p.id}">Recusar</button></div></div>`).join('')}</section>` : ''}
+      <section class="card"><header><h2>${icon('plus')} Adicionar acesso</h2></header><form class="grid-form" id="ppF"><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld"><label>Nome (opcional)</label><input name="nome"></div><div class="fld"><label>Perfil</label><select name="pf">${opt('func')}</select></div><div class="fld right" style="align-self:end"><button class="btn primary" id="ppAdd">${icon('mail')} Liberar e enviar convite</button></div></form></section>
+      ${achBox}`;
+    const salvar = async (user, invite, btn, msg) => {
+      const h0 = btn?.innerHTML; if (btn) { btn.disabled = true; btn.innerHTML = `${icon('sync', 'spin')} Enviando…`; }
+      try { await api('userSave', { user, invite, appUrl: location.origin + location.pathname }); UI.toast(msg, 'ok', 6000); Consult.portalTab(host, e); }
+      catch (err) { if (btn) { btn.disabled = false; btn.innerHTML = h0; } UI.toast(err.message, 'bad', 7000); }
+    };
+    const garanteCli = async () => (await Consult.clientePortal(DB.get('empresas', e.id))).id;
+    $('#ppVer', host).onclick = async () => Portal.preview(await garanteCli());
+    $('#ppF', host).onsubmit = async ev => { ev.preventDefault(); const f = ev.target, c = await garanteCli(); salvar({ email: f.email.value.trim().toLowerCase(), nome: f.nome.value.trim() || undefined, papel: 'cliente', clienteId: c + ':' + f.pf.value, status: 'autorizado' }, true, $('#ppAdd', host), `Acesso liberado e convite enviado para ${f.email.value.trim()}.`); };
+    $$('[data-pf]', host).forEach(s => s.onchange = () => salvar({ email: s.dataset.pf, papel: 'cliente', clienteId: cid + ':' + s.value, status: 'autorizado' }, false, null, 'Perfil alterado. Vale a partir do próximo acesso da pessoa.'));
+    $$('[data-conv]', host).forEach(b => b.onclick = () => salvar({ email: b.dataset.conv, papel: 'cliente', clienteId: cid + ':' + ms.find(u => u.email === b.dataset.conv).perfil, status: 'autorizado' }, true, b, 'Convite reenviado.'));
+    $$('[data-zs]', host).forEach(b => b.onclick = async () => { if (!confirm(`Zerar a senha de ${b.dataset.zs}?`)) return; try { await api('senhaZerar', { email: b.dataset.zs }); UI.toast('Senha zerada.', 'ok'); Consult.portalTab(host, e); } catch (err) { UI.toast(err.message, 'bad'); } });
+    $$('[data-rmv]', host).forEach(b => b.onclick = () => confirm(`Remover o acesso de ${b.dataset.rmv} a esta empresa? As outras empresas dele não mudam.`) && salvar({ email: b.dataset.rmv, papel: 'cliente', clienteId: '', removerCliente: cid, status: 'autorizado' }, false, b, 'Acesso removido.'));
+    $$('[data-apr]', host).forEach(b => b.onclick = async () => { const p = ped.find(x => x.id === b.dataset.apr), c = await garanteCli(); b.disabled = true;
+      try { await api('userSave', p.tipo === 'remover' ? { user: { email: p.email, papel: 'cliente', clienteId: '', removerCliente: c, status: 'autorizado' } } : { user: { email: p.email, nome: p.nome || undefined, papel: 'cliente', clienteId: c + ':func', status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname });
+        await api('pedidoResolver', { id: p.id, aprovado: true }); UI.toast(p.tipo === 'remover' ? 'Acesso removido.' : 'Aprovado e convite enviado.', 'ok'); Consult.portalTab(host, e); } catch (err) { b.disabled = false; UI.toast(err.message, 'bad'); } });
+    $$('[data-rec]', host).forEach(b => b.onclick = async () => { try { await api('pedidoResolver', { id: b.dataset.rec, aprovado: false }); UI.toast('Pedido recusado.'); Consult.portalTab(host, e); } catch (err) { UI.toast(err.message, 'bad'); } });
+    $('#ppPub', host).onclick = () => Consult.publicar(e);
+  },
+  /** escolher quais achados aparecem no portal da empresa */
+  publicar(e) {
+    const as = empRecs('achados', e.id).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
+    if (!as.length) return UI.toast('Esta empresa não tem achados.');
+    const m = UI.modal({ title: 'Publicar achados no portal', sub: esc(e.fantasia || e.razao) + ' · marque o que a empresa pode ver', wide: true,
+      body: `<div class="btn-row"><button class="link small" id="pbTodos">marcar todos</button><button class="link small" id="pbAb">só os em aberto</button><button class="link small" id="pbNen">desmarcar todos</button></div>
+        <div class="rm-dv">${as.map(a => `<label class="chk"><input type="checkbox" data-pb="${a.id}" ${a.visivelEmpresa === 'Sim' ? 'checked' : ''}><span class="pill ${/alto|crít/i.test(a.risco || '') ? 'bad' : /médio/i.test(a.risco || '') ? 'warn' : 'muted'}">${esc(a.risco || '—')}</span><span><b>${esc(a.codigo || '')}</b> ${esc(a.contrato || '')} — ${esc(String(a.achado || '').slice(0, 160))} <small class="muted">(${esc(a.status || 'Pendente')})</small></span></label>`).join('')}</div>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="pbOk">${icon('check')} Salvar</button>` });
+    const cx = () => $$('[data-pb]', m);
+    $('#pbTodos', m).onclick = () => cx().forEach(c => c.checked = true);
+    $('#pbNen', m).onclick = () => cx().forEach(c => c.checked = false);
+    $('#pbAb', m).onclick = () => cx().forEach(c => c.checked = achadoAberto(DB.get('achados', c.dataset.pb)));
+    $('#pbOk', m).onclick = async () => { const mud = cx().map(c => ({ a: DB.get('achados', c.dataset.pb), v: c.checked ? 'Sim' : 'Não' })).filter(x => (x.a.visivelEmpresa || 'Não') !== x.v).map(x => ({ ...x.a, visivelEmpresa: x.v }));
+      if (mud.length) await DB.save('achados', mud); UI.closeModal(); UI.toast(`${mud.length} achado(s) atualizado(s).`, 'ok'); App.render(true); };
+  },
   async habilitarPortal(e, btn) {
     const mails = Consult.emailsPortal(e);
     if (!mails.length) { UI.toast('Informe ao menos um e-mail de acesso ao portal no cadastro da empresa.', 'warn'); return Consult.editEmpresa(e); }
@@ -61,14 +112,13 @@ const Consult = {
     const T = TABS.find(t => t[0] === tab) || TABS[0];
     App.crumbs([{ t: 'Consultoria', href: '/empresas' }, { t: e.fantasia || e.razao, href: '/empresa/' + eid }, { t: T[1] }]);
     const count = c => empRecs(c, eid).length;
-    const pEm = e.portalEmails || [], pNovo = Consult.emailsPortal(e).some(x => !pEm.includes(x));
-    const portalBtn = `<button class="btn ghost" id="wPortal" title="${e.portalConvite ? esc(`Convite enviado em ${fmtDateTime(e.portalConvite)} para ${pEm.join(', ')}. ${pNovo ? 'Há e-mail novo: toque para convidar.' : 'Toque para reenviar.'}`) : 'A empresa passa a entrar no portal com os e-mails cadastrados'}">${icon('key')} ${!e.portalConvite ? 'Habilitar portal' : pNovo ? 'Convidar novo(s) e-mail(s)' : `Portal habilitado <span class="dot-ok"></span> <small class="muted">${pEm.length || 1} acesso(s)</small>`}</button>`;
+    const portalBtn = `<button class="btn ghost" id="wPortal" title="Quem acessa o portal desta empresa e com qual perfil">${icon('key')} Acessos ao portal</button>`;
     v.innerHTML = `<div class="ws-h"><div class="emp-ini lg">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div><span class="eyebrow">Consultoria jurídica</span><h1>${esc(e.fantasia || e.razao)}</h1><p class="muted">${esc(e.razao)}${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${e.segmento ? ' · ' + esc(e.segmento) : ''}</p></div>
       <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wVer" title="Ver o portal como a empresa vê">${icon('eye')} Ver como a empresa</button><button class="btn ghost" id="wLogo" title="Logo da empresa (aparece na abertura do portal)">${e.logo ? `<img src="${esc(e.logo)}" alt="" class="logo-mini">` : icon('image')} Logo</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
-    $('#wPortal').onclick = ev => Consult.habilitarPortal(e, ev.currentTarget);
+    $('#wPortal').onclick = () => location.hash = '#/empresa/' + e.id + '/portal';
     $('#wVer').onclick = async () => { const c = e.clienteId && DB.get('clientes', e.clienteId)?.tipo === 'Pessoa jurídica' ? DB.get('clientes', e.clienteId) : await Consult.clientePortal(e); Portal.preview(c.id); };
     $('#wLogo').onclick = () => ConnSplash.escolherLogo(e);
     $('#wDocs').onclick = () => Docs.open(e);
@@ -78,6 +128,7 @@ const Consult = {
     if (T[0] === 'painel') Consult.painel(body, e);
     else if (T[0] === 'relatorios') Report.tab(body, e);
     else if (T[0] === 'remessas') Remessa.tab(body, e);
+    else if (T[0] === 'portal') Consult.portalTab(body, e);
     else Consult.tabela(body, e, T[0]);
   },
 

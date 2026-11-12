@@ -1,3 +1,14 @@
+/*! ======================================================================
+ *  Amorim Firmo — Advocacia e Consultoria Jurídica · aplicativo de gestão
+ *  © 2026 EFS Technology — todos os direitos reservados.
+ *  Contato: efstechnology.app@gmail.com · WhatsApp 83 9 99944-7957
+ *
+ *  Software protegido pela Lei 9.609/1998 (Lei do Software) e pela
+ *  Lei 9.610/1998 (Direitos Autorais). É proibido copiar, modificar,
+ *  reproduzir, publicar ou distribuir este código, no todo ou em parte,
+ *  sem autorização escrita da EFS Technology. Uso licenciado
+ *  exclusivamente ao escritório Amorim Firmo nos endereços autorizados.
+ * ====================================================================== */
 'use strict';
 /* =====================================================================
    AMORIM FIRMO — Advocacia e Consultoria Jurídica
@@ -5,9 +16,20 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.18.2';
+const APP_VERSAO = '1.20.3';
+/* Desenvolvimento e proteção do aplicativo */
+const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
+/** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
+ *  Para um domínio próprio, inclua-o aqui ou em config.js (CONFIG.DOMINIOS = ['meudominio.com.br']). */
+const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]'];
+const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.20.3', data: '12/11/2026', itens: ['Crédito do desenvolvedor (EFS Technology, WhatsApp e e-mail) no login, no menu, em “Sobre o App” e no portal do cliente.', 'Proteção: o app só roda nos endereços autorizados; uma cópia publicada em outro domínio mostra o aviso de cópia não autorizada. Aviso de direitos autorais no código.'] },
+  { numero: '1.20.2', data: '12/11/2026', itens: ['Portal: quem tem acesso a várias empresas vê uma abertura própria — o cartão percorre os logos das empresas, acendendo um ponto para cada uma, e termina na tela de escolha.'] },
+  { numero: '1.20.1', data: '12/11/2026', itens: ['Portal: quem tem perfil mais alto pode atuar num perfil abaixo (Diretoria → Gerente ou Funcionário; Gerente → Funcionário), pelo menu em “Atuar como”. Uma faixa avisa o perfil em uso e tem “Voltar ao meu perfil”.'] },
+  { numero: '1.20.0', data: '12/11/2026', itens: ['Portal da empresa com 3 perfis: Funcionário (contratos, pendências atribuídas e remessa), Gerente/Administrador (contratos, plano de ação, revisa e envia a remessa, pede acessos de funcionários) e Diretoria (painel com carteira, receita, custos, margem, vigências e riscos; PDF executivo e Excel).', 'O servidor entrega a cada perfil só os dados que ele pode ver.', 'Empresa › aba “Portal da empresa”: acessos com perfil, reenviar convite, zerar senha, remover, aprovar pedidos do gerente e escolher quais achados publicar.', 'Remessa: o funcionário envia ao gerente, que revisa e envia ao escritório (sem gerente, vai direto).', 'Pré-visualização do portal com seletor de perfil.'] },
+  { numero: '1.19.0', data: '12/11/2026', itens: ['Portal: o mesmo e-mail pode ter acesso a várias empresas. Ao entrar, o usuário vê os cards das empresas (contratos, ações em aberto e situação da remessa) e escolhe em qual vai trabalhar; o menu ganhou “Trocar de empresa”.', 'Habilitar o portal de uma segunda empresa para um e-mail já cadastrado agora soma o acesso, em vez de substituir.'] },
   { numero: '1.18.2', data: '12/11/2026', itens: ['Portal: o cartão de conexão (escritório × empresa) aparece em todo login e toda vez que o app é aberto, no lugar da abertura padrão.'] },
   { numero: '1.18.1', data: '12/11/2026', itens: ['Portal: botão do menu e painel lateral passam para o lado esquerdo; no topo do painel, a empresa e, abaixo, o nome do usuário, e-mail, cidade, data e hora do acesso.', '“Meus dados”: cada funcionário da empresa preenche os próprios dados (nome completo, cargo, telefone e endereço); o cadastro da empresa continua com o escritório.'] },
   { numero: '1.18.0', data: '12/11/2026', itens: ['Portal do cliente: senha própria. No 1º acesso, depois de confirmar o código do e-mail, a pessoa cria a senha; nos próximos, entra com e-mail e senha (com “Esqueci minha senha”). 5 tentativas erradas bloqueiam por 15 minutos.', 'Portal: menu do usuário (toque nas iniciais, no topo) com empresa, atalhos (Consultoria, Remessa mensal com prazo/situação, relatório), Meu perfil, Alterar senha, instalar o app, falar com o escritório e Sair.', 'Gestão › Usuários: mostra se o cliente já criou senha e tem o botão “Zerar senha”.'] },
@@ -377,7 +399,6 @@ const SCHEMAS = {
       F('telefone', 'Telefone', 'tel'),
       F('inicio', 'Início da consultoria', 'date'),
       F('honorario', 'Honorário mensal (R$)', 'money'),
-      F('emailPortal', 'E-mails de acesso ao portal', 'text', { w: 'full', hint: 'Um ou mais e-mails, separados por vírgula: cada pessoa entra no portal com o próprio e-mail (consultoria e remessa mensal). A própria empresa vira o cliente do portal; depois de salvar, toque em “Habilitar portal” na página da empresa.' }),
       F('obs', 'Observações', 'long')
     ]
   },
@@ -558,7 +579,11 @@ const SCHEMAS = {
       F('status', 'Status', 'select', { opts: ['Pendente', 'Em andamento', 'Concluído', 'Validado', 'Não aplicável'], list: 1 }),
       F('evidenciaConclusao', 'Evidência de conclusão', 'text'),
       F('dataValidacao', 'Data de validação', 'date'),
-      F('resultado', 'Resultado após correção', 'long')
+      F('resultado', 'Resultado após correção', 'long'),
+      F('visivelEmpresa', 'Visível à empresa (portal)?', 'select', { opts: ['Não', 'Sim'], list: 1, hint: 'Só os achados marcados “Sim” aparecem para o gerente/funcionário no portal; a diretoria vê apenas os números.' }),
+      F('responsavelPortal', 'Responsável na empresa (e-mail)', 'text'),
+      F('prazoInterno', 'Prazo interno da empresa', 'date'),
+      F('providenciaEmpresa', 'Providência informada pela empresa', 'long')
     ]
   },
   documentos: {
@@ -1199,7 +1224,7 @@ const App = {
           <div class="caption">${BRAND.caption}</div>
           <p class="lb-tag">Gestão processual, acompanhamento do cliente e auditoria de contratos em um só lugar.</p>
         </div>
-        <div class="lb-foot">versão ${APP_VERSAO} · © ${new Date().getFullYear()} Amorim Firmo</div>
+        <div class="lb-foot">versão ${APP_VERSAO} · © ${new Date().getFullYear()} Amorim Firmo<br>Desenvolvido por <b>${DEV.nome}</b></div>
       </section>
       <section class="login-form">
         <div class="lf-card" id="lgCard">
@@ -1354,7 +1379,7 @@ const App = {
           <div id="conexSlot"></div>
           ${Session.isAdmin ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
           <button class="side-btn danger" id="btnOut">${icon('logout')}<span>Sair</span></button>
-          <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
+          <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><span class="dev-cred">por ${DEV.nome}</span><br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
         </div>
       </aside>
       <div class="scrim" id="scrim"></div>
@@ -1382,7 +1407,8 @@ const App = {
     UI.modal({ title: 'Sobre o App', sub: `Amorim Firmo · versão ${APP_VERSAO}`, body: `<div class="about"><img src="${BRAND.logoDark}" alt="" class="about-logo"><div class="caption dark">${BRAND.caption}</div>
       <p>Sistema de gestão do escritório: processos judiciais com acompanhamento pelo cliente e consultoria jurídica com auditoria de contratos, indicadores e relatórios.</p>
       <ul class="plain checks">${FUNCIONALIDADES.map(f => `<li>${icon('check')} ${esc(f)}</li>`).join('')}</ul>
-      <p class="muted small">Dados protegidos conforme a LGPD: acesso apenas a pessoas autorizadas, cada cliente vê somente o que lhe diz respeito, e toda alteração fica registrada na trilha de auditoria.</p></div>` });
+      <p class="muted small">Dados protegidos conforme a LGPD: acesso apenas a pessoas autorizadas, cada cliente vê somente o que lhe diz respeito, e toda alteração fica registrada na trilha de auditoria.</p>
+      <div class="dev-box"><span class="eyebrow">Desenvolvimento</span><b>${DEV.nome} ©</b><div class="btn-row center"><a class="btn ghost sm" href="https://wa.me/${DEV.wa}" target="_blank" rel="noopener">${icon('whatsapp')} ${DEV.tel}</a><a class="btn ghost sm" href="mailto:${DEV.email}">${icon('mail')} ${DEV.email}</a></div><p class="muted small">Software protegido pela Lei 9.609/1998. Cópia, reprodução ou distribuição sem autorização são proibidas.</p></div></div>` });
   },
   nav(route) {
     const cnt = a => DB.where('processos', p => p.area === a && p.status !== 'Encerrado').length;
@@ -1650,7 +1676,7 @@ const Gestao = {
     const us = Gestao.users; App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge();
     const papel = { admin: 'Administrador', equipe: 'Equipe', cliente: 'Cliente' };
     const cliOpts = sel => `<option value="">— cliente —</option>${DB.all('clientes').sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}`;
-    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(DB.get('clientes', u.clienteId)?.nome || '') : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
+    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(String(u.clienteId).split(',').map(x => { const [id, pf] = x.split(':'); const n = DB.get('clientes', id)?.nome; return n ? n + (u.papel === 'cliente' ? ' · ' + ({ func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' }[pf || 'func']) : '') : ''; }).filter(Boolean).join(' + ')) : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
     const pend = us.filter(u => u.status === 'pendente'), ok = us.filter(u => u.status === 'autorizado'), bloq = us.filter(u => u.status === 'bloqueado');
     el.innerHTML = `
       <section class="card"><header><h2>⏳ Pedidos de acesso <span class="count">${pend.length}</span></h2></header>
@@ -2101,7 +2127,7 @@ const Parceria = {
 const TABS = [
   ['painel', 'Painel', 'chart'], ['contratos', 'Contratos', 'file'], ['obrigacoes', 'Obrigações', 'check'], ['maoDeObra', 'Mão de obra', 'users'],
   ['materiais', 'Materiais', 'layers'], ['financeiro', 'Financeiro', 'briefcase'], ['medicoes', 'Medições', 'list'], ['indicadores', 'Indicadores', 'chart'],
-  ['achados', 'Achados e plano de ação', 'alert'], ['supervenientes', 'Custos supervenientes', 'briefcase'], ['documentos', 'Documentos', 'file'], ['aditivos', 'Aditivos', 'edit'], ['remessas', 'Remessas mensais', 'upload'], ['relatorios', 'Relatórios', 'printer']
+  ['achados', 'Achados e plano de ação', 'alert'], ['supervenientes', 'Custos supervenientes', 'briefcase'], ['documentos', 'Documentos', 'file'], ['aditivos', 'Aditivos', 'edit'], ['remessas', 'Remessas mensais', 'upload'], ['portal', 'Portal da empresa', 'key'], ['relatorios', 'Relatórios', 'printer']
 ];
 const empRecs = (c, eid) => DB.where(c, r => r.empresaId === eid);
 const tomadorBase = c => String(c.tomador || '').split(/ [–-] /)[0].replace(/\(ver unidade\)/i, '').trim() || 'Não informado';
@@ -2133,6 +2159,57 @@ const Consult = {
     if (e.clienteId !== c.id) await DB.save('empresas', { ...DB.get('empresas', e.id), clienteId: c.id });
     return c;
   },
+  /* ---------------- ACESSOS AO PORTAL (perfis por empresa) ---------------- */
+  PERFIS: [['func', 'Funcionário'], ['ger', 'Gerente / Administrador'], ['dir', 'Diretoria']],
+  async portalTab(host, e) {
+    const pubN = empRecs('achados', e.id).filter(a => a.visivelEmpresa === 'Sim').length, totN = empRecs('achados', e.id).length;
+    const achBox = `<section class="card"><header><h2>${icon('alert')} Plano de ação no portal</h2><button class="btn ghost sm" id="ppPub">${icon('eye')} Escolher o que publicar</button></header><p class="muted small"><b>${pubN}</b> de ${totN} achados visíveis à empresa. O gerente vê todos os publicados; o funcionário, só os atribuídos a ele; a diretoria, só os números.</p></section>`;
+    if (!Session.remote) { host.innerHTML = `<section class="card"><p class="muted">Os acessos ao portal ficam no servidor. No modo local, use “Ver como a empresa”.</p></section>` + achBox; $('#ppPub', host).onclick = () => Consult.publicar(e); return; }
+    host.innerHTML = `<section class="card"><p class="muted">Carregando acessos…</p></section>`;
+    let us = [], ped = [];
+    try { [us, ped] = await Promise.all([api('users'), api('pedidosEquipe', { empresaId: e.id })]); } catch (err) { host.innerHTML = `<section class="card"><p class="muted">${esc(err.message)}</p></section>`; return; }
+    const cid = e.clienteId, entr = u => String(u.clienteId || '').split(/[,;\s]+/).find(x => x.split(':')[0] === cid);
+    const ms = cid ? us.filter(u => u.papel === 'cliente' && entr(u)).map(u => ({ ...u, perfil: (entr(u).split(':')[1] || 'func') })) : [];
+    const opt = sel => Consult.PERFIS.map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
+    host.innerHTML = `<section class="card"><header><h2>${icon('key')} Acessos ao portal <small class="muted">${ms.length}</small></h2><button class="btn ghost sm" id="ppVer">${icon('eye')} Ver como a empresa</button></header>
+        <p class="muted small"><b>Funcionário</b>: contratos (lista), pendências atribuídas e remessa. <b>Gerente</b>: contratos (lista), plano de ação, revisa e envia a remessa, pede acessos de funcionários. <b>Diretoria</b>: painel com carteira, receita, custos e margem (só consulta).</p>
+        ${ms.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody>${ms.map(u => `<tr><td><b>${esc(u.nome || '—')}</b><small class="muted" style="display:block">${esc(u.email)}</small></td><td><select class="input sm" data-pf="${esc(u.email)}">${opt(u.perfil)}</select></td><td><small>${u.status !== 'autorizado' ? esc(u.status) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'convidado, ainda não entrou'}${u.temSenha ? ' · senha criada' : ''}</small></td><td class="right nowrap"><button class="link small" data-conv="${esc(u.email)}">reenviar convite</button>${u.temSenha ? ` · <button class="link small" data-zs="${esc(u.email)}">zerar senha</button>` : ''} · <button class="link small danger-text" data-rmv="${esc(u.email)}">remover</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Ninguém tem acesso ainda.</p>'}</section>
+      ${ped.length ? `<section class="card"><header><h2>⏳ Pedidos do gerente <small class="muted">${ped.length}</small></h2></header>${ped.map(p => `<div class="u-row"><div class="u-who"><b>${p.tipo === 'remover' ? 'Remover' : 'Incluir como funcionário'}: ${esc(p.nome || p.email)}</b><small>${esc(p.email)} · pedido por ${esc(p.por)} em ${fmtDateTime(p.em)}</small></div><div class="u-act"><button class="btn primary sm" data-apr="${p.id}">Aprovar</button><button class="btn ghost sm" data-rec="${p.id}">Recusar</button></div></div>`).join('')}</section>` : ''}
+      <section class="card"><header><h2>${icon('plus')} Adicionar acesso</h2></header><form class="grid-form" id="ppF"><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld"><label>Nome (opcional)</label><input name="nome"></div><div class="fld"><label>Perfil</label><select name="pf">${opt('func')}</select></div><div class="fld right" style="align-self:end"><button class="btn primary" id="ppAdd">${icon('mail')} Liberar e enviar convite</button></div></form></section>
+      ${achBox}`;
+    const salvar = async (user, invite, btn, msg) => {
+      const h0 = btn?.innerHTML; if (btn) { btn.disabled = true; btn.innerHTML = `${icon('sync', 'spin')} Enviando…`; }
+      try { await api('userSave', { user, invite, appUrl: location.origin + location.pathname }); UI.toast(msg, 'ok', 6000); Consult.portalTab(host, e); }
+      catch (err) { if (btn) { btn.disabled = false; btn.innerHTML = h0; } UI.toast(err.message, 'bad', 7000); }
+    };
+    const garanteCli = async () => (await Consult.clientePortal(DB.get('empresas', e.id))).id;
+    $('#ppVer', host).onclick = async () => Portal.preview(await garanteCli());
+    $('#ppF', host).onsubmit = async ev => { ev.preventDefault(); const f = ev.target, c = await garanteCli(); salvar({ email: f.email.value.trim().toLowerCase(), nome: f.nome.value.trim() || undefined, papel: 'cliente', clienteId: c + ':' + f.pf.value, status: 'autorizado' }, true, $('#ppAdd', host), `Acesso liberado e convite enviado para ${f.email.value.trim()}.`); };
+    $$('[data-pf]', host).forEach(s => s.onchange = () => salvar({ email: s.dataset.pf, papel: 'cliente', clienteId: cid + ':' + s.value, status: 'autorizado' }, false, null, 'Perfil alterado. Vale a partir do próximo acesso da pessoa.'));
+    $$('[data-conv]', host).forEach(b => b.onclick = () => salvar({ email: b.dataset.conv, papel: 'cliente', clienteId: cid + ':' + ms.find(u => u.email === b.dataset.conv).perfil, status: 'autorizado' }, true, b, 'Convite reenviado.'));
+    $$('[data-zs]', host).forEach(b => b.onclick = async () => { if (!confirm(`Zerar a senha de ${b.dataset.zs}?`)) return; try { await api('senhaZerar', { email: b.dataset.zs }); UI.toast('Senha zerada.', 'ok'); Consult.portalTab(host, e); } catch (err) { UI.toast(err.message, 'bad'); } });
+    $$('[data-rmv]', host).forEach(b => b.onclick = () => confirm(`Remover o acesso de ${b.dataset.rmv} a esta empresa? As outras empresas dele não mudam.`) && salvar({ email: b.dataset.rmv, papel: 'cliente', clienteId: '', removerCliente: cid, status: 'autorizado' }, false, b, 'Acesso removido.'));
+    $$('[data-apr]', host).forEach(b => b.onclick = async () => { const p = ped.find(x => x.id === b.dataset.apr), c = await garanteCli(); b.disabled = true;
+      try { await api('userSave', p.tipo === 'remover' ? { user: { email: p.email, papel: 'cliente', clienteId: '', removerCliente: c, status: 'autorizado' } } : { user: { email: p.email, nome: p.nome || undefined, papel: 'cliente', clienteId: c + ':func', status: 'autorizado' }, invite: true, appUrl: location.origin + location.pathname });
+        await api('pedidoResolver', { id: p.id, aprovado: true }); UI.toast(p.tipo === 'remover' ? 'Acesso removido.' : 'Aprovado e convite enviado.', 'ok'); Consult.portalTab(host, e); } catch (err) { b.disabled = false; UI.toast(err.message, 'bad'); } });
+    $$('[data-rec]', host).forEach(b => b.onclick = async () => { try { await api('pedidoResolver', { id: b.dataset.rec, aprovado: false }); UI.toast('Pedido recusado.'); Consult.portalTab(host, e); } catch (err) { UI.toast(err.message, 'bad'); } });
+    $('#ppPub', host).onclick = () => Consult.publicar(e);
+  },
+  /** escolher quais achados aparecem no portal da empresa */
+  publicar(e) {
+    const as = empRecs('achados', e.id).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
+    if (!as.length) return UI.toast('Esta empresa não tem achados.');
+    const m = UI.modal({ title: 'Publicar achados no portal', sub: esc(e.fantasia || e.razao) + ' · marque o que a empresa pode ver', wide: true,
+      body: `<div class="btn-row"><button class="link small" id="pbTodos">marcar todos</button><button class="link small" id="pbAb">só os em aberto</button><button class="link small" id="pbNen">desmarcar todos</button></div>
+        <div class="rm-dv">${as.map(a => `<label class="chk"><input type="checkbox" data-pb="${a.id}" ${a.visivelEmpresa === 'Sim' ? 'checked' : ''}><span class="pill ${/alto|crít/i.test(a.risco || '') ? 'bad' : /médio/i.test(a.risco || '') ? 'warn' : 'muted'}">${esc(a.risco || '—')}</span><span><b>${esc(a.codigo || '')}</b> ${esc(a.contrato || '')} — ${esc(String(a.achado || '').slice(0, 160))} <small class="muted">(${esc(a.status || 'Pendente')})</small></span></label>`).join('')}</div>`,
+      foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="pbOk">${icon('check')} Salvar</button>` });
+    const cx = () => $$('[data-pb]', m);
+    $('#pbTodos', m).onclick = () => cx().forEach(c => c.checked = true);
+    $('#pbNen', m).onclick = () => cx().forEach(c => c.checked = false);
+    $('#pbAb', m).onclick = () => cx().forEach(c => c.checked = achadoAberto(DB.get('achados', c.dataset.pb)));
+    $('#pbOk', m).onclick = async () => { const mud = cx().map(c => ({ a: DB.get('achados', c.dataset.pb), v: c.checked ? 'Sim' : 'Não' })).filter(x => (x.a.visivelEmpresa || 'Não') !== x.v).map(x => ({ ...x.a, visivelEmpresa: x.v }));
+      if (mud.length) await DB.save('achados', mud); UI.closeModal(); UI.toast(`${mud.length} achado(s) atualizado(s).`, 'ok'); App.render(true); };
+  },
   async habilitarPortal(e, btn) {
     const mails = Consult.emailsPortal(e);
     if (!mails.length) { UI.toast('Informe ao menos um e-mail de acesso ao portal no cadastro da empresa.', 'warn'); return Consult.editEmpresa(e); }
@@ -2157,14 +2234,13 @@ const Consult = {
     const T = TABS.find(t => t[0] === tab) || TABS[0];
     App.crumbs([{ t: 'Consultoria', href: '/empresas' }, { t: e.fantasia || e.razao, href: '/empresa/' + eid }, { t: T[1] }]);
     const count = c => empRecs(c, eid).length;
-    const pEm = e.portalEmails || [], pNovo = Consult.emailsPortal(e).some(x => !pEm.includes(x));
-    const portalBtn = `<button class="btn ghost" id="wPortal" title="${e.portalConvite ? esc(`Convite enviado em ${fmtDateTime(e.portalConvite)} para ${pEm.join(', ')}. ${pNovo ? 'Há e-mail novo: toque para convidar.' : 'Toque para reenviar.'}`) : 'A empresa passa a entrar no portal com os e-mails cadastrados'}">${icon('key')} ${!e.portalConvite ? 'Habilitar portal' : pNovo ? 'Convidar novo(s) e-mail(s)' : `Portal habilitado <span class="dot-ok"></span> <small class="muted">${pEm.length || 1} acesso(s)</small>`}</button>`;
+    const portalBtn = `<button class="btn ghost" id="wPortal" title="Quem acessa o portal desta empresa e com qual perfil">${icon('key')} Acessos ao portal</button>`;
     v.innerHTML = `<div class="ws-h"><div class="emp-ini lg">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div><span class="eyebrow">Consultoria jurídica</span><h1>${esc(e.fantasia || e.razao)}</h1><p class="muted">${esc(e.razao)}${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${e.segmento ? ' · ' + esc(e.segmento) : ''}</p></div>
       <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wVer" title="Ver o portal como a empresa vê">${icon('eye')} Ver como a empresa</button><button class="btn ghost" id="wLogo" title="Logo da empresa (aparece na abertura do portal)">${e.logo ? `<img src="${esc(e.logo)}" alt="" class="logo-mini">` : icon('image')} Logo</button><button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
-    $('#wPortal').onclick = ev => Consult.habilitarPortal(e, ev.currentTarget);
+    $('#wPortal').onclick = () => location.hash = '#/empresa/' + e.id + '/portal';
     $('#wVer').onclick = async () => { const c = e.clienteId && DB.get('clientes', e.clienteId)?.tipo === 'Pessoa jurídica' ? DB.get('clientes', e.clienteId) : await Consult.clientePortal(e); Portal.preview(c.id); };
     $('#wLogo').onclick = () => ConnSplash.escolherLogo(e);
     $('#wDocs').onclick = () => Docs.open(e);
@@ -2174,6 +2250,7 @@ const Consult = {
     if (T[0] === 'painel') Consult.painel(body, e);
     else if (T[0] === 'relatorios') Report.tab(body, e);
     else if (T[0] === 'remessas') Remessa.tab(body, e);
+    else if (T[0] === 'portal') Consult.portalTab(body, e);
     else Consult.tabela(body, e, T[0]);
   },
 
@@ -2803,17 +2880,58 @@ const Portal = {
     window.onhashchange = null;
     Portal.acesso();
     Portal.render();
-    const u0 = Session.user, emp0 = DB.where('empresas', e => e.clienteId === u0.clienteId)[0];
-    ConnSplash.show(emp0, (DB.get('clientes', u0.clienteId) || {}).nome || u0.nome);
+    const k = Portal.ctx(), cs = Portal.ctxs(); if (k) ConnSplash.show(k.e || null, k.c?.nome || Session.user.nome); else if (cs.length > 1) ConnSplash.multi(cs.map(x => x.e || { razao: x.c?.nome || '' }));
   },
-  render() { Portal.draw($('#portal'), Session.user.clienteId, false); },
+  /* ---- usuário com acesso a mais de uma empresa: escolhe em qual vai trabalhar ---- */
+  cids: () => String(Session.user?.clienteId || '').split(/[,;\s]+/).filter(String).map(x => x.split(':')[0]),
+  ctxs() {
+    const out = [];
+    Portal.cids().forEach(id => {
+      const emps = DB.where('empresas', e => e.clienteId === id).sort((a, b) => (a.fantasia || a.razao).localeCompare(b.fantasia || b.razao));
+      emps.forEach(e => out.push({ key: 'e:' + e.id, cid: id, e }));
+      if (!emps.length) { const c = DB.get('clientes', id); if (c) out.push({ key: 'c:' + id, cid: id, c }); }
+    });
+    return out;
+  },
+  ctx() {
+    const cs = Portal.ctxs(); if (cs.length === 1) return cs[0];
+    let k = ''; try { k = sessionStorage.getItem('af-ctx') || ''; } catch (_) {}
+    return cs.find(x => x.key === k) || null;
+  },
+  escolher(key) {
+    try { sessionStorage.setItem('af-ctx', key); } catch (_) {}
+    const k = Portal.ctx(); Portal.st = { tab: k?.e ? Perfis.abas(Perfis.de(k.e))[0][0] : 'processos', proc: null }; Remessa.pst = {};
+    scrollTo(0, 0); Portal.render(); if (k) ConnSplash.show(k.e || null, k.c?.nome || Session.user.nome);
+  },
+  trocar() { try { sessionStorage.removeItem('af-ctx'); } catch (_) {} Portal.st = { tab: 'processos', proc: null }; Portal.render(); scrollTo(0, 0); },
+  picker(root) {
+    const cs = Portal.ctxs(), u = Session.user, pe = u.pessoa || {}, esc0 = escritorio();
+    root.innerHTML = `<header class="p-top"><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span><button class="btn ghost sm" id="pkOut">${icon('logout')} Sair</button></header>
+      <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá${pe.nome ? ', ' + esc(pe.nome.split(' ')[0]) : ''}!</h1><p>Seu acesso está liberado para ${cs.length} empresas. Escolha em qual você vai trabalhar agora — dá para trocar depois pelo menu.</p></div>
+      <main class="p-main"><div class="emp-cards pk-cards">${cs.map(k => { const e = k.e;
+        if (!e) return `<button class="emp-card pk" data-ctx="${k.key}"><div class="pk-logo"><span>${esc((k.c.nome || '?').slice(0, 2).toUpperCase())}</span></div><b>${esc(k.c.nome)}</b><small class="muted">Meus processos</small></button>`;
+        const comp = Remessa.compPadrao(), r = Remessa.get(e.id, comp), ab = empRecs('achados', e.id).filter(achadoAberto).length, nc = empRecs('contratos', e.id).length;
+        return `<button class="emp-card pk" data-ctx="${k.key}"><div class="pk-logo">${e.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span>${esc(e.sigla || (e.fantasia || e.razao).slice(0, 2).toUpperCase())}</span>`}</div><b>${esc(e.fantasia || e.razao)}</b><em class="pf-tag ${Perfis.real(e)}">${esc(Perfis.CURTO[Perfis.real(e)])}</em><small class="muted">${e.cnpj ? 'CNPJ ' + esc(fmtDoc(e.cnpj)) : esc(e.razao || '')}</small>
+          <div class="pk-meta"><span>${nc} contrato(s)</span><span>${ab} ação(ões) em aberto</span></div>${Perfis.de(e) === 'dir' ? '' : `<div class="pk-rm">Remessa ${fmtComp(comp)}: ${Remessa.pill(r || { status: 'aberta' })}</div>`}</button>`; }).join('')}</div></main>
+      <footer class="p-foot">Acesso exclusivo e confidencial · ${esc(esc0.nome || 'Amorim Firmo')}<br><span class="dev-cred">Tecnologia ${DEV.nome} ©</span></footer>`;
+    $$('[data-ctx]', root).forEach(b => b.onclick = () => Portal.escolher(b.dataset.ctx));
+    $('#pkOut', root).onclick = () => App.logout();
+  },
+  render() {
+    const root = $('#portal'), cs = Portal.ctxs(), k = Portal.ctx();
+    if (!k && cs.length > 1) return Portal.picker(root);
+    const x = k || cs[0];
+    if (x?.e) Remessa.pst = { ...(Remessa.pst || {}), emp: x.e.id };
+    Portal.draw(root, x ? x.cid : Portal.cids()[0], false);
+  },
   preview(clienteId, procId) {
     const ov = document.createElement('div'); ov.className = 'portal-preview';
-    ov.innerHTML = `<div class="pv-bar">${icon('eye')} <span>Pré-visualização do portal — é exatamente o que o cliente vê</span><span class="sp"></span><button class="btn ghost light sm" id="pvClose">${icon('x')} Fechar</button></div><div class="portal" id="pvBody"></div>`;
+    ov.innerHTML = `<div class="pv-bar">${icon('eye')} <span>Pré-visualização do portal</span><span class="sp"></span><label class="pv-pf">Ver como <select id="pvPf"><option value="func">Funcionário</option><option value="ger" selected>Gerente</option><option value="dir">Diretoria</option></select></label><button class="btn ghost light sm" id="pvClose">${icon('x')} Fechar</button></div><div class="portal" id="pvBody"></div>`;
     document.body.appendChild(ov); document.body.classList.add('noscroll');
     $('#pvClose').onclick = () => { ov.remove(); document.body.classList.remove('noscroll'); };
-    Portal.st = { tab: 'processos', proc: procId || null };
+    Portal.prevPerfil = 'ger'; Portal.st = { tab: 'processos', proc: procId || null };
     Portal.draw($('#pvBody'), clienteId, true);
+    $('#pvPf').onchange = ev => { Portal.prevPerfil = ev.target.value; Portal.st = { tab: Perfis.abas(ev.target.value)[0][0], proc: null }; Portal.draw($('#pvBody'), clienteId, true); };
   },
   ini: n => `<span class="p-ava">${esc(((n || '?').split(/\s+/).filter(w => w.length > 2).map(w => w[0]).slice(0, 2).join('') || (n || '?')[0]).toUpperCase())}</span>`,
   /** painel lateral do usuário do portal */
@@ -2823,10 +2941,12 @@ const Portal = {
     const rm = o.emps.map(e => { const comp = Remessa.compPadrao(), r = Remessa.get(e.id, comp); return { e, comp, r, pz: Remessa.prazo(e, comp) }; });
     const ov = document.createElement('div'); ov.className = 'p-drawer-ov';
     ov.innerHTML = `<aside class="p-drawer" role="dialog" aria-label="Meu menu">
-      <div class="pd-h"><div class="pd-emp">${e0?.logo ? `<img src="${esc(e0.logo)}" alt="">` : `<span class="pd-emp-i">${esc(e0?.sigla || (e0?.fantasia || e0?.razao || o.cli.nome || '?').slice(0, 2))}</span>`}<div><b>${esc(e0 ? e0.fantasia || e0.razao : o.cli.nome || '')}</b><small>${e0?.cnpj ? 'CNPJ ' + esc(fmtDoc(e0.cnpj)) : ''}</small></div></div><button class="icon-btn" data-x aria-label="Fechar">${icon('x')}</button></div>
+      <div class="pd-h"><div class="pd-emp">${e0?.logo ? `<img src="${esc(e0.logo)}" alt="">` : `<span class="pd-emp-i">${esc(e0?.sigla || (e0?.fantasia || e0?.razao || o.cli.nome || '?').slice(0, 2))}</span>`}<div><b>${esc(e0 ? e0.fantasia || e0.razao : o.cli.nome || '')}</b><small>${e0?.cnpj ? 'CNPJ ' + esc(fmtDoc(e0.cnpj)) : ''}</small>${e0 ? `<em class="pf-tag ${Perfis.de(e0, o.preview)}">${esc(Perfis.CURTO[Perfis.de(e0, o.preview)])}</em>` : ''}</div></div><button class="icon-btn" data-x aria-label="Fechar">${icon('x')}</button></div>
       <div class="pd-user">${Portal.ini(pe.nome || u.email)}<div><b>${pe.nome ? esc(pe.nome) : '<button class="link small" data-perfil2>Complete seu perfil</button>'}</b>${pe.cargo ? `<small>${esc(pe.cargo)}</small>` : ''}<small>${esc(u.email || '')}</small><small class="pd-acc">${icon('clock')} ${esc(ac.local ? ac.local + ' · ' : '')}${fmtDate(ac.em)} às ${new Date(ac.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></div></div>
-      <nav class="pd-nav">${o.tabs.map(([k, l]) => `<button data-go="${k}" class="${st.tab === k ? 'on' : ''}">${icon({ processos: 'scale', agenda: 'calendar', consultoria: 'building', remessa: 'upload', contato: 'whatsapp' }[k] || 'file')}<span>${l}</span>${k === 'remessa' && rm[0] ? `<em class="pill ${Remessa.ST[rm[0].r?.status || 'aberta'][1]}">${rm[0].r?.status && rm[0].r.status !== 'aberta' ? Remessa.ST[rm[0].r.status][0].split(' ·')[0] : 'até ' + fmtDate(rm[0].pz).slice(0, 5)}</em>` : ''}</button>`).join('')}
-        ${o.emps.length ? `<button data-relat>${icon('printer')}<span>Relatório da consultoria</span></button>` : ''}</nav>
+      <nav class="pd-nav">${o.tabs.map(([k, l]) => `<button data-go="${k}" class="${st.tab === k ? 'on' : ''}">${icon(Perfis.ICON[k] || 'file')}<span>${l}</span>${k === 'remessa' && rm[0] ? `<em class="pill ${Remessa.ST[rm[0].r?.status || 'aberta'][1]}">${rm[0].r?.status && rm[0].r.status !== 'aberta' ? Remessa.ST[rm[0].r.status][0].split(' ·')[0] : 'até ' + fmtDate(rm[0].pz).slice(0, 5)}</em>` : ''}</button>`).join('')}
+</nav>
+      ${!o.preview && Portal.ctxs().length > 1 ? `<nav class="pd-nav"><button data-trocar>${icon('building')}<span>Trocar de empresa</span><em class="pill muted">${Portal.ctxs().length}</em></button></nav>` : ''}
+      ${!o.preview && e0 && Perfis.possiveis(e0).length > 1 ? `<div class="pd-sec">Atuar como</div><div class="pd-pf">${Perfis.possiveis(e0).map(k => `<button data-atuar="${k}" class="${Perfis.de(e0) === k ? 'on' : ''}">${esc(Perfis.CURTO[k])}${k === Perfis.real(e0) ? ' <small>(seu perfil)</small>' : ''}</button>`).join('')}</div>` : ''}
       <div class="pd-sec">Minha conta</div>
       <nav class="pd-nav"><button data-perfil>${icon('user')}<span>Meus dados</span></button><button data-senha>${icon('key')}<span>${o.preview || Session.user?.temSenha !== false ? 'Alterar senha' : 'Criar senha'}</span></button>
         ${window.__afInstall ? `<button data-inst>${icon('download')}<span>Instalar o app no celular</span></button>` : /iphone|ipad/i.test(navigator.userAgent) ? `<div class="pd-hint">${icon('download')} Para instalar: toque em <b>Compartilhar</b> › <b>Adicionar à Tela de Início</b>.</div>` : ''}</nav>
@@ -2841,6 +2961,8 @@ const Portal = {
     $$('[data-go]', ov).forEach(b => b.onclick = () => { st.tab = b.dataset.go; st.proc = null; fechar(); o.redraw(); scrollTo(0, 0); });
     $('[data-relat]', ov)?.addEventListener('click', () => { fechar(); Report.open(o.emps[0], { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: o.esc0.advogado, oab: o.esc0.oab, conf: true }); });
     $('[data-sair]', ov)?.addEventListener('click', () => { ov.remove(); App.logout(); });
+    $('[data-trocar]', ov)?.addEventListener('click', () => { ov.remove(); Portal.trocar(); });
+    $$('[data-atuar]', ov).forEach(b => b.onclick = () => { ov.remove(); Perfis.atuarComo(e0, b.dataset.atuar); });
     $('[data-inst]', ov)?.addEventListener('click', async () => { const p = window.__afInstall; window.__afInstall = null; fechar(); try { p.prompt(); await p.userChoice; } catch (_) {} });
     const soCliente = () => { UI.toast('Disponível só para o cliente (fora da pré-visualização).', 'warn'); return o.preview; };
     $$('[data-perfil],[data-perfil2]', ov).forEach(b => b.onclick = () => { if (soCliente()) return; fechar(); Portal.perfil(o.redraw); });
@@ -2882,10 +3004,11 @@ const Portal = {
     const st = Portal.st, cli = DB.get('clientes', clienteId) || { nome: Session.user?.nome || '' };
     const esc0 = escritorio();
     const procs = DB.where('processos', p => (p.clienteIds || []).includes(clienteId));
-    const emps = DB.where('empresas', e => e.clienteId === clienteId);
+    const kx = !preview && Portal.ctx(), emps = DB.where('empresas', e => e.clienteId === clienteId && (!kx?.e || e.id === kx.e.id));
     const vis = id => DB.where('movimentos', m => m.processoId === id && m.visivelCliente).sort((a, b) => String(b.data).localeCompare(String(a.data)));
     const ag = DB.where('prazos', x => procs.some(p => p.id === x.processoId) && x.visivelCliente && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data));
-    const tabs = [...(procs.length || !emps.length ? [['processos', 'Meus processos'], ['agenda', 'Agenda']] : []), ...(emps.length ? [['consultoria', 'Consultoria'], ['remessa', 'Remessa mensal']] : []), ['contato', 'Fale com o escritório']];
+    const e0 = emps[0], pf = e0 ? Perfis.de(e0, preview) : null;
+    const tabs = [...(procs.length || !emps.length ? [['processos', 'Meus processos'], ['agenda', 'Agenda']] : []), ...(e0 ? Perfis.abas(pf) : []), ['contato', 'Fale com o escritório']];
     if (!tabs.some(t => t[0] === st.tab)) { st.tab = tabs[0][0]; st.proc = null; }
     const wa = onlyDigits(esc0.whatsapp);
     let body = '';
@@ -2901,6 +3024,8 @@ const Portal = {
       body = ag.length ? `<section class="card"><ul class="agenda-list">${ag.map(x => { const p = DB.get('processos', x.processoId); return `<li><div class="ag-date"><b>${fmtDate(x.data).slice(0, 5)}</b><small>${esc(x.hora || '')}</small></div><div class="ag-body"><span class="pill info">${esc(x.tipo)}</span> <b>${esc(x.descricao)}</b><small>${esc(x.local || '')} · ${esc(fmtCNJ(p?.numero))}</small></div></li>`; }).join('')}</ul></section>` : `<div class="empty">${icon('calendar')}<p>Nenhum compromisso agendado.</p></div>`;
     } else if (st.tab === 'remessa') {
       body = '<div id="pRem"></div>';
+    } else if (['contratos', 'plano', 'equipe', 'diretoria'].includes(st.tab)) {
+      body = '<div id="pPf"></div>';
     } else if (st.tab === 'consultoria') {
       body = emps.map(e => { const S = Consult.stats(e), ins = Consult.insights(S); return `<section class="card"><header><h2>${icon('building')} ${esc(e.fantasia || e.razao)}</h2></header>
         <div class="kpis sm">${kpi('Contratos vigentes', `${S.at.length}/${S.cs.length}`)}${kpi('Completude documental', fmtPct(S.compl))}${kpi('Conformidade', fmtPct(S.conf))}${kpi('Ações em aberto', S.achAbertos.length)}</div>
@@ -2914,17 +3039,21 @@ const Portal = {
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }
     root.innerHTML = `<header class="p-top"><button class="p-me" id="pMe" title="Meu menu"><span>${icon('menu')}</span>${Portal.ini(Portal.pessoa(preview, cli).nome || cli.nome)}</button><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span></header>
-      <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá, ${esc((cli.nome || '').split(' ')[0])}</h1><p>Acompanhe aqui o andamento dos seus processos${emps.length ? ' e da consultoria da sua empresa' : ''}. As informações são atualizadas pelo escritório.</p></div>
+      <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá${(n => n ? ', ' + esc(n.split(' ')[0]) : '')(Portal.pessoa(preview, cli).nome || (e0 ? '' : cli.nome))}!</h1><p>${e0 ? `${esc(e0.fantasia || e0.razao)} · <b>${esc(Perfis.NOMES[pf])}</b>. ${pf === 'dir' ? 'Visão estratégica da carteira de contratos.' : pf === 'ger' ? 'Contratos, plano de ação, remessa mensal e equipe.' : 'Seus contratos, pendências e a remessa mensal.'}` : 'Acompanhe aqui o andamento dos seus processos. As informações são atualizadas pelo escritório.'}</p></div>
+      ${!preview && e0 && pf !== Perfis.real(e0) ? `<div class="pf-band">${icon('users')} Você está atuando como <b>${esc(Perfis.NOMES[pf])}</b> (seu perfil: ${esc(Perfis.NOMES[Perfis.real(e0)])}). <button class="link small" id="pfVolta">Voltar ao meu perfil</button></div>` : ''}
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
       <main class="p-main">${body}</main>
-      <footer class="p-foot">Acesso exclusivo e confidencial · ${esc(esc0.nome || 'Amorim Firmo')}</footer>`;
+      <footer class="p-foot">Acesso exclusivo e confidencial · ${esc(esc0.nome || 'Amorim Firmo')}<br><span class="dev-cred">Tecnologia ${DEV.nome} ©</span></footer>`;
     const redraw = () => Portal.draw(root, clienteId, preview);
     $$('[data-tab]', root).forEach(b => b.onclick = () => { st.tab = b.dataset.tab; st.proc = null; redraw(); });
     $$('[data-proc]', root).forEach(b => b.onclick = () => { st.proc = b.dataset.proc; redraw(); root.scrollTop = 0; scrollTo(0, 0); });
     $$('[data-back]', root).forEach(b => b.onclick = () => { st.proc = null; redraw(); });
     $$('[data-rep]', root).forEach(b => b.onclick = () => Report.open(DB.get('empresas', b.dataset.rep), { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: esc0.advogado, oab: esc0.oab, conf: true }));
     $('#pMe', root).onclick = () => Portal.menu(root, { cli, emps, procs, tabs, preview, redraw, wa, esc0 });
+    $('#pfVolta', root)?.addEventListener('click', () => Perfis.atuarComo(e0, Perfis.real(e0)));
     if ($('#pRem', root)) Remessa.portal($('#pRem', root), emps, redraw);
+    const pp = $('#pPf', root);
+    if (pp) { if (st.tab === 'contratos') Perfis.contratos(pp, e0); else if (st.tab === 'plano') Perfis.plano(pp, e0, pf, preview, redraw); else if (st.tab === 'equipe') Perfis.equipe(pp, e0, preview); else if (st.tab === 'diretoria') Diretoria.render(pp, e0); }
   }
 };
 
@@ -2932,6 +3061,11 @@ const Portal = {
 window.addEventListener('DOMContentLoaded', async () => {
   if (window.__afPopup) return; // janela de retorno do login do Google
   const splash = document.getElementById('splash'); const t0 = performance.now();
+  if (!dominioOk()) { // cópia publicada fora dos endereços autorizados
+    splash?.remove(); document.body.className = 'blocked';
+    document.getElementById('root').innerHTML = `<div class="dom-lock"><div class="dl-card"><img src="brasao.png" alt="" class="dl-logo"><h1>Aplicativo protegido</h1><p>Este endereço (<b>${esc(location.hostname)}</b>) não está autorizado a executar o aplicativo do escritório Amorim Firmo.</p><p class="muted">Cópia, reprodução ou distribuição não autorizada é proibida (Lei 9.609/1998 e Lei 9.610/1998).</p><p class="dl-dev">© ${new Date().getFullYear()} ${DEV.nome} · <a href="mailto:${DEV.email}">${DEV.email}</a> · <a href="https://wa.me/${DEV.wa}" target="_blank" rel="noopener">${DEV.tel}</a></p></div></div>`;
+    return;
+  }
   try { await App.start(); } catch (e) { console.error(e); App.loginScreen(); }
   const wait = Math.max(0, 2300 - (performance.now() - t0));
   setTimeout(() => { splash?.classList.add('out'); setTimeout(() => splash?.remove(), 900); }, wait);
@@ -5227,7 +5361,7 @@ const BenefDP = {
    "em análise" e só alimenta os dados gerais quando o escritório aprova.
    ===================================================================== */
 const Remessa = {
-  ST: { aberta: ['Em preenchimento', 'muted'], enviada: ['Enviada · aguardando análise', 'warn'], analise: ['Em análise', 'info'], pendencia: ['Devolvida com pendência', 'bad'], aprovada: ['Aprovada e lançada', 'ok'] },
+  ST: { aberta: ['Em preenchimento', 'muted'], revisao: ['Com o gerente para revisão', 'info'], enviada: ['Enviada · aguardando análise', 'warn'], analise: ['Em análise', 'info'], pendencia: ['Devolvida com pendência', 'bad'], aprovada: ['Aprovada e lançada', 'ok'] },
   CATS: [['folha', 'Folha de pagamento'], ['beneficios', 'Comprovantes de benefícios (VA/VT…)'], ['fgts', 'Guias e comprovantes FGTS/INSS'], ['nf', 'Notas fiscais / medições'], ['receb', 'Comprovantes de recebimento'], ['ponto', 'Frequência / ponto'], ['aditivo', 'Termo aditivo / apólice de garantia'], ['outros', 'Outros']],
   OBRIG: ['folha', 'fgts', 'nf'],
   id: (eid, comp) => 'rm_' + eid + '_' + comp.replace('-', ''),
@@ -5281,7 +5415,7 @@ const Remessa = {
     if (!emps.length) { host.innerHTML = '<div class="empty"><p>Nenhuma empresa vinculada.</p></div>'; return; }
     const e = emps.find(x => x.id === st.emp) || emps[0], comp = st.comp || Remessa.compPadrao();
     const r = Remessa.get(e.id, comp) || { id: Remessa.id(e.id, comp), empresaId: e.id, competencia: comp, status: 'aberta', contratos: {}, arquivos: [] };
-    const edit = ['aberta', 'pendencia'].includes(r.status || 'aberta'), cs = Remessa.contratos(e, comp), pz = Remessa.prazo(e, comp), dz = daysUntil(pz);
+    const pfR = Perfis.de(e, Session.isStaff), edit = ['aberta', 'pendencia'].includes(r.status || 'aberta') || (r.status === 'revisao' && pfR === 'ger'), cs = Remessa.contratos(e, comp), pz = Remessa.prazo(e, comp), dz = daysUntil(pz);
     const inp = (c, k, ph, money) => `<input class="input" data-rc="${c.id}" data-k="${k}" inputmode="decimal" placeholder="${ph}" value="${esc(r.contratos?.[c.id]?.[k] != null ? (money ? (num(r.contratos[c.id][k]) ?? '').toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : r.contratos[c.id][k]) : '')}" ${edit ? '' : 'disabled'}>`;
     host.innerHTML = `
       <section class="card rm-top">
@@ -5306,7 +5440,7 @@ const Remessa = {
           ${fs.map(a => `<small>${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.nome)}</a>` : esc(a.nome)}${edit ? ` <button class="link small" data-rmdel="${a.id}">remover</button>` : ''}</small>`).join('')}</div>
           ${edit ? `<label class="btn ghost sm">${icon('upload')} Anexar<input type="file" multiple hidden data-rmcat="${k}"></label>` : ''}</div>`; }).join('')}</div></section>
       ${edit ? `<section class="card"><label class="full">Observações para o escritório<textarea class="input" id="rmObs" rows="3">${esc(r.obsCliente || '')}</textarea></label>
-        <div class="btn-row right"><button class="btn ghost" id="rmSalvar">${icon('check')} Salvar rascunho</button><button class="btn primary" id="rmEnviar">${icon('upload')} Enviar para análise</button></div></section>` : ''}`;
+        <div class="btn-row right"><button class="btn ghost" id="rmSalvar">${icon('check')} Salvar rascunho</button><button class="btn primary" id="rmEnviar">${icon('upload')} ${pfR === 'ger' ? 'Enviar ao escritório' : 'Enviar'}</button></div></section>` : ''}`;
     const coleta = () => {
       $$('[data-rc]', host).forEach(i => { const o = r.contratos[i.dataset.rc] = r.contratos[i.dataset.rc] || {}; o[i.dataset.k] = i.type === 'checkbox' ? i.checked : (/faturado|recebido|ocupados|faltas/.test(i.dataset.k) ? num(i.value) : i.value.trim()); });
       r.obsCliente = $('#rmObs', host)?.value.trim() || '';
@@ -5325,8 +5459,9 @@ const Remessa = {
       coleta();
       const falta = Remessa.OBRIG.filter(k => !(r.arquivos || []).some(a => a.cat === k)).map(k => Remessa.CATS.find(x => x[0] === k)[1]);
       if (falta.length && !confirm('Ainda faltam documentos obrigatórios:\n• ' + falta.join('\n• ') + '\n\nEnviar mesmo assim?')) return;
+      const ant = r.status;
       r.status = 'enviada'; r.enviadoEm = new Date().toISOString(); r.enviadoPor = Session.user?.nome || Session.user?.email || '';
-      try { await Remessa.gravar(r); UI.toast('Remessa enviada para análise do escritório.', 'ok'); redraw(); } catch (err) { r.status = 'aberta'; UI.toast(err.message, 'bad'); }
+      try { const out = await Remessa.gravar(r); UI.toast(out?.status === 'revisao' ? 'Remessa enviada ao gerente da empresa para revisão.' : 'Remessa enviada para análise do escritório.', 'ok'); redraw(); } catch (err) { r.status = ant || 'aberta'; UI.toast(err.message, 'bad'); }
     });
   },
 
@@ -5381,7 +5516,7 @@ const Remessa = {
       });
       (r.arquivos || []).forEach(a => { const c = cs.find(x => x.id === a.contratoId); doc.push({ ...base, contrato: c?.codigo || '', tomador: c?.tomador || '', tipo: Remessa.CATS.find(x => x[0] === a.cat)?.[1] || 'Outro', arquivo: a.nome, link: a.url, origem: 'Portal da empresa – remessa ' + fmtComp(r.competencia), caminho: 'Remessas/' + r.competencia, origemId: r.id }); });
       const n0 = empRecs('achados', e.id).length;
-      marc.forEach((d, i) => ach.push({ ...base, codigo: `${e.sigla || 'AC'}-R${r.competencia.replace('-', '')}-${String(i + 1).padStart(2, '0')}`, contrato: d.c?.codigo || '', periodo: fmtComp(r.competencia), area: /Recebido|Faturado|Faturamento/.test(d.txt) ? 'Financeiro' : /Postos|falta/i.test(d.txt) ? 'Trabalhista' : 'Documental', achado: d.txt, criterio: 'Remessa mensal da empresa', risco: d.risco, valor: d.valor ?? null, recomendacao: 'Verificar com a empresa e regularizar', responsavel: 'Gestão contratual da empresa', status: 'Pendente', origem: r.id }));
+      marc.forEach((d, i) => ach.push({ ...base, codigo: `${e.sigla || 'AC'}-R${r.competencia.replace('-', '')}-${String(i + 1).padStart(2, '0')}`, contrato: d.c?.codigo || '', periodo: fmtComp(r.competencia), area: /Recebido|Faturado|Faturamento/.test(d.txt) ? 'Financeiro' : /Postos|falta/i.test(d.txt) ? 'Trabalhista' : 'Documental', achado: d.txt, criterio: 'Remessa mensal da empresa', risco: d.risco, valor: d.valor ?? null, recomendacao: 'Verificar com a empresa e regularizar', responsavel: 'Gestão contratual da empresa', status: 'Pendente', visivelEmpresa: 'Sim', origem: r.id }));
       for (const [col, recs] of [['financeiro', fin], ['maoDeObra', mo], ['documentos', doc], ['achados', ach]]) if (recs.length) await DB.save(col, recs);
       await fim('aprovada', { lancados: fin.length + mo.length + doc.length, achados: ach.length });
       UI.toast(`Remessa aprovada: ${fin.length + mo.length} lançamento(s), ${doc.length} documento(s) e ${ach.length} achado(s).`, 'ok');
@@ -5406,6 +5541,26 @@ const ConnSplash = {
     const t = setTimeout(fora, 3500); ov.onclick = () => { clearTimeout(t); fora(); };
   }
 };
+/** abertura para quem tem várias empresas: o cartão percorre os logos e termina na escolha */
+ConnSplash.multi = (emps) => {
+  if (document.querySelector('.conn-splash')) return;
+  document.getElementById('splash')?.remove();
+  const esc0 = escritorio(), mostra = emps.slice(0, 5), n = emps.length, passo = Math.min(900, Math.round(2700 / mostra.length));
+  const ov = document.createElement('div'); ov.className = 'conn-splash';
+  ov.innerHTML = `<div class="cs-card"><div class="cs-pair"><img src="${BRAND.logoDark}" alt="" class="cs-af"><span class="cs-x">×</span><div class="cs-cli cs-slot">${mostra.map((e, i) => `<div class="cs-it" data-i="${i}">${ConnSplash.logo(e)}</div>`).join('')}${n > 5 ? '<div class="cs-it" data-i="5"><span>+' + (n - 5) + '</span></div>' : ''}</div></div>
+    <div class="cs-t">${esc((esc0.nome || 'Amorim Firmo').split(/ Advocacia| e Consultoria/)[0])} × suas empresas</div><div class="cs-s">Área exclusiva do cliente</div>
+    <div class="cs-dots">${mostra.map(() => '<i></i>').join('')}${n > 5 ? '<i></i>' : ''}</div><div class="cs-st">Estabelecendo conexão segura…</div></div><small class="cs-skip">toque para pular</small>`;
+  document.body.appendChild(ov);
+  const its = $$('.cs-it', ov), dots = $$('.cs-dots i', ov), st = $('.cs-st', ov), tm = [];
+  its.forEach((el, i) => tm.push(setTimeout(() => {
+    its.forEach(x => x.classList.remove('on')); el.classList.add('on'); if (i) dots[i - 1].classList.add('ok');
+    st.textContent = i < mostra.length ? `Conectando ${mostra[i].fantasia || mostra[i].razao}…` : `Conectando mais ${n - 5} empresa(s)…`;
+  }, 500 + i * passo)));
+  const fimT = 500 + its.length * passo;
+  tm.push(setTimeout(() => { dots.forEach(d => d.classList.add('ok')); st.textContent = `${n} empresas conectadas ✓`; }, fimT));
+  const fora = () => { tm.forEach(clearTimeout); ov.classList.add('out'); setTimeout(() => ov.remove(), 500); };
+  tm.push(setTimeout(fora, fimT + 900)); ov.onclick = fora;
+};
 /** logo da empresa (para o splash do portal): reduz a imagem e guarda no cadastro */
 ConnSplash.escolherLogo = e => {
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
@@ -5414,4 +5569,218 @@ ConnSplash.escolherLogo = e => {
       await DB.save('empresas', { ...e, logo: cv.toDataURL('image/png') }); URL.revokeObjectURL(url); UI.toast('Logo da empresa salvo.', 'ok'); App.render(true); };
     img.src = url; };
   inp.click();
+};
+/* =====================================================================
+   PERFIS DA EMPRESA NO PORTAL
+   func = Funcionário (operação) · ger = Gerente/Administrador (gestão do
+   dia a dia) · dir = Diretoria (visão estratégica, só consulta).
+   O servidor já entrega só os dados de cada perfil; aqui ficam as telas.
+   ===================================================================== */
+const Perfis = {
+  NOMES: { func: 'Funcionário', ger: 'Gerente / Administrador', dir: 'Diretoria' },
+  CURTO: { func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' },
+  /** perfil do usuário nesta empresa (na pré-visualização, o escolhido na barra) */
+  RANK: { func: 1, ger: 2, dir: 3 },
+  /** perfil real do usuário nesta empresa */
+  real(e) { return e?.perfilPortal || Perfis.daSessao(e) || 'func'; },
+  /** perfil em uso: quem tem perfil mais alto pode atuar num perfil abaixo (ex.: gerente cobrindo férias de funcionário) */
+  de(e, preview) {
+    if (preview) return Portal.prevPerfil || 'ger';
+    const r = Perfis.real(e); let a = ''; try { a = sessionStorage.getItem('af-pf:' + e?.id) || ''; } catch (_) {}
+    return a && Perfis.RANK[a] < Perfis.RANK[r] ? a : r;
+  },
+  /** perfis em que o usuário pode atuar (o dele e os abaixo) */
+  possiveis: e => ['dir', 'ger', 'func'].filter(k => Perfis.RANK[k] <= Perfis.RANK[Perfis.real(e)]),
+  atuarComo(e, pf) {
+    try { if (pf === Perfis.real(e)) sessionStorage.removeItem('af-pf:' + e.id); else sessionStorage.setItem('af-pf:' + e.id, pf); } catch (_) {}
+    Portal.st = { tab: Perfis.abas(pf)[0][0], proc: null }; Remessa.pst = { emp: e.id }; Portal.render(); scrollTo(0, 0);
+    UI.toast(pf === Perfis.real(e) ? `De volta ao seu perfil: ${Perfis.NOMES[pf]}.` : `Agora você está atuando como ${Perfis.NOMES[pf]}.`, 'ok');
+  },
+  daSessao(e) { const x = String(Session.user?.clienteId || '').split(/[,;\s]+/).find(s => s.split(':')[0] === e?.clienteId); return x && x.split(':')[1]; },
+  abas(pf) {
+    if (pf === 'dir') return [['diretoria', 'Painel da Diretoria'], ['contratos', 'Contratos']];
+    if (pf === 'ger') return [['contratos', 'Contratos'], ['plano', 'Plano de ação'], ['remessa', 'Remessa mensal'], ['equipe', 'Equipe']];
+    return [['contratos', 'Contratos'], ['plano', 'Minhas pendências'], ['remessa', 'Remessa mensal']];
+  },
+  ICON: { diretoria: 'chart', contratos: 'file', plano: 'alert', equipe: 'users', remessa: 'upload', processos: 'scale', agenda: 'calendar', contato: 'whatsapp' },
+
+  /* ---------------- contratos (lista simples) ---------------- */
+  contratos(host, e) {
+    const cs = empRecs('contratos', e.id).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
+    const sit = c => { if (/^(encerrad|rescindid)/i.test(c.status || '')) return '<span class="pill muted">Encerrado</span>'; if (/licita/i.test(c.status || '')) return '<span class="pill muted">Em licitação</span>'; if (!isISO(c.fim)) return '<span class="pill">Vigente</span>'; const d = daysUntil(c.fim); return d < 0 ? '<span class="pill bad">Vencido</span>' : d <= 90 ? `<span class="pill warn">Vence em ${d} dia(s)</span>` : '<span class="pill ok">Vigente</span>'; };
+    host.innerHTML = `<section class="card"><header><h2>${icon('file')} Contratos <small class="muted">${cs.length}</small></h2></header>
+      ${cs.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>Contrato</th><th>Órgão / unidade</th><th>Nº</th><th>Início</th><th>Fim</th><th>Situação</th></tr></thead><tbody>${cs.map(c => `<tr><td><b>${esc(c.codigo || '')}</b></td><td>${esc(c.tomador || '')}<small class="muted" style="display:block">${esc(c.unidade || '')}</small></td><td>${esc(c.numero || '—')}</td><td>${fmtDate(c.inicio) || '—'}</td><td>${fmtDate(c.fim) || '—'}</td><td>${sit(c)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Nenhum contrato cadastrado.</p>'}</section>`;
+  },
+
+  /* ---------------- plano de ação (gerente: todos; funcionário: os dele) ---------------- */
+  async plano(host, e, pf, preview, redraw) {
+    const as = empRecs('achados', e.id).filter(a => preview ? a.visivelEmpresa === 'Sim' && (pf !== 'func' || !!a.responsavelPortal) : (pf !== 'func' || a.responsavelPortal === Session.user?.email))
+      .sort((a, b) => (achadoAberto(b) - achadoAberto(a)) || RISCOS.indexOf(b.risco) - RISCOS.indexOf(a.risco));
+    let equipe = [];
+    if (pf === 'ger' && !preview && Session.remote) { try { equipe = (await api('equipe', { empresaId: e.id })).membros.filter(m => m.status === 'autorizado'); } catch (_) {} }
+    const rk = r => `<span class="pill ${/alto|crít/i.test(r || '') ? 'bad' : /médio/i.test(r || '') ? 'warn' : 'muted'}">${esc(r || '—')}</span>`;
+    host.innerHTML = `<section class="card"><header><h2>${icon('alert')} ${pf === 'func' ? 'Minhas pendências' : 'Plano de ação'} <small class="muted">${as.filter(achadoAberto).length} em aberto</small></h2></header>
+      <p class="muted small">${pf === 'func' ? 'Itens que o gerente da empresa atribuiu a você. Informe a providência tomada; o escritório confere e encerra.' : 'Pontos levantados pela auditoria do escritório. Atribua um responsável e um prazo interno; a providência informada vai para o escritório conferir e encerrar.'}</p>
+      ${as.length ? as.map(a => `<article class="pa-item ${achadoAberto(a) ? '' : 'fechado'}" data-ach="${a.id}">
+        <div class="pa-h"><b>${esc(a.codigo || '')}</b>${a.contrato ? ` · ${esc(a.contrato)}` : ''} ${rk(a.risco)} <span class="pill ${achadoAberto(a) ? 'info' : 'ok'}">${esc(a.status || 'Pendente')}</span>${a.prazo ? `<small class="muted">prazo do escritório: ${fmtDate(a.prazo)}</small>` : ''}</div>
+        <p class="pa-t">${esc(a.achado || '')}</p>${a.recomendacao ? `<p class="pa-r"><b>O que fazer:</b> ${esc(a.recomendacao)}</p>` : ''}
+        ${pf === 'ger' ? `<div class="pa-g"><label>Responsável na empresa<select data-resp>${['', ...new Set([...equipe.filter(m => m.perfil === 'func').map(m => m.email), a.responsavelPortal].filter(Boolean))].map(x => `<option value="${esc(x)}" ${x === (a.responsavelPortal || '') ? 'selected' : ''}>${x ? esc((equipe.find(m => m.email === x)?.nome || '') + ' ' + x) : '— eu mesmo —'}</option>`).join('')}</select></label><label>Prazo interno<input type="date" data-prz value="${esc(a.prazoInterno || '')}"></label></div>` : a.prazoInterno ? `<small class="muted">Prazo interno: ${fmtDate(a.prazoInterno)}</small>` : ''}
+        ${achadoAberto(a) ? `<label class="pa-p">Providência tomada<textarea rows="2" data-prov placeholder="Ex.: termo aditivo assinado e enviado em 10/12…">${esc(a.providenciaEmpresa || '')}</textarea></label><div class="right"><button class="btn primary sm" data-salvar>${icon('check')} Salvar</button></div>` : a.providenciaEmpresa ? `<p class="pa-r"><b>Providência:</b> ${esc(a.providenciaEmpresa)}</p>` : ''}
+        ${a.providenciaEm ? `<small class="muted">Atualizado por ${esc(a.providenciaPor || '')} em ${fmtDateTime(a.providenciaEm)}</small>` : ''}
+      </article>`).join('') : `<p class="muted">${pf === 'func' ? 'Nenhuma pendência atribuída a você.' : 'Nenhum item publicado pelo escritório.'}</p>`}</section>`;
+    $$('[data-salvar]', host).forEach(b => b.onclick = async () => {
+      const art = b.closest('[data-ach]'), id = art.dataset.ach, a = DB.get('achados', id);
+      const dados = { id, providencia: $('[data-prov]', art)?.value.trim() ?? undefined, responsavelPortal: $('[data-resp]', art)?.value, prazoInterno: $('[data-prz]', art)?.value };
+      b.disabled = true;
+      try {
+        let x;
+        if (preview || !Session.remote) { x = { ...a, providenciaEmpresa: dados.providencia, providenciaEm: new Date().toISOString(), providenciaPor: Session.user?.nome || '', status: a.status === 'Pendente' && dados.providencia ? 'Em andamento' : a.status, ...(pf === 'ger' ? { responsavelPortal: dados.responsavelPortal || '', prazoInterno: dados.prazoInterno || '' } : {}) }; await DB.save('achados', x); }
+        else { x = await api('achadoPortal', dados); DB._applyLocal({ op: 'save', c: 'achados', records: [x] }); await DB.persist(); }
+        UI.toast('Salvo. O escritório vai conferir.', 'ok'); redraw();
+      } catch (err) { b.disabled = false; UI.toast(err.message, 'bad'); }
+    });
+  },
+
+  /* ---------------- equipe (gerente) ---------------- */
+  async equipe(host, e, preview) {
+    if (preview || !Session.remote) { host.innerHTML = `<section class="card"><p class="muted">Na pré-visualização a equipe não é carregada. O gerente vê aqui quem tem acesso à empresa e pede ao escritório a inclusão ou a remoção de funcionários.</p></section>`; return; }
+    host.innerHTML = `<section class="card"><p class="muted">Carregando a equipe…</p></section>`;
+    let d; try { d = await api('equipe', { empresaId: e.id }); } catch (err) { host.innerHTML = `<section class="card"><p class="muted">${esc(err.message)}</p></section>`; return; }
+    const desenha = () => {
+      host.innerHTML = `<section class="card"><header><h2>${icon('users')} Equipe com acesso <small class="muted">${d.membros.length}</small></h2></header>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>Pessoa</th><th>Perfil</th><th>Último acesso</th><th></th></tr></thead><tbody>${d.membros.map(m => `<tr><td><b>${esc(m.nome || '—')}</b><small class="muted" style="display:block">${esc(m.email)}</small></td><td>${esc(Perfis.CURTO[m.perfil] || m.perfil)}</td><td>${m.ultimoAcesso ? fmtDateTime(m.ultimoAcesso) : 'ainda não entrou'}</td><td>${m.perfil === 'func' && m.email !== Session.user.email ? `<button class="link small" data-rem="${esc(m.email)}">pedir remoção</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>
+        <section class="card"><header><h2>${icon('plus')} Pedir acesso para um funcionário</h2></header><p class="muted small">O escritório aprova o pedido e o funcionário recebe o convite por e-mail.</p>
+          <form class="grid-form" id="eqF"><div class="fld"><label>Nome</label><input name="nome" required></div><div class="fld"><label>E-mail</label><input name="email" type="email" required></div><div class="fld full right"><button class="btn primary">${icon('upload')} Enviar pedido ao escritório</button></div></form></section>
+        ${d.pedidos.length ? `<section class="card"><header><h2>⏳ Pedidos aguardando o escritório</h2></header><ul class="plain">${d.pedidos.map(p => `<li>${p.tipo === 'remover' ? 'Remover' : 'Incluir'} <b>${esc(p.nome || p.email)}</b> (${esc(p.email)}) · ${fmtDateTime(p.em)} <button class="link small" data-cancel="${p.id}">cancelar</button></li>`).join('')}</ul></section>` : ''}`;
+      const pedir = async (o, btn) => { if (btn) btn.disabled = true; try { d.pedidos = await api('equipePedido', { empresaId: e.id, ...o }); UI.toast('Pedido enviado ao escritório.', 'ok'); desenha(); } catch (err) { if (btn) btn.disabled = false; UI.toast(err.message, 'bad'); } };
+      $('#eqF', host).onsubmit = ev => { ev.preventDefault(); const f = ev.target; pedir({ nome: f.nome.value.trim(), email: f.email.value.trim(), tipo: 'incluir' }, $('button', f)); };
+      $$('[data-rem]', host).forEach(b => b.onclick = () => confirm(`Pedir ao escritório a remoção do acesso de ${b.dataset.rem}?`) && pedir({ email: b.dataset.rem, tipo: 'remover' }, b));
+      $$('[data-cancel]', host).forEach(b => b.onclick = () => pedir({ cancelar: b.dataset.cancel }, b));
+    };
+    desenha();
+  }
+};
+/* =====================================================================
+   PAINEL DA DIRETORIA (portal da empresa, só consulta)
+   Carteira, receita, custos, margem e riscos em dinheiro, calculados com
+   o que o escritório apurou (contratos, folha do DP, custos lançados e
+   remessas aprovadas).
+   ===================================================================== */
+const Diretoria = {
+  f: { esfera: '', orgao: '' },
+  esfera: c => String(c.grupo || '').split(/ [–-] /)[0].trim() || 'Não informada',
+  orgao: c => tomadorBase(c),
+  mi(v) { v = num(v) || 0; return Math.abs(v) >= 1e6 ? 'R$ ' + NUM.format(+(v / 1e6).toFixed(2)) + ' mi' : Math.abs(v) >= 1e4 ? 'R$ ' + NUM.format(+(v / 1e3).toFixed(1)) + ' mil' : fmtMoney(v); },
+  vigente: c => !/^(encerrad|rescindid)|licita/i.test(c.status || '') && (!isISO(c.fim) || daysUntil(c.fim) >= 0),
+  /** custo mensal apurado do contrato: a última competência com folha (DP) ou custos lançados */
+  custos(e) {
+    const mo = empRecs('maoDeObra', e.id).filter(m => /^\d{4}-\d{2}$/.test(m.competencia || '') && (num(m.custoApurado) || num(m.beneficios)));
+    const fi = empRecs('financeiro', e.id).filter(f => /^\d{4}-\d{2}$/.test(f.competencia || '') && /^(Custo|Tributo)$/.test(f.tipo || ''));
+    const por = {};
+    const add = (cod, comp, v) => { const o = por[cod] = por[cod] || {}; o[comp] = (o[comp] || 0) + (v || 0); };
+    mo.forEach(m => add(m.contrato, m.competencia, (num(m.custoApurado) || 0) + (num(m.beneficios) || 0)));
+    fi.forEach(f => add(f.contrato, f.competencia, num(f.realizado) ?? num(f.previsto) ?? 0));
+    const out = {}; let base = '';
+    Object.entries(por).forEach(([cod, comps]) => { const k = Object.keys(comps).sort().pop(); out[cod] = { valor: comps[k], comp: k }; if (k > base) base = k; });
+    return { por: out, base };
+  },
+  /** contratado × faturado × recebido por competência (remessas aprovadas) */
+  fluxo(e, cs) {
+    const fr = empRecs('financeiro', e.id).filter(f => /Faturamento \(remessa\)/.test(f.grupo || '') && /^\d{4}-\d{2}$/.test(f.competencia || ''));
+    const comps = [...new Set(fr.map(f => f.competencia))].sort().slice(-6);
+    return comps.map(k => ({ k, cont: cs.filter(c => (!isISO(c.inicio) || c.inicio.slice(0, 7) <= k) && (!isISO(c.fim) || c.fim.slice(0, 7) >= k)).reduce((s, c) => s + (num(c.valorMensal) || 0), 0),
+      fat: fr.filter(f => f.competencia === k).reduce((s, f) => s + (num(f.previsto) || 0), 0), rec: fr.filter(f => f.competencia === k).reduce((s, f) => s + (num(f.realizado) || 0), 0) }));
+  },
+  dados(e) {
+    const todos = empRecs('contratos', e.id).filter(c => !/licita/i.test(c.status || ''));
+    const cs = todos.filter(c => (!Diretoria.f.esfera || Diretoria.esfera(c) === Diretoria.f.esfera) && (!Diretoria.f.orgao || Diretoria.orgao(c) === Diretoria.f.orgao));
+    const vig = cs.filter(Diretoria.vigente), C = Diretoria.custos(e);
+    const linhas = vig.map(c => { const m = num(c.valorMensal) || 0, k = C.por[c.codigo]; return { c, m, a: num(c.valorAnual) || m * 12, custo: k ? k.valor : null, mg: k && m ? (m - k.valor) / m : null }; }).sort((a, b) => b.m - a.m);
+    const comCusto = linhas.filter(l => l.custo !== null), tm = linhas.reduce((s, l) => s + l.m, 0), tmc = comCusto.reduce((s, l) => s + l.m, 0), tc = comCusto.reduce((s, l) => s + l.custo, 0);
+    const fl = Diretoria.fluxo(e, cs), aReceber = empRecs('financeiro', e.id).filter(f => /Faturamento \(remessa\)/.test(f.grupo || '')).reduce((s, f) => s + Math.max(0, (num(f.previsto) || 0) - (num(f.realizado) || 0)), 0);
+    const base = [C.base, ...fl.map(x => x.k)].filter(Boolean).sort().pop() || '';
+    return { todos, cs, vig, linhas, comCusto, tm, tmc, tc, fl, aReceber, base };
+  },
+  render(host, e) {
+    const D = Diretoria.dados(e), F = Diretoria.f, mi = Diretoria.mi;
+    const esferas = [...new Set(D.todos.map(Diretoria.esfera))].sort(), orgaos = [...new Set(D.todos.map(Diretoria.orgao))].sort();
+    const dd = c => isISO(c.fim) ? daysUntil(c.fim) : 9999;
+    const v90 = D.vig.filter(c => dd(c) <= 90), v180 = D.vig.filter(c => dd(c) <= 180), vencidos = D.cs.filter(c => !/^(encerrad|rescindid)/i.test(c.status || '') && isISO(c.fim) && daysUntil(c.fim) < 0);
+    const neg = D.linhas.filter(l => l.mg !== null && l.mg < 0), achAlto = empRecs('achados', e.id).filter(a => achadoAberto(a) && /alto|crít/i.test(a.risco || '')).length;
+    // receita contratada nos próximos 12 meses
+    const d0 = new Date(); d0.setDate(1); const meses = Array.from({ length: 12 }, (_, i) => { const x = new Date(d0); x.setMonth(d0.getMonth() + i); const k = x.toISOString().slice(0, 7); return { k, v: D.vig.filter(c => (!isISO(c.fim) || c.fim.slice(0, 7) >= k) && (!isISO(c.inicio) || c.inicio.slice(0, 7) <= k)).reduce((s, c) => s + (num(c.valorMensal) || 0), 0) }; });
+    const mx = Math.max(...meses.map(m => m.v), 1);
+    // concentração e esfera
+    const soma = key => { const o = {}; D.vig.forEach(c => { const k = key(c); o[k] = (o[k] || 0) + (num(c.valorMensal) || 0); }); return Object.entries(o).sort((a, b) => b[1] - a[1]); };
+    const orgS = soma(Diretoria.orgao), top = orgS.slice(0, 5), topP = D.tm ? top.reduce((s, x) => s + x[1], 0) / D.tm : 0, esfS = soma(Diretoria.esfera);
+    const hb = (l, v, w, txt) => `<div class="dr-hb"><span title="${esc(l)}">${esc(l)}</span><i style="width:${Math.max(2, w * 100).toFixed(0)}%"></i><b>${txt}</b></div>`;
+    // linha contratado × faturado × recebido
+    let fluxoSvg = '<p class="muted small">As remessas mensais aprovadas pelo escritório alimentam este gráfico.</p>';
+    if (D.fl.length) {
+      const W = 520, H = 170, vs = D.fl.flatMap(x => [x.cont, x.fat, x.rec]), hi = Math.max(...vs) * 1.05 || 1, lo = Math.min(...vs) * 0.9;
+      const X = i => 40 + i * (W - 60) / Math.max(1, D.fl.length - 1), Y = v => H - 22 - (v - lo) / ((hi - lo) || 1) * (H - 40);
+      const pl = k => D.fl.map((x, i) => `${X(i).toFixed(0)},${Y(x[k]).toFixed(0)}`).join(' ');
+      fluxoSvg = `<svg viewBox="0 0 ${W} ${H}" class="dr-ln"><polyline points="${pl('cont')}" class="l1"/><polyline points="${pl('fat')}" class="l2"/><polyline points="${pl('rec')}" class="l3"/>${D.fl.map((x, i) => `<text x="${X(i).toFixed(0)}" y="${H - 4}">${fmtCompShort(x.k)}</text>`).join('')}</svg><div class="dr-lgd"><span><i style="background:#9aa3b5"></i>Contratado</span><span><i style="background:var(--s1)"></i>Faturado</span><span><i style="background:#b08a3e"></i>Recebido</span></div>`;
+    }
+    // linha do tempo
+    const gs = D.cs.filter(c => isISO(c.inicio) || isISO(c.fim)).sort((a, b) => String(a.fim || '9999').localeCompare(String(b.fim || '9999')));
+    const t0 = Math.min(...gs.map(c => +new Date(c.inicio || c.fim) - (c.inicio ? 0 : 365 * 864e5)), Date.now() - 365 * 864e5), t1 = Math.max(...gs.map(c => +new Date(c.fim || Date.now() + 730 * 864e5)), Date.now() + 365 * 864e5);
+    const px = t => ((t - t0) / (t1 - t0) * 100).toFixed(2);
+    const gantt = gs.map(c => { const a = c.inicio ? +new Date(c.inicio) : +new Date(c.fim) - 365 * 864e5, b = c.fim ? +new Date(c.fim) : t1, d = dd(c), cl = /^(encerrad|rescindid)/i.test(c.status || '') ? 'enc' : d < 0 ? 'ven' : d <= 30 ? 'r30' : d <= 90 ? 'r90' : 'ok';
+      return `<div class="dr-gr"><span class="gl" title="${esc(c.tomador || '')}"><b>${esc(c.codigo || '')}</b> ${esc(Diretoria.orgao(c))}</span><span class="gt"><i class="${cl}" style="left:${px(a)}%;width:${Math.max(0.8, px(b) - px(a))}%"></i><em style="left:${px(Date.now())}%"></em></span><span class="gd">${c.fim ? fmtDate(c.fim).slice(0, 6) + fmtDate(c.fim).slice(8) : '—'}</span></div>`; }).join('');
+    const pct = v => v === null ? '—' : fmtPct(v);
+    host.innerHTML = `<div class="dr" id="drRoot">
+      <div class="dr-top"><div><h2>Visão da carteira</h2><p class="muted small">${D.base ? `Dados apurados até a competência <b>${fmtComp(D.base)}</b>` : 'Ainda sem competências apuradas (folha, custos ou remessas)'} · atualizado em ${fmtDate(todayISO())}</p></div>
+        <div class="dr-flt"><select id="drEsf"><option value="">Todas as esferas</option>${esferas.map(x => `<option ${x === F.esfera ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select><select id="drOrg"><option value="">Todos os órgãos</option>${orgaos.map(x => `<option ${x === F.orgao ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select><button class="btn ghost sm" id="drPdf">${icon('printer')} PDF executivo</button><button class="btn ghost sm" id="drXls">${icon('download')} Excel</button></div></div>
+      <div class="kpis">
+        ${kpi('Contratos vigentes', D.vig.length, `de ${D.cs.length} no cadastro`)}
+        ${kpi('Receita mensal contratada', mi(D.tm), `${mi(D.tm * 12)} por ano`, 'ok')}
+        ${kpi('Custo mensal apurado', D.comCusto.length ? mi(D.tc) : '—', D.comCusto.length ? `${D.comCusto.length} de ${D.linhas.length} contratos com custo` : 'aguardando folha/custos do mês')}
+        ${kpi('Margem bruta', D.comCusto.length && D.tmc ? fmtPct((D.tmc - D.tc) / D.tmc) : '—', D.comCusto.length ? `${mi((D.tmc - D.tc) * 12)} por ano` : 'sem custo apurado', D.tmc && D.tmc - D.tc < 0 ? 'bad' : 'ok')}
+        ${kpi('Vencem em 90 dias', v90.length, `${mi(v90.reduce((s, c) => s + (num(c.valorMensal) || 0), 0) * 12)}/ano em jogo`, v90.length ? 'warn' : '')}
+        ${kpi('Margem negativa', neg.length, 'contrato(s) dando prejuízo', neg.length ? 'bad' : '')}
+      </div>
+      <div class="grid2">
+        <section class="card"><header><h2>Receita contratada — próximos 12 meses</h2></header><p class="muted small">Soma dos valores mensais dos contratos vigentes em cada mês, pela data de fim atual. A queda mostra receita que depende de prorrogação.</p>
+          <div class="dr-bars">${meses.map(m => `<div class="b" title="${fmtCompShort(m.k)}: ${fmtMoney(m.v)}"><i style="height:${(m.v / mx * 100).toFixed(0)}%"></i><span>${fmtCompShort(m.k)}</span></div>`).join('')}</div></section>
+        <section class="card"><header><h2>Contratado × faturado × recebido</h2></header>${fluxoSvg}</section>
+      </div>
+      <div class="grid2">
+        <section class="card"><header><h2>Concentração da receita</h2></header><p class="muted small">Os ${top.length} maiores órgãos respondem por <b>${fmtPct(topP)}</b> da receita mensal.</p>${top.map(([l, v]) => hb(l, v, v / (top[0]?.[1] || 1), mi(v * 12) + '/ano')).join('') || '<p class="muted">Sem contratos vigentes.</p>'}</section>
+        <section class="card"><header><h2>Receita por esfera</h2></header>${esfS.map(([l, v]) => hb(l, v, D.tm ? v / D.tm : 0, fmtPct(D.tm ? v / D.tm : 0))).join('') || '<p class="muted">—</p>'}</section>
+      </div>
+      <section class="card"><header><h2>Linha do tempo das vigências</h2></header><p class="muted small"><i class="dr-dot ven"></i>vencido sem prorrogação · <i class="dr-dot r30"></i>até 30 dias · <i class="dr-dot r90"></i>até 90 dias · <i class="dr-dot ok"></i>em dia · linha = hoje</p><div class="dr-gantt">${gantt || '<p class="muted">Sem datas de vigência.</p>'}</div></section>
+      <section class="card"><header><h2>Contratos: receita, custo e margem</h2></header>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>Contrato</th><th>Esfera</th><th>Fim</th><th class="n">Mensal</th><th class="n">Anual</th><th class="n">Custo mensal</th><th class="n">Margem</th></tr></thead><tbody>
+        ${D.linhas.map(l => `<tr><td><b>${esc(l.c.codigo || '')}</b><small class="muted" style="display:block">${esc(l.c.tomador || '')}</small></td><td>${esc(Diretoria.esfera(l.c))}</td><td>${fmtDate(l.c.fim) || '—'}</td><td class="n">${fmtMoney(l.m)}</td><td class="n">${fmtMoney(l.a)}</td><td class="n">${l.custo === null ? '<span class="muted">—</span>' : fmtMoney(l.custo)}</td><td class="n ${l.mg !== null && l.mg < 0 ? 't-bad' : ''}">${pct(l.mg)}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td><b>Total</b></td><td></td><td></td><td class="n"><b>${fmtMoney(D.tm)}</b></td><td class="n"><b>${fmtMoney(D.linhas.reduce((s, l) => s + l.a, 0))}</b></td><td class="n"><b>${D.comCusto.length ? fmtMoney(D.tc) : '—'}</b></td><td class="n"><b>${D.comCusto.length && D.tmc ? fmtPct((D.tmc - D.tc) / D.tmc) : '—'}</b></td></tr></tfoot></table></div>
+        ${D.linhas.length > D.comCusto.length ? `<p class="muted small">“—” no custo: contrato ainda sem folha ou custos apurados pelo escritório.</p>` : ''}</section>
+      <section class="card"><header><h2>Riscos em dinheiro</h2></header><div class="dr-risk">
+        <div><b>${mi(D.aReceber)}</b><span>faturado e ainda não recebido (remessas aprovadas)</span></div>
+        <div><b>${v180.length}</b><span>contratos vencem em 180 dias · ${mi(v180.reduce((s, c) => s + (num(c.valorMensal) || 0), 0) * 12)}/ano</span></div>
+        <div><b>${vencidos.length}</b><span>contratos com vigência vencida sem termo de prorrogação</span></div>
+        <div><b>${achAlto}</b><span>pontos de risco alto em aberto no plano de ação</span></div>
+      </div></section></div>`;
+    $('#drEsf', host).onchange = ev => { F.esfera = ev.target.value; Diretoria.render(host, e); };
+    $('#drOrg', host).onchange = ev => { F.orgao = ev.target.value; Diretoria.render(host, e); };
+    $('#drPdf', host).onclick = () => Diretoria.pdf(host, e);
+    $('#drXls', host).onclick = () => {
+      const sub = `${e.razao || e.fantasia} — painel da diretoria em ${fmtDateTime(new Date())}`;
+      download(XLSX.write([
+        { name: 'Contratos', title: 'CONTRATOS — RECEITA, CUSTO E MARGEM', subtitle: sub, headers: ['Contrato', 'Órgão', 'Esfera', 'Início', 'Fim', 'Mensal (R$)', 'Anual (R$)', 'Custo mensal (R$)', 'Margem (%)'], types: ['text', 'text', 'text', 'text', 'text', 'money', 'money', 'money', 'num'],
+          rows: D.linhas.map(l => [l.c.codigo, l.c.tomador, Diretoria.esfera(l.c), fmtDate(l.c.inicio), fmtDate(l.c.fim), l.m, l.a, l.custo ?? '', l.mg === null ? '' : +(l.mg * 100).toFixed(1)]) },
+        { name: 'Receita mensal', title: 'CONTRATADO × FATURADO × RECEBIDO', subtitle: sub, headers: ['Competência', 'Contratado (R$)', 'Faturado (R$)', 'Recebido (R$)'], types: ['text', 'money', 'money', 'money'], rows: D.fl.map(x => [fmtComp(x.k), x.cont, x.fat, x.rec]) },
+        { name: 'Próximos 12 meses', title: 'RECEITA CONTRATADA — PRÓXIMOS 12 MESES', subtitle: sub, headers: ['Mês', 'Receita contratada (R$)'], types: ['text', 'money'], rows: meses.map(m => [fmtComp(m.k), m.v]) }
+      ]), `Diretoria_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.xlsx`);
+    };
+  },
+  /** PDF executivo: abre o painel numa janela de impressão (salvar como PDF) */
+  pdf(host, e) {
+    const w = window.open('', '_blank'); if (!w) return UI.toast('Permita a abertura de janelas para gerar o PDF.', 'warn');
+    const css = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+    w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Painel da Diretoria — ${esc(e.fantasia || e.razao)}</title><style>${css}
+      body{background:#fff!important;padding:18px}.dr-flt,.no-print{display:none!important}.card{break-inside:avoid;box-shadow:none!important}@page{size:A4;margin:12mm}</style></head>
+      <body class="client"><div class="pdf-h"><img src="${BRAND.logoDark}" alt="" style="height:54px"><div><b style="font:700 20px var(--serif)">${esc(e.fantasia || e.razao)}</b><div class="muted small">Painel executivo da diretoria · ${fmtDateTime(new Date())} · ${esc(escritorio().nome || 'Amorim Firmo')}</div></div></div>${$('#drRoot', host).outerHTML}</body></html>`);
+    w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 600);
+  }
 };

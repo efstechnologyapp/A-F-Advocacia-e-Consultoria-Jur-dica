@@ -94,7 +94,6 @@ const SCHEMAS = {
       F('telefone', 'Telefone', 'tel'),
       F('inicio', 'Início da consultoria', 'date'),
       F('honorario', 'Honorário mensal (R$)', 'money'),
-      F('emailPortal', 'E-mails de acesso ao portal', 'text', { w: 'full', hint: 'Um ou mais e-mails, separados por vírgula: cada pessoa entra no portal com o próprio e-mail (consultoria e remessa mensal). A própria empresa vira o cliente do portal; depois de salvar, toque em “Habilitar portal” na página da empresa.' }),
       F('obs', 'Observações', 'long')
     ]
   },
@@ -275,7 +274,11 @@ const SCHEMAS = {
       F('status', 'Status', 'select', { opts: ['Pendente', 'Em andamento', 'Concluído', 'Validado', 'Não aplicável'], list: 1 }),
       F('evidenciaConclusao', 'Evidência de conclusão', 'text'),
       F('dataValidacao', 'Data de validação', 'date'),
-      F('resultado', 'Resultado após correção', 'long')
+      F('resultado', 'Resultado após correção', 'long'),
+      F('visivelEmpresa', 'Visível à empresa (portal)?', 'select', { opts: ['Não', 'Sim'], list: 1, hint: 'Só os achados marcados “Sim” aparecem para o gerente/funcionário no portal; a diretoria vê apenas os números.' }),
+      F('responsavelPortal', 'Responsável na empresa (e-mail)', 'text'),
+      F('prazoInterno', 'Prazo interno da empresa', 'date'),
+      F('providenciaEmpresa', 'Providência informada pela empresa', 'long')
     ]
   },
   documentos: {

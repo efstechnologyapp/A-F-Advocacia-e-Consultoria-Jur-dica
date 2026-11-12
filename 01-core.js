@@ -5,9 +5,20 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.18.2';
+const APP_VERSAO = '1.20.3';
+/* Desenvolvimento e proteção do aplicativo */
+const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
+/** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
+ *  Para um domínio próprio, inclua-o aqui ou em config.js (CONFIG.DOMINIOS = ['meudominio.com.br']). */
+const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]'];
+const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.20.3', data: '12/11/2026', itens: ['Crédito do desenvolvedor (EFS Technology, WhatsApp e e-mail) no login, no menu, em “Sobre o App” e no portal do cliente.', 'Proteção: o app só roda nos endereços autorizados; uma cópia publicada em outro domínio mostra o aviso de cópia não autorizada. Aviso de direitos autorais no código.'] },
+  { numero: '1.20.2', data: '12/11/2026', itens: ['Portal: quem tem acesso a várias empresas vê uma abertura própria — o cartão percorre os logos das empresas, acendendo um ponto para cada uma, e termina na tela de escolha.'] },
+  { numero: '1.20.1', data: '12/11/2026', itens: ['Portal: quem tem perfil mais alto pode atuar num perfil abaixo (Diretoria → Gerente ou Funcionário; Gerente → Funcionário), pelo menu em “Atuar como”. Uma faixa avisa o perfil em uso e tem “Voltar ao meu perfil”.'] },
+  { numero: '1.20.0', data: '12/11/2026', itens: ['Portal da empresa com 3 perfis: Funcionário (contratos, pendências atribuídas e remessa), Gerente/Administrador (contratos, plano de ação, revisa e envia a remessa, pede acessos de funcionários) e Diretoria (painel com carteira, receita, custos, margem, vigências e riscos; PDF executivo e Excel).', 'O servidor entrega a cada perfil só os dados que ele pode ver.', 'Empresa › aba “Portal da empresa”: acessos com perfil, reenviar convite, zerar senha, remover, aprovar pedidos do gerente e escolher quais achados publicar.', 'Remessa: o funcionário envia ao gerente, que revisa e envia ao escritório (sem gerente, vai direto).', 'Pré-visualização do portal com seletor de perfil.'] },
+  { numero: '1.19.0', data: '12/11/2026', itens: ['Portal: o mesmo e-mail pode ter acesso a várias empresas. Ao entrar, o usuário vê os cards das empresas (contratos, ações em aberto e situação da remessa) e escolhe em qual vai trabalhar; o menu ganhou “Trocar de empresa”.', 'Habilitar o portal de uma segunda empresa para um e-mail já cadastrado agora soma o acesso, em vez de substituir.'] },
   { numero: '1.18.2', data: '12/11/2026', itens: ['Portal: o cartão de conexão (escritório × empresa) aparece em todo login e toda vez que o app é aberto, no lugar da abertura padrão.'] },
   { numero: '1.18.1', data: '12/11/2026', itens: ['Portal: botão do menu e painel lateral passam para o lado esquerdo; no topo do painel, a empresa e, abaixo, o nome do usuário, e-mail, cidade, data e hora do acesso.', '“Meus dados”: cada funcionário da empresa preenche os próprios dados (nome completo, cargo, telefone e endereço); o cadastro da empresa continua com o escritório.'] },
   { numero: '1.18.0', data: '12/11/2026', itens: ['Portal do cliente: senha própria. No 1º acesso, depois de confirmar o código do e-mail, a pessoa cria a senha; nos próximos, entra com e-mail e senha (com “Esqueci minha senha”). 5 tentativas erradas bloqueiam por 15 minutos.', 'Portal: menu do usuário (toque nas iniciais, no topo) com empresa, atalhos (Consultoria, Remessa mensal com prazo/situação, relatório), Meu perfil, Alterar senha, instalar o app, falar com o escritório e Sair.', 'Gestão › Usuários: mostra se o cliente já criou senha e tem o botão “Zerar senha”.'] },

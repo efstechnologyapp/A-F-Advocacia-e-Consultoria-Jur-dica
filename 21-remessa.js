@@ -4,7 +4,7 @@
    "em análise" e só alimenta os dados gerais quando o escritório aprova.
    ===================================================================== */
 const Remessa = {
-  ST: { aberta: ['Em preenchimento', 'muted'], enviada: ['Enviada · aguardando análise', 'warn'], analise: ['Em análise', 'info'], pendencia: ['Devolvida com pendência', 'bad'], aprovada: ['Aprovada e lançada', 'ok'] },
+  ST: { aberta: ['Em preenchimento', 'muted'], revisao: ['Com o gerente para revisão', 'info'], enviada: ['Enviada · aguardando análise', 'warn'], analise: ['Em análise', 'info'], pendencia: ['Devolvida com pendência', 'bad'], aprovada: ['Aprovada e lançada', 'ok'] },
   CATS: [['folha', 'Folha de pagamento'], ['beneficios', 'Comprovantes de benefícios (VA/VT…)'], ['fgts', 'Guias e comprovantes FGTS/INSS'], ['nf', 'Notas fiscais / medições'], ['receb', 'Comprovantes de recebimento'], ['ponto', 'Frequência / ponto'], ['aditivo', 'Termo aditivo / apólice de garantia'], ['outros', 'Outros']],
   OBRIG: ['folha', 'fgts', 'nf'],
   id: (eid, comp) => 'rm_' + eid + '_' + comp.replace('-', ''),
@@ -58,7 +58,7 @@ const Remessa = {
     if (!emps.length) { host.innerHTML = '<div class="empty"><p>Nenhuma empresa vinculada.</p></div>'; return; }
     const e = emps.find(x => x.id === st.emp) || emps[0], comp = st.comp || Remessa.compPadrao();
     const r = Remessa.get(e.id, comp) || { id: Remessa.id(e.id, comp), empresaId: e.id, competencia: comp, status: 'aberta', contratos: {}, arquivos: [] };
-    const edit = ['aberta', 'pendencia'].includes(r.status || 'aberta'), cs = Remessa.contratos(e, comp), pz = Remessa.prazo(e, comp), dz = daysUntil(pz);
+    const pfR = Perfis.de(e, Session.isStaff), edit = ['aberta', 'pendencia'].includes(r.status || 'aberta') || (r.status === 'revisao' && pfR === 'ger'), cs = Remessa.contratos(e, comp), pz = Remessa.prazo(e, comp), dz = daysUntil(pz);
     const inp = (c, k, ph, money) => `<input class="input" data-rc="${c.id}" data-k="${k}" inputmode="decimal" placeholder="${ph}" value="${esc(r.contratos?.[c.id]?.[k] != null ? (money ? (num(r.contratos[c.id][k]) ?? '').toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : r.contratos[c.id][k]) : '')}" ${edit ? '' : 'disabled'}>`;
     host.innerHTML = `
       <section class="card rm-top">
@@ -83,7 +83,7 @@ const Remessa = {
           ${fs.map(a => `<small>${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.nome)}</a>` : esc(a.nome)}${edit ? ` <button class="link small" data-rmdel="${a.id}">remover</button>` : ''}</small>`).join('')}</div>
           ${edit ? `<label class="btn ghost sm">${icon('upload')} Anexar<input type="file" multiple hidden data-rmcat="${k}"></label>` : ''}</div>`; }).join('')}</div></section>
       ${edit ? `<section class="card"><label class="full">Observações para o escritório<textarea class="input" id="rmObs" rows="3">${esc(r.obsCliente || '')}</textarea></label>
-        <div class="btn-row right"><button class="btn ghost" id="rmSalvar">${icon('check')} Salvar rascunho</button><button class="btn primary" id="rmEnviar">${icon('upload')} Enviar para análise</button></div></section>` : ''}`;
+        <div class="btn-row right"><button class="btn ghost" id="rmSalvar">${icon('check')} Salvar rascunho</button><button class="btn primary" id="rmEnviar">${icon('upload')} ${pfR === 'ger' ? 'Enviar ao escritório' : 'Enviar'}</button></div></section>` : ''}`;
     const coleta = () => {
       $$('[data-rc]', host).forEach(i => { const o = r.contratos[i.dataset.rc] = r.contratos[i.dataset.rc] || {}; o[i.dataset.k] = i.type === 'checkbox' ? i.checked : (/faturado|recebido|ocupados|faltas/.test(i.dataset.k) ? num(i.value) : i.value.trim()); });
       r.obsCliente = $('#rmObs', host)?.value.trim() || '';
@@ -102,8 +102,9 @@ const Remessa = {
       coleta();
       const falta = Remessa.OBRIG.filter(k => !(r.arquivos || []).some(a => a.cat === k)).map(k => Remessa.CATS.find(x => x[0] === k)[1]);
       if (falta.length && !confirm('Ainda faltam documentos obrigatórios:\n• ' + falta.join('\n• ') + '\n\nEnviar mesmo assim?')) return;
+      const ant = r.status;
       r.status = 'enviada'; r.enviadoEm = new Date().toISOString(); r.enviadoPor = Session.user?.nome || Session.user?.email || '';
-      try { await Remessa.gravar(r); UI.toast('Remessa enviada para análise do escritório.', 'ok'); redraw(); } catch (err) { r.status = 'aberta'; UI.toast(err.message, 'bad'); }
+      try { const out = await Remessa.gravar(r); UI.toast(out?.status === 'revisao' ? 'Remessa enviada ao gerente da empresa para revisão.' : 'Remessa enviada para análise do escritório.', 'ok'); redraw(); } catch (err) { r.status = ant || 'aberta'; UI.toast(err.message, 'bad'); }
     });
   },
 
@@ -158,7 +159,7 @@ const Remessa = {
       });
       (r.arquivos || []).forEach(a => { const c = cs.find(x => x.id === a.contratoId); doc.push({ ...base, contrato: c?.codigo || '', tomador: c?.tomador || '', tipo: Remessa.CATS.find(x => x[0] === a.cat)?.[1] || 'Outro', arquivo: a.nome, link: a.url, origem: 'Portal da empresa – remessa ' + fmtComp(r.competencia), caminho: 'Remessas/' + r.competencia, origemId: r.id }); });
       const n0 = empRecs('achados', e.id).length;
-      marc.forEach((d, i) => ach.push({ ...base, codigo: `${e.sigla || 'AC'}-R${r.competencia.replace('-', '')}-${String(i + 1).padStart(2, '0')}`, contrato: d.c?.codigo || '', periodo: fmtComp(r.competencia), area: /Recebido|Faturado|Faturamento/.test(d.txt) ? 'Financeiro' : /Postos|falta/i.test(d.txt) ? 'Trabalhista' : 'Documental', achado: d.txt, criterio: 'Remessa mensal da empresa', risco: d.risco, valor: d.valor ?? null, recomendacao: 'Verificar com a empresa e regularizar', responsavel: 'Gestão contratual da empresa', status: 'Pendente', origem: r.id }));
+      marc.forEach((d, i) => ach.push({ ...base, codigo: `${e.sigla || 'AC'}-R${r.competencia.replace('-', '')}-${String(i + 1).padStart(2, '0')}`, contrato: d.c?.codigo || '', periodo: fmtComp(r.competencia), area: /Recebido|Faturado|Faturamento/.test(d.txt) ? 'Financeiro' : /Postos|falta/i.test(d.txt) ? 'Trabalhista' : 'Documental', achado: d.txt, criterio: 'Remessa mensal da empresa', risco: d.risco, valor: d.valor ?? null, recomendacao: 'Verificar com a empresa e regularizar', responsavel: 'Gestão contratual da empresa', status: 'Pendente', visivelEmpresa: 'Sim', origem: r.id }));
       for (const [col, recs] of [['financeiro', fin], ['maoDeObra', mo], ['documentos', doc], ['achados', ach]]) if (recs.length) await DB.save(col, recs);
       await fim('aprovada', { lancados: fin.length + mo.length + doc.length, achados: ach.length });
       UI.toast(`Remessa aprovada: ${fin.length + mo.length} lançamento(s), ${doc.length} documento(s) e ${ach.length} achado(s).`, 'ok');
@@ -182,6 +183,26 @@ const ConnSplash = {
     setTimeout(() => st.textContent = 'Tudo pronto ✓', 2700);
     const t = setTimeout(fora, 3500); ov.onclick = () => { clearTimeout(t); fora(); };
   }
+};
+/** abertura para quem tem várias empresas: o cartão percorre os logos e termina na escolha */
+ConnSplash.multi = (emps) => {
+  if (document.querySelector('.conn-splash')) return;
+  document.getElementById('splash')?.remove();
+  const esc0 = escritorio(), mostra = emps.slice(0, 5), n = emps.length, passo = Math.min(900, Math.round(2700 / mostra.length));
+  const ov = document.createElement('div'); ov.className = 'conn-splash';
+  ov.innerHTML = `<div class="cs-card"><div class="cs-pair"><img src="${BRAND.logoDark}" alt="" class="cs-af"><span class="cs-x">×</span><div class="cs-cli cs-slot">${mostra.map((e, i) => `<div class="cs-it" data-i="${i}">${ConnSplash.logo(e)}</div>`).join('')}${n > 5 ? '<div class="cs-it" data-i="5"><span>+' + (n - 5) + '</span></div>' : ''}</div></div>
+    <div class="cs-t">${esc((esc0.nome || 'Amorim Firmo').split(/ Advocacia| e Consultoria/)[0])} × suas empresas</div><div class="cs-s">Área exclusiva do cliente</div>
+    <div class="cs-dots">${mostra.map(() => '<i></i>').join('')}${n > 5 ? '<i></i>' : ''}</div><div class="cs-st">Estabelecendo conexão segura…</div></div><small class="cs-skip">toque para pular</small>`;
+  document.body.appendChild(ov);
+  const its = $$('.cs-it', ov), dots = $$('.cs-dots i', ov), st = $('.cs-st', ov), tm = [];
+  its.forEach((el, i) => tm.push(setTimeout(() => {
+    its.forEach(x => x.classList.remove('on')); el.classList.add('on'); if (i) dots[i - 1].classList.add('ok');
+    st.textContent = i < mostra.length ? `Conectando ${mostra[i].fantasia || mostra[i].razao}…` : `Conectando mais ${n - 5} empresa(s)…`;
+  }, 500 + i * passo)));
+  const fimT = 500 + its.length * passo;
+  tm.push(setTimeout(() => { dots.forEach(d => d.classList.add('ok')); st.textContent = `${n} empresas conectadas ✓`; }, fimT));
+  const fora = () => { tm.forEach(clearTimeout); ov.classList.add('out'); setTimeout(() => ov.remove(), 500); };
+  tm.push(setTimeout(fora, fimT + 900)); ov.onclick = fora;
 };
 /** logo da empresa (para o splash do portal): reduz a imagem e guarda no cadastro */
 ConnSplash.escolherLogo = e => {

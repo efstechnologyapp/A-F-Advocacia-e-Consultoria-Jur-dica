@@ -52,7 +52,7 @@ const App = {
           <div class="caption">${BRAND.caption}</div>
           <p class="lb-tag">Gestão processual, acompanhamento do cliente e auditoria de contratos em um só lugar.</p>
         </div>
-        <div class="lb-foot">versão ${APP_VERSAO} · © ${new Date().getFullYear()} Amorim Firmo</div>
+        <div class="lb-foot">versão ${APP_VERSAO} · © ${new Date().getFullYear()} Amorim Firmo<br>Desenvolvido por <b>${DEV.nome}</b></div>
       </section>
       <section class="login-form">
         <div class="lf-card" id="lgCard">
@@ -207,7 +207,7 @@ const App = {
           <div id="conexSlot"></div>
           ${Session.isAdmin ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
           <button class="side-btn danger" id="btnOut">${icon('logout')}<span>Sair</span></button>
-          <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
+          <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><span class="dev-cred">por ${DEV.nome}</span><br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
         </div>
       </aside>
       <div class="scrim" id="scrim"></div>
@@ -235,7 +235,8 @@ const App = {
     UI.modal({ title: 'Sobre o App', sub: `Amorim Firmo · versão ${APP_VERSAO}`, body: `<div class="about"><img src="${BRAND.logoDark}" alt="" class="about-logo"><div class="caption dark">${BRAND.caption}</div>
       <p>Sistema de gestão do escritório: processos judiciais com acompanhamento pelo cliente e consultoria jurídica com auditoria de contratos, indicadores e relatórios.</p>
       <ul class="plain checks">${FUNCIONALIDADES.map(f => `<li>${icon('check')} ${esc(f)}</li>`).join('')}</ul>
-      <p class="muted small">Dados protegidos conforme a LGPD: acesso apenas a pessoas autorizadas, cada cliente vê somente o que lhe diz respeito, e toda alteração fica registrada na trilha de auditoria.</p></div>` });
+      <p class="muted small">Dados protegidos conforme a LGPD: acesso apenas a pessoas autorizadas, cada cliente vê somente o que lhe diz respeito, e toda alteração fica registrada na trilha de auditoria.</p>
+      <div class="dev-box"><span class="eyebrow">Desenvolvimento</span><b>${DEV.nome} ©</b><div class="btn-row center"><a class="btn ghost sm" href="https://wa.me/${DEV.wa}" target="_blank" rel="noopener">${icon('whatsapp')} ${DEV.tel}</a><a class="btn ghost sm" href="mailto:${DEV.email}">${icon('mail')} ${DEV.email}</a></div><p class="muted small">Software protegido pela Lei 9.609/1998. Cópia, reprodução ou distribuição sem autorização são proibidas.</p></div></div>` });
   },
   nav(route) {
     const cnt = a => DB.where('processos', p => p.area === a && p.status !== 'Encerrado').length;
@@ -503,7 +504,7 @@ const Gestao = {
     const us = Gestao.users; App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge();
     const papel = { admin: 'Administrador', equipe: 'Equipe', cliente: 'Cliente' };
     const cliOpts = sel => `<option value="">— cliente —</option>${DB.all('clientes').sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}`;
-    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(DB.get('clientes', u.clienteId)?.nome || '') : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
+    const linha = (u, acoes) => `<div class="u-row"><span class="avatar sm">${u.foto ? `<img src="${esc(u.foto)}" alt="" referrerpolicy="no-referrer">` : esc((u.nome || u.email)[0].toUpperCase())}</span><div class="u-who"><b>${esc(u.nome || u.email)}</b><small>${esc(u.email)}${u.papel ? ' · ' + papel[u.papel] : ''}${u.clienteId ? ' · ' + esc(String(u.clienteId).split(',').map(x => { const [id, pf] = x.split(':'); const n = DB.get('clientes', id)?.nome; return n ? n + (u.papel === 'cliente' ? ' · ' + ({ func: 'Funcionário', ger: 'Gerente', dir: 'Diretoria' }[pf || 'func']) : '') : ''; }).filter(Boolean).join(' + ')) : ''}</small><small>${u.status === 'pendente' ? 'pediu acesso em ' + fmtDateTime(u.criado) : u.ultimoAcesso ? 'último acesso ' + fmtDateTime(u.ultimoAcesso) : 'ainda não entrou'}${u.papel === 'cliente' && u.status === 'autorizado' ? (u.temSenha ? ' · <b class="t-ok">senha criada</b>' : ' · sem senha (entra com código)') : ''}</small></div><div class="u-act">${acoes}</div></div>`;
     const pend = us.filter(u => u.status === 'pendente'), ok = us.filter(u => u.status === 'autorizado'), bloq = us.filter(u => u.status === 'bloqueado');
     el.innerHTML = `
       <section class="card"><header><h2>⏳ Pedidos de acesso <span class="count">${pend.length}</span></h2></header>
