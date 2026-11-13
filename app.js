@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.22.2';
+const APP_VERSAO = '1.22.3';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -25,6 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Olá, Dr. Nome” ou “Olá, Dra. Nome”.'] },
   { numero: '1.22.2', data: '12/11/2026', itens: ['Área do cliente: botão “Início” no topo, para diretoria, gerente e funcionário. Quem tem acesso a várias empresas volta aos cartões de escolha; quem tem uma só volta à primeira tela do seu perfil.'] },
   { numero: '1.22.1', data: '12/11/2026', itens: ['Área do cliente: quem tem acesso a várias empresas volta a ver a abertura com todas elas e os cartões para escolher, mesmo depois de sair e entrar de novo ou de ganhar acesso a uma empresa nova.'] },
   { numero: '1.22.0', data: '12/11/2026', itens: ['Relatório da consultoria: “Gerar relatório” abre um editor tipo Word já com o conteúdo padrão (gráficos e tabelas protegidos); o advogado acrescenta texto, títulos, listas e observações, salva e imprime/salva em PDF.', 'Cada relatório salvo vai para a pasta da empresa no Drive do escritório (subpasta “Relatórios”) e fica no histórico com “Abrir e continuar editando”.'] },
@@ -1524,6 +1525,8 @@ function kpi(label, value, sub = '', tone = '', href = '') {
   return `<${tag} class="kpi ${tone}" ${href ? `href="${href}"` : ''}><span class="kpi-l">${label}</span><span class="kpi-v">${value}</span>${sub ? `<span class="kpi-s">${sub}</span>` : ''}</${tag}>`;
 }
 const clienteNomes = p => (p.clienteIds || []).map(id => DB.get('clientes', id)?.nome).filter(Boolean).join(', ');
+/** saudação do painel: "Olá, Dr. Nome" / "Olá, Dra. Nome" (primeiro nome terminado em "a" → Dra.) */
+const tratamento = nome => { const n = String(nome || '').trim().split(/\s+/)[0] || ''; if (!n) return 'Olá!'; return `Olá, ${/a$/i.test(n) ? 'Dra.' : 'Dr.'} ${n}`; };
 const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 const contratoAtivo = c => !/encerrad|rescindid|extint/i.test(c.status || '') && !/encerrad/i.test(c.grupo || '') && isISO(c.fim) && daysUntil(c.fim) >= 0;
 const semVigencia = c => !isISO(c.fim) && !/encerrad|rescindid|extint/i.test((c.status || '') + (c.grupo || ''));
@@ -1570,7 +1573,7 @@ const Views = {
     </div>
     <section class="card"><header><h2>${icon('alert')} Alertas da consultoria</h2></header>${Views.alertasConsultoria()}</section>`;
     v.innerHTML = `
-    <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${saudacao()}, ${esc((Session.user.nome || '').split(' ')[0] || 'Dr.')}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div></div>
+    <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${esc(tratamento(Session.user.nome))}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div></div>
     <div class="pn-tabs">
       <button type="button" data-aba="jud" class="jud ${aba === 'jud' ? 'on' : ''}">${icon('scale')}<b>Judicial</b><small>${procs.length} processo(s) · ${prox7.length} compromisso(s) em 7 dias</small></button>
       <button type="button" data-aba="con" class="con ${aba === 'con' ? 'on' : ''}">${icon('building')}<b>Consultoria</b><small>${empresas.length} empresa(s) · ${achAlt.length} achado(s) de risco alto</small></button>
