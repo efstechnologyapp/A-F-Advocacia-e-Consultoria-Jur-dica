@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.23.0';
+const APP_VERSAO = '1.23.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.23.1', data: '13/11/2026', itens: ['Trilha de auditoria: passa a registrar as entradas (login) e o uso do app de todos os usuários, do escritório e dos clientes; filtros por tipo (acessos ou alterações) e por usuário; mostra até 1.000 registros.'] },
   { numero: '1.23.0', data: '13/11/2026', itens: ['Nova identidade da EFS Technology: o ícone do “E” de linhas de código aparece no login, no menu lateral, no “Sobre o App” (com o lema “Soluções digitais sob medida”), no rodapé do portal do cliente e no aviso de domínio não autorizado.'] },
   { numero: '1.22.4', data: '12/11/2026', itens: ['Listas resumidas com “+ N” (alertas da consultoria, próximos compromissos, tabelas do detalhe do contrato e plano de ação no portal) agora abrem com um clique em “ver todos” e fecham em “Recolher”.'] },
   { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Bom dia / Boa tarde / Boa noite, Dr. Nome” (ou Dra.); o quadro “Processos por área” vem antes de “Próximos compromissos”.'] },
@@ -1800,7 +1801,18 @@ const Gestao = {
     el.innerHTML = `<section class="card"><div class="empty sm">${icon('sync', 'spin')}<p>Carregando…</p></div></section>`;
     try {
       const log = await api('log');
-      el.innerHTML = `<section class="card flush"><header class="pad"><h2>${icon('history')} Trilha de auditoria</h2><span class="muted small">últimas ${log.length} operações</span></header><div class="table-wrap"><table class="dt"><thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Coleção</th><th>Registros</th></tr></thead><tbody>${log.map(l => `<tr><td>${esc(fmtDateTime(l[0]))}</td><td>${esc(l[1])}</td><td>${pill(l[2])}</td><td>${esc(SCHEMAS[l[3]]?.titulo || l[3])}</td><td>${esc(l[4])}</td></tr>`).join('')}</tbody></table></div></section>`;
+      const ehAcesso = l => /^(entrar|uso do app)/.test(l[2] || '');
+      const users = [...new Set(log.map(l => l[1]).filter(Boolean))].sort();
+      el.innerHTML = `<section class="card flush"><header class="pad"><h2>${icon('history')} Trilha de auditoria</h2><span class="muted small" id="audN"></span></header>
+        <div class="pad" style="display:flex;gap:10px;flex-wrap:wrap;padding-top:0"><select id="audTipo" class="input sm" style="width:auto"><option value="">Tudo</option><option value="acesso">Só acessos (entradas e uso)</option><option value="alt">Só alterações</option></select><select id="audUser" class="input sm" style="width:auto"><option value="">Todos os usuários (${users.length})</option>${users.map(u => `<option>${esc(u)}</option>`).join('')}</select></div>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Onde</th><th>Registros</th></tr></thead><tbody id="audBody"></tbody></table></div></section>`;
+      const draw = () => {
+        const t = $('#audTipo', el).value, us = $('#audUser', el).value;
+        const ls = log.filter(l => (!us || l[1] === us) && (!t || (t === 'acesso' ? ehAcesso(l) : !ehAcesso(l))));
+        $('#audN', el).textContent = `${ls.length} de ${log.length} registros`;
+        $('#audBody', el).innerHTML = ls.map(l => `<tr><td>${esc(fmtDateTime(l[0]))}</td><td>${esc(l[1])}</td><td>${pill(l[2])}</td><td>${esc(SCHEMAS[l[3]]?.titulo || l[3])}</td><td>${esc(l[4])}</td></tr>`).join('') || `<tr><td colspan="5" class="muted">Nada para esse filtro.</td></tr>`;
+      };
+      $('#audTipo', el).onchange = draw; $('#audUser', el).onchange = draw; draw();
     } catch (e) { el.innerHTML = `<section class="card"><div class="empty">${icon('alert')}<p>${esc(e.message)}</p></div></section>`; }
   }
 };
