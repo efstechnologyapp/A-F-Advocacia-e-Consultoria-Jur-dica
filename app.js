@@ -25,7 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Olá, Dr. Nome” ou “Olá, Dra. Nome”.'] },
+  { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Bom dia / Boa tarde / Boa noite, Dr. Nome” (ou Dra.).'] },
   { numero: '1.22.2', data: '12/11/2026', itens: ['Área do cliente: botão “Início” no topo, para diretoria, gerente e funcionário. Quem tem acesso a várias empresas volta aos cartões de escolha; quem tem uma só volta à primeira tela do seu perfil.'] },
   { numero: '1.22.1', data: '12/11/2026', itens: ['Área do cliente: quem tem acesso a várias empresas volta a ver a abertura com todas elas e os cartões para escolher, mesmo depois de sair e entrar de novo ou de ganhar acesso a uma empresa nova.'] },
   { numero: '1.22.0', data: '12/11/2026', itens: ['Relatório da consultoria: “Gerar relatório” abre um editor tipo Word já com o conteúdo padrão (gráficos e tabelas protegidos); o advogado acrescenta texto, títulos, listas e observações, salva e imprime/salva em PDF.', 'Cada relatório salvo vai para a pasta da empresa no Drive do escritório (subpasta “Relatórios”) e fica no histórico com “Abrir e continuar editando”.'] },
@@ -1525,8 +1525,8 @@ function kpi(label, value, sub = '', tone = '', href = '') {
   return `<${tag} class="kpi ${tone}" ${href ? `href="${href}"` : ''}><span class="kpi-l">${label}</span><span class="kpi-v">${value}</span>${sub ? `<span class="kpi-s">${sub}</span>` : ''}</${tag}>`;
 }
 const clienteNomes = p => (p.clienteIds || []).map(id => DB.get('clientes', id)?.nome).filter(Boolean).join(', ');
-/** saudação do painel: "Olá, Dr. Nome" / "Olá, Dra. Nome" (primeiro nome terminado em "a" → Dra.) */
-const tratamento = nome => { const n = String(nome || '').trim().split(/\s+/)[0] || ''; if (!n) return 'Olá!'; return `Olá, ${/a$/i.test(n) ? 'Dra.' : 'Dr.'} ${n}`; };
+/** saudação do painel: "Bom dia, Dr. Nome" / "Boa tarde, Dra. Nome" (primeiro nome terminado em "a" → Dra.) */
+const tratamento = nome => { const n = String(nome || '').trim().split(/\s+/)[0] || ''; return n ? `${saudacao()}, ${/a$/i.test(n) ? 'Dra.' : 'Dr.'} ${n}` : saudacao(); };
 const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 const contratoAtivo = c => !/encerrad|rescindid|extint/i.test(c.status || '') && !/encerrad/i.test(c.grupo || '') && isISO(c.fim) && daysUntil(c.fim) >= 0;
 const semVigencia = c => !isISO(c.fim) && !/encerrad|rescindid|extint/i.test((c.status || '') + (c.grupo || ''));
