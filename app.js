@@ -25,7 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Bom dia / Boa tarde / Boa noite, Dr. Nome” (ou Dra.).'] },
+  { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Bom dia / Boa tarde / Boa noite, Dr. Nome” (ou Dra.); o quadro “Processos por área” vem antes de “Próximos compromissos”.'] },
   { numero: '1.22.2', data: '12/11/2026', itens: ['Área do cliente: botão “Início” no topo, para diretoria, gerente e funcionário. Quem tem acesso a várias empresas volta aos cartões de escolha; quem tem uma só volta à primeira tela do seu perfil.'] },
   { numero: '1.22.1', data: '12/11/2026', itens: ['Área do cliente: quem tem acesso a várias empresas volta a ver a abertura com todas elas e os cartões para escolher, mesmo depois de sair e entrar de novo ou de ganhar acesso a uma empresa nova.'] },
   { numero: '1.22.0', data: '12/11/2026', itens: ['Relatório da consultoria: “Gerar relatório” abre um editor tipo Word já com o conteúdo padrão (gráficos e tabelas protegidos); o advogado acrescenta texto, títulos, listas e observações, salva e imprime/salva em PDF.', 'Cada relatório salvo vai para a pasta da empresa no Drive do escritório (subpasta “Relatórios”) e fica no histórico com “Abrir e continuar editando”.'] },
@@ -1553,11 +1553,11 @@ const Views = {
       ${kpi('Compromissos em 7 dias', prox7.length, atras.length ? `<b class="t-bad">${atras.length} em atraso</b>` : 'nenhum em atraso', atras.length ? 'bad' : '', '#/agenda')}
       ${kpi('Intimações novas (DJEN)', djPend, djPend ? '<u>revisar e cadastrar</u>' : 'nenhum processo novo', djPend ? 'warn' : '', djPend ? '#/painel?dj=1' : '')}
     </div>
+    <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a]) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
     <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
       ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
     ${DJEN.cardHtml()}
-    <div class="grid2">
-      <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a]) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
+    <div>
       <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
         ${movs.length ? `<ul class="feed">${movs.map(m => { const p = DB.get('processos', m.processoId); return `<li><a href="#/processo/${m.processoId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(p ? fmtCNJ(p.numero) + ' · ' + clienteNomes(p) : '')}</small></div>${m.origem === 'datajud' ? '<span class="badge">DataJud</span>' : ''}</a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>As movimentações dos processos aparecerão aqui.</p></div>`}</section>
     </div>`;
