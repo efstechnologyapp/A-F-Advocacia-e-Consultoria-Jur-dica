@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.22.3';
+const APP_VERSAO = '1.22.4';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -25,6 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.22.4', data: '12/11/2026', itens: ['Listas resumidas com “+ N” (alertas da consultoria, próximos compromissos, tabelas do detalhe do contrato e plano de ação no portal) agora abrem com um clique em “ver todos” e fecham em “Recolher”.'] },
   { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Bom dia / Boa tarde / Boa noite, Dr. Nome” (ou Dra.); o quadro “Processos por área” vem antes de “Próximos compromissos”.'] },
   { numero: '1.22.2', data: '12/11/2026', itens: ['Área do cliente: botão “Início” no topo, para diretoria, gerente e funcionário. Quem tem acesso a várias empresas volta aos cartões de escolha; quem tem uma só volta à primeira tela do seu perfil.'] },
   { numero: '1.22.1', data: '12/11/2026', itens: ['Área do cliente: quem tem acesso a várias empresas volta a ver a abertura com todas elas e os cartões para escolher, mesmo depois de sair e entrar de novo ou de ganhar acesso a uma empresa nova.'] },
@@ -936,6 +937,18 @@ document.addEventListener('click', ev => {
   b.dataset.o = abrir ? '1' : ''; b.textContent = abrir ? 'Recolher' : `+ ${b.dataset.n} outros`;
 });
 
+/** listas com "+N": os itens além do limite ficam escondidos e um botão abre/recolhe.
+ *  Uso: `<div data-mxw><ul>${mxItens(htmls, 8)}</ul>${mxBtn(htmls.length, 8, 'alerta(s)')}</div>` */
+const mxItens = (arr, max) => arr.map((h, k) => k >= max ? String(h).replace(/^(\s*<[a-z0-9]+)/i, '$1 data-mx hidden') : h).join('');
+const mxBtn = (total, max, rot = 'item(ns)') => total > max ? `<button type="button" class="link small mx-more" data-n="${total - max}" data-r="${esc(rot)}">+ ${total - max} ${esc(rot)} · ver todos</button>` : '';
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('.mx-more'); if (!b) return;
+  ev.preventDefault();
+  const w = b.closest('[data-mxw]') || b.parentNode, abrir = !b.dataset.o;
+  w.querySelectorAll('[data-mx]').forEach(x => x.hidden = !abrir);
+  b.dataset.o = abrir ? '1' : ''; b.textContent = abrir ? 'Recolher' : `+ ${b.dataset.n} ${b.dataset.r} · ver todos`;
+});
+
 /** barra segmentada (distribuição por status) */
 function segBar(parts) {
   const tot = parts.reduce((s, p) => s + p.value, 0);
@@ -1555,7 +1568,7 @@ const Views = {
     </div>
     <section class="card"><header><h2>${icon('scale')} Processos por área</h2></header>${hbarHtml(Object.entries(AREAS).map(([k, a]) => ({ label: a.nome, value: procs.filter(p => p.area === k).length, color: 'var(--s1)' })).filter(x => x.value), v => String(v))}</section>
     <section class="card"><header><h2>${icon('calendar')} Próximos compromissos</h2><a href="#/agenda" class="link">Ver agenda</a></header>
-      ${prazos.length ? `<ul class="agenda-list">${prazos.slice(0, 7).map(Views.agendaItem).join('')}</ul>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
+      ${prazos.length ? `<div data-mxw><ul class="agenda-list">${mxItens(prazos.map(Views.agendaItem), 7)}</ul>${mxBtn(prazos.length, 7, 'compromisso(s)')}</div>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou audiência cadastrado.</p></div>`}</section>
     ${DJEN.cardHtml()}
     <div>
       <section class="card"><header><h2>${icon('history')} Últimas movimentações</h2></header>
@@ -1599,7 +1612,7 @@ const Views = {
     DB.where('achados', a => (!empresaId || a.empresaId === empresaId) && achadoAberto(a) && isISO(a.prazo) && daysUntil(a.prazo) < 0).forEach(a => items.push({ k: 'bad', d: daysUntil(a.prazo), t: `Ação ${a.codigo || ''} com prazo vencido`, s: a.achado, h: `#/empresa/${a.empresaId}/achados` }));
     if (!items.length) return `<div class="empty sm">${icon('check')}<p>Nenhum alerta no momento.</p></div>`;
     items.sort((a, b) => a.d - b.d);
-    return `<ul class="alerts">${items.slice(0, 8).map(i => `<li class="${i.k}"><a href="${i.h}">${icon('alert')}<div><b>${esc(i.t)}</b><small>${esc(String(i.s || '').slice(0, 110))}</small></div></a></li>`).join('')}</ul>${items.length > 8 ? `<p class="muted small">+ ${items.length - 8} alerta(s)</p>` : ''}`;
+    return `<div data-mxw><ul class="alerts">${mxItens(items.map(i => `<li class="${i.k}"><a href="${i.h}">${icon('alert')}<div><b>${esc(i.t)}</b><small>${esc(String(i.s || '').slice(0, 110))}</small></div></a></li>`), 8)}</ul>${mxBtn(items.length, 8, 'alerta(s)')}</div>`;
   },
   agendaItem(p) {
     const proc = DB.get('processos', p.processoId), d = daysUntil(p.data);
@@ -2381,7 +2394,7 @@ const Consult = {
     const postos = mo.reduce((s, r) => s + (num(r.qtdContratada) || 0), 0), custoPrev = mo.reduce((s, r) => s + (num(r.custoPrevisto) || 0), 0);
     const filled = SCHEMAS.contratos.fields.filter(f => c[f.k] !== null && c[f.k] !== undefined && c[f.k] !== '' && !isGap(c[f.k])).length;
     const compl = filled / SCHEMAS.contratos.fields.length;
-    const mini = (titulo, coll, list, cols) => `<h4 class="sec">${titulo} <span class="count">${list.length}</span></h4>${list.length ? `<div class="table-wrap"><table class="mini"><thead><tr>${cols.map(k => `<th>${esc(SCHEMAS[coll].fields.find(f => f.k === k).label.replace(/ \(R\$\)/, ''))}</th>`).join('')}</tr></thead><tbody>${list.slice(0, 30).map(r => `<tr data-rel="${coll}:${r.id}">${cols.map(k => `<td>${UI.cell(SCHEMAS[coll].fields.find(f => f.k === k), r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Nenhum registro.</p>'}`;
+    const mini = (titulo, coll, list, cols) => `<h4 class="sec">${titulo} <span class="count">${list.length}</span></h4>${list.length ? `<div data-mxw><div class="table-wrap"><table class="mini"><thead><tr>${cols.map(k => `<th>${esc(SCHEMAS[coll].fields.find(f => f.k === k).label.replace(/ \(R\$\)/, ''))}</th>`).join('')}</tr></thead><tbody>${mxItens(list.map(r => `<tr data-rel="${coll}:${r.id}">${cols.map(k => `<td>${UI.cell(SCHEMAS[coll].fields.find(f => f.k === k), r[k])}</td>`).join('')}</tr>`), 30)}</tbody></table></div>${mxBtn(list.length, 30, 'registro(s)')}</div>` : '<p class="muted small">Nenhum registro.</p>'}`;
     const m = UI.modal({
       title: `${c.codigo} · ${c.unidade || c.grupo || ''}`, sub: esc(c.tomador || ''), wide: true,
       body: `<div class="kpis xs">${kpi('Vigência', c.fim ? fmtDate(c.fim) : '—', d === null ? '' : d < 0 ? `expirada há ${-d} dias` : `${d} dias restantes`, d !== null && d < 0 ? 'bad' : d !== null && d <= 90 ? 'warn' : '')}${kpi('Valor mensal', num(c.valorMensal) !== null ? fmtMoneyShort(c.valorMensal) : '—', num(c.valorMensal) === null ? 'não identificado' : '')}${kpi('Postos contratados', postos || '—', custoPrev ? 'custo previsto ' + fmtMoneyShort(custoPrev) : '')}${kpi('Completude do cadastro', fmtPct(compl), filled + ' de ' + SCHEMAS.contratos.fields.length + ' campos', compl < .6 ? 'warn' : '')}</div>
@@ -3128,7 +3141,7 @@ const Portal = {
       body = emps.map(e => { const S = Consult.stats(e), ins = Consult.insights(S); return `<section class="card"><header><h2>${icon('building')} ${esc(e.fantasia || e.razao)}</h2></header>
         <div class="kpis sm">${kpi('Contratos vigentes', `${S.at.length}/${S.cs.length}`)}${kpi('Completude documental', fmtPct(S.compl))}${kpi('Conformidade', fmtPct(S.conf))}${kpi('Ações em aberto', S.achAbertos.length)}</div>
         ${ins.length ? `<ul class="ins">${ins.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
-        <h4 class="sec">Plano de ação em aberto</h4>${S.achAbertos.length ? `<div class="table-wrap"><table class="mini"><thead><tr><th>Contrato</th><th>Achado</th><th>Risco</th><th>Recomendação</th><th>Prazo</th><th>Status</th></tr></thead><tbody>${S.achAbertos.slice(0, 60).map(a => `<tr><td>${esc(a.contrato || '')}</td><td>${esc(a.achado || '')}</td><td>${pill(a.risco || '—')}</td><td>${esc(a.recomendacao || '')}</td><td>${esc(fmtDate(a.prazo))}</td><td>${pill(a.status || '')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Nenhuma ação pendente.</p>'}
+        <h4 class="sec">Plano de ação em aberto</h4>${S.achAbertos.length ? `<div data-mxw><div class="table-wrap"><table class="mini"><thead><tr><th>Contrato</th><th>Achado</th><th>Risco</th><th>Recomendação</th><th>Prazo</th><th>Status</th></tr></thead><tbody>${mxItens(S.achAbertos.map(a => `<tr><td>${esc(a.contrato || '')}</td><td>${esc(a.achado || '')}</td><td>${pill(a.risco || '—')}</td><td>${esc(a.recomendacao || '')}</td><td>${esc(fmtDate(a.prazo))}</td><td>${pill(a.status || '')}</td></tr>`), 15)}</tbody></table></div>${mxBtn(S.achAbertos.length, 15, 'ação(ões)')}</div>` : '<p class="muted small">Nenhuma ação pendente.</p>'}
         <div class="right"><button class="btn primary" data-rep="${e.id}">${icon('printer')} Relatório completo</button></div></section>`; }).join('');
     } else {
       body = `<section class="card contact"><img src="${BRAND.logoDark}" alt="" class="about-logo"><div class="caption dark">${BRAND.caption}</div>
