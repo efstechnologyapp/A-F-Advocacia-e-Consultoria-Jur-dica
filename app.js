@@ -16,15 +16,18 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.22.4';
+const APP_VERSAO = '1.23.0';
 /* Desenvolvimento e proteção do aplicativo */
-const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
+const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
+/** ícone da EFS Technology (o "E" de linhas de código) */
+const devIco = (px = 14) => `<svg class="dev-ico" width="${px}" height="${px}" viewBox="0 0 160 160" aria-hidden="true"><defs><linearGradient id="efsg" gradientUnits="userSpaceOnUse" x1="42" y1="0" x2="118" y2="0"><stop offset="0" stop-color="#14B8A6"/><stop offset="1" stop-color="#2563EB"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="#16213A"/><g fill="none" stroke-linecap="round" stroke-width="14"><path d="M42 46H118M42 80H100M42 114H118" stroke="url(#efsg)"/><path d="M42 46V114" stroke="#fff"/></g><circle cx="128" cy="80" r="8" fill="#fff"/></svg>`;
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
  *  Para um domínio próprio, inclua-o aqui ou em config.js (CONFIG.DOMINIOS = ['meudominio.com.br']). */
 const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]'];
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.23.0', data: '13/11/2026', itens: ['Nova identidade da EFS Technology: o ícone do “E” de linhas de código aparece no login, no menu lateral, no “Sobre o App” (com o lema “Soluções digitais sob medida”), no rodapé do portal do cliente e no aviso de domínio não autorizado.'] },
   { numero: '1.22.4', data: '12/11/2026', itens: ['Listas resumidas com “+ N” (alertas da consultoria, próximos compromissos, tabelas do detalhe do contrato e plano de ação no portal) agora abrem com um clique em “ver todos” e fecham em “Recolher”.'] },
   { numero: '1.22.3', data: '12/11/2026', itens: ['Painel do escritório: a saudação passa a ser “Bom dia / Boa tarde / Boa noite, Dr. Nome” (ou Dra.); o quadro “Processos por área” vem antes de “Próximos compromissos”.'] },
   { numero: '1.22.2', data: '12/11/2026', itens: ['Área do cliente: botão “Início” no topo, para diretoria, gerente e funcionário. Quem tem acesso a várias empresas volta aos cartões de escolha; quem tem uma só volta à primeira tela do seu perfil.'] },
@@ -1252,7 +1255,7 @@ const App = {
           <div class="caption">${BRAND.caption}</div>
           <p class="lb-tag">Gestão processual, acompanhamento do cliente e auditoria de contratos em um só lugar.</p>
         </div>
-        <div class="lb-foot">versão ${APP_VERSAO} · © ${new Date().getFullYear()} Amorim Firmo<br>Desenvolvido por <b>${DEV.nome}</b></div>
+        <div class="lb-foot">versão ${APP_VERSAO} · © ${new Date().getFullYear()} Amorim Firmo<br><span class="dev-cred">${devIco(13)} Desenvolvido por <b>${DEV.nome}</b></span></div>
       </section>
       <section class="login-form">
         <div class="lf-card" id="lgCard">
@@ -1407,7 +1410,7 @@ const App = {
           <div id="conexSlot"></div>
           ${Session.isDev ? `<a href="#/gestao" class="side-btn" id="lnkGestao">${icon('settings')}<span>Gestão do App</span><em class="pend-badge" hidden>0</em></a>` : ''}
           <button class="side-btn danger" id="btnOut">${icon('logout')}<span>Sair</span></button>
-          <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><span class="dev-cred">por ${DEV.nome}</span><br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
+          <div class="side-ver">versão ${APP_VERSAO} — Amorim Firmo<br><span class="dev-cred">${devIco(12)} por ${DEV.nome}</span><br><button class="link tiny" id="btnSobre">Sobre o App</button></div>
         </div>
       </aside>
       <div class="scrim" id="scrim"></div>
@@ -1436,7 +1439,7 @@ const App = {
       <p>Sistema de gestão do escritório: processos judiciais com acompanhamento pelo cliente e consultoria jurídica com auditoria de contratos, indicadores e relatórios.</p>
       <ul class="plain checks">${FUNCIONALIDADES.map(f => `<li>${icon('check')} ${esc(f)}</li>`).join('')}</ul>
       <p class="muted small">Dados protegidos conforme a LGPD: acesso apenas a pessoas autorizadas, cada cliente vê somente o que lhe diz respeito, e toda alteração fica registrada na trilha de auditoria.</p>
-      <div class="dev-box"><span class="eyebrow">Desenvolvimento</span><b>${DEV.nome} ©</b><div class="btn-row center"><a class="btn ghost sm" href="https://wa.me/${DEV.wa}" target="_blank" rel="noopener">${icon('whatsapp')} ${DEV.tel}</a><a class="btn ghost sm" href="mailto:${DEV.email}">${icon('mail')} ${DEV.email}</a></div><p class="muted small">Software protegido pela Lei 9.609/1998. Cópia, reprodução ou distribuição sem autorização são proibidas.</p></div></div>` });
+      <div class="dev-box"><span class="eyebrow">Desenvolvimento</span>${devIco(48)}<b>${DEV.nome} ©</b><span class="dev-lema">${DEV.lema}</span><div class="btn-row center"><a class="btn ghost sm" href="https://wa.me/${DEV.wa}" target="_blank" rel="noopener">${icon('whatsapp')} ${DEV.tel}</a><a class="btn ghost sm" href="mailto:${DEV.email}">${icon('mail')} ${DEV.email}</a></div><p class="muted small">Software protegido pela Lei 9.609/1998. Cópia, reprodução ou distribuição sem autorização são proibidas.</p></div></div>` });
   },
   nav(route) {
     const cnt = a => DB.where('processos', p => p.area === a && p.status !== 'Encerrado').length;
@@ -3024,7 +3027,7 @@ const Portal = {
         const comp = Remessa.compPadrao(), r = Remessa.get(e.id, comp), ab = empRecs('achados', e.id).filter(achadoAberto).length, nc = empRecs('contratos', e.id).length;
         return `<button class="emp-card pk" data-ctx="${k.key}"><div class="pk-logo">${e.logo ? `<img src="${esc(e.logo)}" alt="">` : `<span>${esc(e.sigla || (e.fantasia || e.razao).slice(0, 2).toUpperCase())}</span>`}</div><b>${esc(e.fantasia || e.razao)}</b><em class="pf-tag ${Perfis.real(e)}">${esc(Perfis.CURTO[Perfis.real(e)])}</em><small class="muted">${e.cnpj ? 'CNPJ ' + esc(fmtDoc(e.cnpj)) : esc(e.razao || '')}</small>
           <div class="pk-meta"><span>${nc} contrato(s)</span><span>${ab} ação(ões) em aberto</span></div>${Perfis.de(e) === 'dir' ? '' : `<div class="pk-rm">Remessa ${fmtComp(comp)}: ${Remessa.pill(r || { status: 'aberta' })}</div>`}</button>`; }).join('')}</div></main>
-      <footer class="p-foot">Acesso exclusivo e confidencial · ${esc(esc0.nome || 'Amorim Firmo')}<br><span class="dev-cred">Tecnologia ${DEV.nome} ©</span></footer>`;
+      <footer class="p-foot">Acesso exclusivo e confidencial · ${esc(esc0.nome || 'Amorim Firmo')}<br><span class="dev-cred">${devIco(13)} Tecnologia ${DEV.nome} ©</span></footer>`;
     $$('[data-ctx]', root).forEach(b => b.onclick = () => Portal.escolher(b.dataset.ctx));
     $('#pkOut', root).onclick = () => App.logout();
   },
@@ -3154,7 +3157,7 @@ const Portal = {
       ${!preview && e0 && pf !== Perfis.real(e0) ? `<div class="pf-band">${icon('users')} Você está atuando como <b>${esc(Perfis.NOMES[pf])}</b> (seu perfil: ${esc(Perfis.NOMES[Perfis.real(e0)])}). <button class="link small" id="pfVolta">Voltar ao meu perfil</button></div>` : ''}
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
       <main class="p-main">${body}</main>
-      <footer class="p-foot">Acesso exclusivo e confidencial · ${esc(esc0.nome || 'Amorim Firmo')}<br><span class="dev-cred">Tecnologia ${DEV.nome} ©</span></footer>`;
+      <footer class="p-foot">Acesso exclusivo e confidencial · ${esc(esc0.nome || 'Amorim Firmo')}<br><span class="dev-cred">${devIco(13)} Tecnologia ${DEV.nome} ©</span></footer>`;
     const redraw = () => Portal.draw(root, clienteId, preview);
     $$('[data-tab]', root).forEach(b => b.onclick = () => { st.tab = b.dataset.tab; st.proc = null; redraw(); });
     $$('[data-proc]', root).forEach(b => b.onclick = () => { st.proc = b.dataset.proc; redraw(); root.scrollTop = 0; scrollTo(0, 0); });
@@ -3176,7 +3179,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const splash = document.getElementById('splash'); const t0 = performance.now();
   if (!dominioOk()) { // cópia publicada fora dos endereços autorizados
     splash?.remove(); document.body.className = 'blocked';
-    document.getElementById('root').innerHTML = `<div class="dom-lock"><div class="dl-card"><img src="brasao.png" alt="" class="dl-logo"><h1>Aplicativo protegido</h1><p>Este endereço (<b>${esc(location.hostname)}</b>) não está autorizado a executar o aplicativo do escritório Amorim Firmo.</p><p class="muted">Cópia, reprodução ou distribuição não autorizada é proibida (Lei 9.609/1998 e Lei 9.610/1998).</p><p class="dl-dev">© ${new Date().getFullYear()} ${DEV.nome} · <a href="mailto:${DEV.email}">${DEV.email}</a> · <a href="https://wa.me/${DEV.wa}" target="_blank" rel="noopener">${DEV.tel}</a></p></div></div>`;
+    document.getElementById('root').innerHTML = `<div class="dom-lock"><div class="dl-card"><img src="brasao.png" alt="" class="dl-logo"><h1>Aplicativo protegido</h1><p>Este endereço (<b>${esc(location.hostname)}</b>) não está autorizado a executar o aplicativo do escritório Amorim Firmo.</p><p class="muted">Cópia, reprodução ou distribuição não autorizada é proibida (Lei 9.609/1998 e Lei 9.610/1998).</p><p class="dl-dev">${devIco(16)} © ${new Date().getFullYear()} ${DEV.nome} · <a href="mailto:${DEV.email}">${DEV.email}</a> · <a href="https://wa.me/${DEV.wa}" target="_blank" rel="noopener">${DEV.tel}</a></p></div></div>`;
     return;
   }
   try { await App.start(); } catch (e) { console.error(e); App.loginScreen(); }
