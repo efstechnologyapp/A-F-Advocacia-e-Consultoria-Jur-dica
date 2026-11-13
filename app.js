@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.22.1';
+const APP_VERSAO = '1.22.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -25,6 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.22.2', data: '12/11/2026', itens: ['Área do cliente: botão “Início” no topo, para diretoria, gerente e funcionário. Quem tem acesso a várias empresas volta aos cartões de escolha; quem tem uma só volta à primeira tela do seu perfil.'] },
   { numero: '1.22.1', data: '12/11/2026', itens: ['Área do cliente: quem tem acesso a várias empresas volta a ver a abertura com todas elas e os cartões para escolher, mesmo depois de sair e entrar de novo ou de ganhar acesso a uma empresa nova.'] },
   { numero: '1.22.0', data: '12/11/2026', itens: ['Relatório da consultoria: “Gerar relatório” abre um editor tipo Word já com o conteúdo padrão (gráficos e tabelas protegidos); o advogado acrescenta texto, títulos, listas e observações, salva e imprime/salva em PDF.', 'Cada relatório salvo vai para a pasta da empresa no Drive do escritório (subpasta “Relatórios”) e fica no histórico com “Abrir e continuar editando”.'] },
   { numero: '1.21.3', data: '12/11/2026', itens: ['Listas de pessoas com acesso (escritório e equipe do gerente): quando a pessoa ainda não informou o nome, aparece só o e-mail e o WhatsApp — nunca o nome da empresa.'] },
@@ -3132,7 +3133,7 @@ const Portal = {
         <div class="btn-row center">${wa ? `<a class="btn primary" href="https://wa.me/55${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>` : ''}${esc0.email ? `<a class="btn ghost" href="mailto:${esc(esc0.email)}">${icon('mail')} ${esc(esc0.email)}</a>` : ''}</div>
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }
-    root.innerHTML = `<header class="p-top"><button class="p-me" id="pMe" title="Meu menu"><span>${icon('menu')}</span>${Portal.ini(Portal.pessoa(preview, cli).nome || cli.nome)}</button><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span></header>
+    root.innerHTML = `<header class="p-top"><button class="p-me" id="pMe" title="Meu menu"><span>${icon('menu')}</span>${Portal.ini(Portal.pessoa(preview, cli).nome || cli.nome)}</button><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span><button class="btn ghost sm p-home" id="pHome" title="${!preview && Portal.ctxs().length > 1 ? 'Voltar à escolha da empresa' : 'Voltar ao início'}">${icon('home')}<span>Início</span></button></header>
       <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá${(n => n ? ', ' + esc(n.split(' ')[0]) : '')(Portal.pessoa(preview, cli).nome || (e0 ? '' : cli.nome))}!</h1><p>${e0 ? `${esc(e0.fantasia || e0.razao)} · <b>${esc(Perfis.NOMES[pf])}</b>. ${pf === 'dir' ? 'Visão estratégica da carteira de contratos.' : pf === 'ger' ? 'Contratos, plano de ação, remessa mensal e equipe.' : 'Seus contratos, pendências e a remessa mensal.'}` : 'Acompanhe aqui o andamento dos seus processos. As informações são atualizadas pelo escritório.'}</p></div>
       ${!preview && e0 && pf !== Perfis.real(e0) ? `<div class="pf-band">${icon('users')} Você está atuando como <b>${esc(Perfis.NOMES[pf])}</b> (seu perfil: ${esc(Perfis.NOMES[Perfis.real(e0)])}). <button class="link small" id="pfVolta">Voltar ao meu perfil</button></div>` : ''}
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
@@ -3143,6 +3144,8 @@ const Portal = {
     $$('[data-proc]', root).forEach(b => b.onclick = () => { st.proc = b.dataset.proc; redraw(); root.scrollTop = 0; scrollTo(0, 0); });
     $$('[data-back]', root).forEach(b => b.onclick = () => { st.proc = null; redraw(); });
     $$('[data-rep]', root).forEach(b => b.onclick = () => Report.open(DB.get('empresas', b.dataset.rep), { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: esc0.advogado, oab: esc0.oab, conf: true }));
+    // Início: quem tem várias empresas volta aos cartões de escolha; quem tem uma só volta à primeira aba do seu perfil
+    $('#pHome', root).onclick = () => { if (!preview && Portal.ctxs().length > 1) return Portal.trocar(); st.tab = tabs[0][0]; st.proc = null; redraw(); scrollTo(0, 0); };
     $('#pMe', root).onclick = () => Portal.menu(root, { cli, emps, procs, tabs, preview, redraw, wa, esc0 });
     $('#pfVolta', root)?.addEventListener('click', () => Perfis.atuarComo(e0, Perfis.real(e0)));
     if ($('#pRem', root)) Remessa.portal($('#pRem', root), emps, redraw);
