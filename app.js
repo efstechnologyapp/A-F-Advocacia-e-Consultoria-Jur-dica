@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.22.0';
+const APP_VERSAO = '1.22.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** endereços em que o app pode rodar; outros domínios mostram o aviso de cópia não autorizada.
@@ -25,6 +25,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.22.1', data: '12/11/2026', itens: ['Área do cliente: quem tem acesso a várias empresas volta a ver a abertura com todas elas e os cartões para escolher, mesmo depois de sair e entrar de novo ou de ganhar acesso a uma empresa nova.'] },
   { numero: '1.22.0', data: '12/11/2026', itens: ['Relatório da consultoria: “Gerar relatório” abre um editor tipo Word já com o conteúdo padrão (gráficos e tabelas protegidos); o advogado acrescenta texto, títulos, listas e observações, salva e imprime/salva em PDF.', 'Cada relatório salvo vai para a pasta da empresa no Drive do escritório (subpasta “Relatórios”) e fica no histórico com “Abrir e continuar editando”.'] },
   { numero: '1.21.3', data: '12/11/2026', itens: ['Listas de pessoas com acesso (escritório e equipe do gerente): quando a pessoa ainda não informou o nome, aparece só o e-mail e o WhatsApp — nunca o nome da empresa.'] },
   { numero: '1.21.2', data: '12/11/2026', itens: ['Portal › Fale com o escritório: sem o nome do advogado e a OAB.'] },
@@ -1203,7 +1204,7 @@ const App = {
     App.boot();
     // confirma no servidor se este usuário é o desenvolvedor (mostra ou esconde a Gestão do App)
     if (Session.remote && Session.isAdmin) api('whoami').then(w => { const d = !!w.dev; if (d !== (Session.user.dev === true)) { Session.user = { ...Session.user, dev: d }; Session.save(); if (Session.isStaff) { App.shell(); App.render(true); } } }).catch(() => {});
-    if (Session.remote) DB.pull().then(() => { App.render(true); DB.flush(); }).catch(e => { if (e.code === 'AUTH') App.logout(); else UI.toast('Trabalhando com os dados guardados neste aparelho (sem conexão).', 'warn'); });
+    if (Session.remote) DB.pull().then(() => { if (!Session.isStaff && Portal.ctxs().length !== Portal._n) Portal.shell(); else App.render(true); DB.flush(); }).catch(e => { if (e.code === 'AUTH') App.logout(); else UI.toast('Trabalhando com os dados guardados neste aparelho (sem conexão).', 'warn'); });
   },
   boot() {
     document.body.className = Session.isStaff ? 'staff' : 'client';
@@ -1222,7 +1223,7 @@ const App = {
     try { const us = await api('users'); App.pendentes = us.filter(u => u.status === 'pendente').length; App.badge(); } catch { }
   },
   badge() { $$('.pend-badge').forEach(b => { b.textContent = App.pendentes; b.hidden = !App.pendentes; }); },
-  async logout() { try { google.accounts.id.disableAutoSelect(); } catch { } Session.clear(); location.hash = ''; App.loginScreen(); },
+  async logout() { try { google.accounts.id.disableAutoSelect(); } catch { } try { sessionStorage.removeItem('af-ctx'); } catch (_) { } Session.clear(); location.hash = ''; App.loginScreen(); },
 
   /* ---------------- LOGIN (Google + código por e-mail + autorização) ---------------- */
   loginScreen() {
@@ -2966,11 +2967,17 @@ const Portal = {
     document.getElementById('root').innerHTML = `<div class="portal" id="portal"></div>`;
     window.onhashchange = null;
     Portal.acesso();
+    Portal._n = Portal.ctxs().length;
     Portal.render();
     const k = Portal.ctx(), cs = Portal.ctxs(); if (k) ConnSplash.show(k.e || null, k.c?.nome || Session.user.nome); else if (cs.length > 1) ConnSplash.multi(cs.map(x => x.e || { razao: x.c?.nome || '' }));
   },
   /* ---- usuário com acesso a mais de uma empresa: escolhe em qual vai trabalhar ---- */
-  cids: () => String(Session.user?.clienteId || '').split(/[,;\s]+/).filter(String).map(x => x.split(':')[0]),
+  // empresas liberadas: as da sessão + as que o servidor enviou (o servidor já filtra pelo acesso atual; assim um acesso novo aparece sem precisar sair e entrar)
+  cids() {
+    const ids = String(Session.user?.clienteId || '').split(/[,;\s]+/).filter(String).map(x => x.split(':')[0]);
+    if (Session.user?.papel === 'cliente') DB.all('clientes').forEach(c => { if (!ids.includes(c.id)) ids.push(c.id); });
+    return ids;
+  },
   ctxs() {
     const out = [];
     Portal.cids().forEach(id => {
