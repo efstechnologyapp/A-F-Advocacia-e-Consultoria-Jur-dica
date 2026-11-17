@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.23.2';
+const APP_VERSAO = '1.24.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,8 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.24.0', data: '17/11/2026', itens: ['Atendimentos: nova etapa “Procuração”, entre o contrato e o relato. Tipos ad judicia, ad extra (ad negotia) e ad judicia et extra, com ou sem poderes especiais — os do art. 105 do CPC e os do art. 661, § 1º, do Código Civil já vêm listados para marcar —, outorgados, finalidade e substabelecimento. O texto abre no editor para ajustes e sai impresso no papel timbrado.'] },
+  { numero: '1.23.3', data: '16/11/2026', itens: ['Link direto da área do cliente: o endereço do app terminado em “?cliente” (usado no QR code da placa do escritório) abre já na tela de acesso do cliente.'] },
   { numero: '1.23.2', data: '13/11/2026', itens: ['Auditoria reorganizada em cartões: locais de acesso (escritório e cada empresa) → usuários → movimentações, com caminho para voltar e filtro de acessos/alterações.'] },
   { numero: '1.23.1', data: '13/11/2026', itens: ['Trilha de auditoria: passa a registrar as entradas (login) e o uso do app de todos os usuários, do escritório e dos clientes; filtros por tipo (acessos ou alterações) e por usuário; mostra até 1.000 registros.'] },
   { numero: '1.23.0', data: '13/11/2026', itens: ['Nova identidade da EFS Technology: o ícone do “E” de linhas de código aparece no login, no menu lateral, no “Sobre o App” (com o lema “Soluções digitais sob medida”), no rodapé do portal do cliente e no aviso de domínio não autorizado.'] },
@@ -1388,6 +1390,8 @@ const App = {
     $('#lgReenv').onclick = pedirCodigo;
     $$('[data-lgback]').forEach(b => b.onclick = () => { try { google.accounts.id.disableAutoSelect(); } catch { } L.ref = ''; step('Google'); });
     $('#lgSemGoogle') && ($('#lgSemGoogle').onclick = () => step('Email'));
+    // link direto da área do cliente (QR code da placa): .../?cliente abre já na tela do cliente
+    if ($('#lgSemGoogle') && /[?&#]cliente\b/.test(location.search + location.hash)) step('Email');
     $('#lgStepEmail').onsubmit = e => { e.preventDefault(); L.ident = $('#lgMail').value.trim(); L.viaGoogle = false; L.idToken = null; if (L.ident) pedirConsulta(); };
     // link público (Instagram/Linktree): …/#/consulta abre direto a consulta do cliente
     if (/^#\/?consulta/.test(location.hash) && apiUrl()) step('Email');
@@ -4486,12 +4490,12 @@ const DJEN = {
 };
 /* =====================================================================
    ATENDIMENTOS — do primeiro contato à petição inicial
-   1) Cliente e caso  2) Contrato de honorários  3) Relato e documentos
-   4) Petição inicial (IA redige, o advogado revisa no editor)
+   1) Cliente e caso  2) Contrato de honorários  3) Procuração  4) Relato e documentos
+   5) Petição inicial (IA redige, o advogado revisa no editor)
    ===================================================================== */
 const Atend = {
   STATUS: ['Em atendimento', 'Contrato gerado', 'Contrato assinado', 'Inicial em elaboração', 'Inicial pronta', 'Ajuizado', 'Não prosseguiu'],
-  TABS: [['caso', 'Cliente e caso', 'user'], ['contrato', 'Contrato de honorários', 'file'], ['fatos', 'Relato e documentos', 'list'], ['inicial', 'Petição inicial', 'gavel']],
+  TABS: [['caso', 'Cliente e caso', 'user'], ['contrato', 'Contrato de honorários', 'file'], ['procuracao', 'Procuração', 'edit'], ['fatos', 'Relato e documentos', 'list'], ['inicial', 'Petição inicial', 'gavel']],
   tom: s => /Ajuizado/.test(s) ? 'good' : /Não prosseguiu/.test(s) ? 'neutral' : /assinado|pronta/.test(s) ? 'info' : 'warn',
   cli: a => DB.get('clientes', a.clienteId),
 
@@ -4538,7 +4542,7 @@ const Atend = {
     if (!a) { v.innerHTML = `<div class="empty">${icon('alert')}<p>Atendimento não encontrado.</p></div>`; return; }
     const c = Atend.cli(a);
     App.crumbs([{ t: 'Atendimentos', href: '/atendimentos' }, { t: c?.nome || 'Atendimento' }]);
-    const feito = { caso: !!(c && a.assunto), contrato: !!a.contratoHtml, fatos: !!(a.relato || (a.documentos || []).length), inicial: !!a.inicialHtml };
+    const feito = { caso: !!(c && a.assunto), contrato: !!a.contratoHtml, procuracao: !!a.procuracaoHtml, fatos: !!(a.relato || (a.documentos || []).length), inicial: !!a.inicialHtml };
     v.innerHTML = `<div class="proc-h"><div>
         <div class="proc-tags">${pill(AREAS[a.area]?.nome || '')} <span class="pill ${Atend.tom(a.status)}">${esc(a.status || 'Em atendimento')}</span>${a.processoId ? ` <a class="tag" href="#/processo/${a.processoId}">${icon('link')} processo</a>` : ''}</div>
         <h1 class="at-tit">${esc(c?.nome || 'Cliente não encontrado')}</h1>
@@ -4548,7 +4552,7 @@ const Atend = {
       <div id="atBody"></div>`;
     $('#atSt').onchange = async e => { await DB.save('atendimentos', { ...a, status: e.target.value }); UI.toast('Situação atualizada.'); App.render(true); };
     const host = $('#atBody');
-    ({ caso: Atend.tCaso, contrato: Atend.tContrato, fatos: Atend.tFatos, inicial: Atend.tInicial }[tab] || Atend.tCaso)(host, a, c);
+    ({ caso: Atend.tCaso, contrato: Atend.tContrato, procuracao: Atend.tProcuracao, fatos: Atend.tFatos, inicial: Atend.tInicial }[tab] || Atend.tCaso)(host, a, c);
   },
   async salvar(a, campos, msg) { Object.assign(a, campos); await DB.save('atendimentos', a); if (msg) UI.toast(msg); },
 
@@ -4572,7 +4576,7 @@ const Atend = {
         ${fal.length ? `<div class="notice">${icon('alert')}<div>Para o contrato e a inicial saírem completos, falta no cadastro: <b>${esc(fal.join(', '))}</b>.</div></div>` : `<p class="muted small">${icon('check')} Qualificação completa para o contrato e a inicial.</p>`}
       </section>
       <section class="card"><header><h2>${icon('list')} Próximos passos</h2></header><ol class="next">
-        <li><a href="#/atendimento/${a.id}/contrato">Gerar o contrato de honorários</a></li><li><a href="#/atendimento/${a.id}/fatos">Registrar o relato e juntar os documentos</a></li><li><a href="#/atendimento/${a.id}/inicial">Redigir a petição inicial</a></li></ol></section></div></div>`;
+        <li><a href="#/atendimento/${a.id}/contrato">Gerar o contrato de honorários</a></li><li><a href="#/atendimento/${a.id}/procuracao">Gerar a procuração</a></li><li><a href="#/atendimento/${a.id}/fatos">Registrar o relato e juntar os documentos</a></li><li><a href="#/atendimento/${a.id}/inicial">Redigir a petição inicial</a></li></ol></section></div></div>`;
     $('#cliEd').onclick = () => c && UI.editRecord('clientes', c, { onSaved: () => App.render(true) });
     $('#cfOk').onclick = () => { const f = $('#cf'); Atend.salvar(a, { area: f.area.value, parteContraria: f.parteContraria.value.trim(), assunto: f.assunto.value.trim(), obs: f.obs.value }, 'Salvo.').then(() => App.render(true)); };
   },
@@ -4646,7 +4650,74 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
 <div class="assin test"><div><span></span><b>Testemunha 1</b>Nome:<br>CPF:</div><div><span></span><b>Testemunha 2</b>Nome:<br>CPF:</div></div>`;
   },
 
-  /* ---------- 3. relato e documentos ---------- */
+  /* ---------- 3. procuração ---------- */
+  // poderes especiais: judiciais (art. 105 do CPC) e extrajudiciais (art. 661, § 1º, do CC); [chave, texto, marcado por padrão]
+  PODERES_J: [['cit', 'receber citação', 1], ['conf', 'confessar', 1], ['proc', 'reconhecer a procedência do pedido', 1], ['trans', 'transigir', 1], ['desist', 'desistir', 1],
+    ['renun', 'renunciar ao direito sobre o qual se funda a ação', 1], ['rec', 'receber, dar quitação e levantar valores, inclusive por alvará, RPV ou precatório', 1],
+    ['comp', 'firmar compromisso', 1], ['hipo', 'assinar declaração de hipossuficiência econômica', 1]],
+  PODERES_E: [['acordo', 'transigir e celebrar acordos', 1], ['quit', 'receber valores e dar quitação', 1], ['assin', 'assinar contratos, termos, requerimentos e declarações', 1],
+    ['renunE', 'renunciar a direitos e desistir de pedidos administrativos', 0], ['alien', 'alienar, onerar ou hipotecar bens', 0]],
+  tProcuracao(host, a, c) {
+    const p = a.procuracao || {}, E = escritorio();
+    const tipo = p.tipo || 'judicia_extra';
+    const marc = (lista, chave) => lista.map(([k, , def]) => (p[chave] ? p[chave].includes(k) : def) ? k : null).filter(Boolean);
+    const sj = marc(Atend.PODERES_J, 'pj'), se = marc(Atend.PODERES_E, 'pe');
+    const outPadrao = `${String(E.advogado || '[COMPLETAR: advogado]').toUpperCase()}, advogado(a) inscrito(a) na ${oabFmt(E.oab) || '[COMPLETAR: OAB]'}`;
+    host.innerHTML = `<section class="card"><header><h2>${icon('settings')} Dados da procuração</h2></header>
+      <form class="grid-form" id="pf">
+        <div class="fld"><label>Tipo</label><select name="tipo">
+          <option value="judicia" ${tipo === 'judicia' ? 'selected' : ''}>Ad judicia (para o foro em geral)</option>
+          <option value="extra" ${tipo === 'extra' ? 'selected' : ''}>Ad extra / ad negotia (extrajudicial)</option>
+          <option value="judicia_extra" ${tipo === 'judicia_extra' ? 'selected' : ''}>Ad judicia et extra (judicial e extrajudicial)</option></select></div>
+        <div class="fld"><label>&nbsp;</label><label class="switch"><input type="checkbox" name="esp" ${p.especiais !== false ? 'checked' : ''}><span></span>Com poderes especiais</label></div>
+        <div class="fld full" data-pf="j"><label>Poderes especiais judiciais <span class="muted small">(art. 105 do CPC)</span></label><div class="chk-list">${Atend.PODERES_J.map(([k, t]) => `<label class="chk"><input type="checkbox" name="pj" value="${k}" ${sj.includes(k) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div></div>
+        <div class="fld full" data-pf="e"><label>Poderes especiais extrajudiciais <span class="muted small">(art. 661, § 1º, do Código Civil)</span></label><div class="chk-list">${Atend.PODERES_E.map(([k, t]) => `<label class="chk"><input type="checkbox" name="pe" value="${k}" ${se.includes(k) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div></div>
+        <div class="fld full"><label>Outorgado(s) — um por linha (nome e OAB)</label><textarea name="outorgados" rows="2">${esc(p.outorgados || outPadrao)}</textarea></div>
+        <div class="fld full"><label>Finalidade (opcional — deixe em branco para uma procuração geral)</label><input name="fim" value="${esc(p.fim ?? ((a.assunto ? 'especialmente para ' + (tipo === 'extra' ? 'atuar em ' : 'propor ') + a.assunto : '') + (a.parteContraria ? ' em face de ' + a.parteContraria : '')))}"></div>
+        <div class="fld"><label>Substabelecimento</label><select name="subst"><option value="com" ${p.subst !== 'sem' && p.subst !== 'nao' ? 'selected' : ''}>Pode substabelecer, com ou sem reserva</option><option value="sem" ${p.subst === 'sem' ? 'selected' : ''}>Só com reserva de poderes</option><option value="nao" ${p.subst === 'nao' ? 'selected' : ''}>Vedado substabelecer</option></select></div>
+        <div class="fld"><label>Cidade</label><input name="cidade" value="${esc(p.cidade || a.honorarios?.cidade || 'João Pessoa')}"></div>
+      </form>
+      <div class="btn-row right"><button class="btn ${a.procuracaoHtml ? 'ghost' : 'primary'}" id="pGer">${icon('sparkle')} ${a.procuracaoHtml ? 'Gerar de novo (substitui o texto)' : 'Gerar procuração'}</button></div></section>
+      <div id="prEd"></div>`;
+    const f = $('#pf');
+    const vis = () => { const t = f.tipo.value, esp = f.esp.checked; $('[data-pf=j]', f).hidden = !esp || t === 'extra'; $('[data-pf=e]', f).hidden = !esp || t === 'judicia'; };
+    f.tipo.onchange = vis; f.esp.onchange = vis; vis();
+    const ler = () => ({ tipo: f.tipo.value, especiais: f.esp.checked, pj: $$('[name=pj]:checked', f).map(x => x.value), pe: $$('[name=pe]:checked', f).map(x => x.value),
+      outorgados: f.outorgados.value.trim(), fim: f.fim.value.trim(), subst: f.subst.value, cidade: f.cidade.value.trim() || 'João Pessoa' });
+    $('#pGer').onclick = async () => {
+      if (a.procuracaoHtml && !await UI.confirm('Gerar de novo substitui o texto da procuração, inclusive o que foi editado. Continuar?', 'Gerar de novo', false)) return;
+      const o = ler();
+      await Atend.salvar(a, { procuracao: o, procuracaoHtml: Atend.modeloProcuracao(a, c, E, o) }, 'Procuração gerada. Revise o texto abaixo — pode editar à vontade.');
+      App.render(true);
+    };
+    if (a.procuracaoHtml) Editor.montar($('#prEd'), { html: a.procuracaoHtml, titulo: 'Procuração', salvar: html => Atend.salvar(a, { procuracaoHtml: html }),
+      imprimir: html => Timbre.imprimir(html, 'Procuração — ' + (c?.nome || '')) });
+  },
+  modeloProcuracao(a, c, E, o) {
+    const dataExt = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const outs = (o.outorgados || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+    const outTxt = (outs.length ? outs.map(s => `<b>${esc(s)}</b>`).join('; ') : '<mark>[COMPLETAR: advogado e OAB]</mark>') +
+      `, com escritório profissional em ${E.endereco ? esc(E.endereco) : '<mark>[COMPLETAR: endereço do escritório]</mark>'}${E.email ? ', e-mail ' + esc(E.email) : ''}`;
+    const jud = o.tipo !== 'extra', ext = o.tipo !== 'judicia';
+    const titulo = { judicia: 'PROCURAÇÃO AD JUDICIA', extra: 'PROCURAÇÃO AD NEGOTIA (EXTRAJUDICIAL)', judicia_extra: 'PROCURAÇÃO AD JUDICIA ET EXTRA' }[o.tipo];
+    const pJ = `os poderes da cláusula <i>ad judicia</i>, para o foro em geral, a fim de representar o(a) OUTORGANTE em qualquer juízo, instância ou tribunal, podendo propor as ações competentes e defendê-lo(a) nas contrárias, seguindo umas e outras até final decisão, interpor recursos, requerer, produzir provas e praticar todos os atos do processo, nos termos do art. 105 do Código de Processo Civil`;
+    const pE = `poderes para representar o(a) OUTORGANTE perante repartições públicas federais, estaduais e municipais, autarquias, órgãos da administração direta e indireta, cartórios e serventias extrajudiciais, instituições financeiras, empresas públicas e privadas e pessoas físicas, podendo requerer, protocolar, apresentar e retirar documentos, obter certidões, prestar declarações, tomar ciência de atos e decisões, apresentar defesas, impugnações e recursos administrativos e praticar os demais atos necessários ao fiel cumprimento deste mandato`;
+    const espJ = o.especiais && jud ? Atend.PODERES_J.filter(([k]) => o.pj.includes(k)).map(([, t]) => t) : [];
+    const espE = o.especiais && ext ? Atend.PODERES_E.filter(([k]) => o.pe.includes(k)).map(([, t]) => t) : [];
+    const lista = l => l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l[0];
+    const sub = { com: 'podendo substabelecer, no todo ou em parte, com ou sem reserva de poderes', sem: 'podendo substabelecer, no todo ou em parte, sempre com reserva de poderes', nao: 'vedado o substabelecimento' }[o.subst];
+    return `<h1>${titulo}</h1>
+<p><b>OUTORGANTE:</b> ${c ? Atend.qualif(c) : '<mark>[COMPLETAR: outorgante]</mark>'}.</p>
+<p><b>OUTORGADO(S):</b> ${outTxt}.</p>
+<p><b>PODERES:</b> Pelo presente instrumento particular de mandato, o(a) OUTORGANTE nomeia e constitui seu(s) bastante(s) procurador(es) o(s) OUTORGADO(S), a quem confere ${jud ? pJ : ''}${jud && ext ? '; e, ainda, ' : ''}${ext ? pE : ''}${o.fim ? ', ' + esc(o.fim) : ''}.</p>
+${espJ.length ? `<p><b>PODERES ESPECIAIS (art. 105 do CPC):</b> Confere, ainda, poderes especiais para ${esc(lista(espJ))}.</p>` : ''}
+${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do Código Civil):</b> Confere, também, poderes especiais e expressos para ${esc(lista(espE))}${o.fim ? ', no âmbito da finalidade acima' : ''}.</p>` : ''}
+<p>Os poderes podem ser exercidos em conjunto ou separadamente pelos outorgados, ${sub}.</p>
+<p class="local">${esc(o.cidade || 'João Pessoa')}, ${dataExt}.</p>
+<div class="assin"><div><span></span><b>${esc(String(c?.nome || 'OUTORGANTE').toUpperCase())}</b>Outorgante</div></div>`;
+  },
+
+  /* ---------- 4. relato e documentos ---------- */
   tFatos(host, a, c) {
     const docs = a.documentos || [], an = a.analise;
     host.innerHTML = `<div class="grid-main"><section class="card"><header><h2>${icon('edit')} Relato do cliente</h2><span class="muted small" id="rlSt"></span></header>
@@ -4715,7 +4786,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
         ${(an.riscos || []).length ? `<div class="notice">${icon('alert')}<div><b>Pontos de atenção</b><ul>${li(an.riscos)}</ul></div></div>` : ''}</div></section>`;
   },
 
-  /* ---------- 4. petição inicial ---------- */
+  /* ---------- 5. petição inicial ---------- */
   tInicial(host, a, c) {
     const an = a.analise || {}, o = a.opcoesInicial || {};
     const juizo = o.juizo || (an.competencia ? '' : '');
