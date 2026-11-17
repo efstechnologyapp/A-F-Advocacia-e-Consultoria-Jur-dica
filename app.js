@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.25.0';
+const APP_VERSAO = '1.25.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.25.1', data: '17/11/2026', itens: ['Administrativo: o atendimento aceita mais de um órgão ou cartório (ex.: Prefeitura e Registro de Imóveis), com um requerimento redigido para cada órgão.', 'Concluir o atendimento abre uma demanda por órgão, ligadas entre si (“Procedimentos relacionados”). O número do protocolo fica pendente e é informado depois, em cada demanda, sem travar o restante do sistema.', 'Nova situação “Aguardando protocolo” e indicador correspondente no painel do Administrativo.'] },
   { numero: '1.25.0', data: '17/11/2026', itens: ['Contencioso: a visão geral passa a ter o card “Contencioso”, com as seções Judicial (como antes) e Administrativo.', 'Nova seção Administrativo: demandas extrajudiciais e administrativas (cartórios de notas, registro civil, registro de imóveis, prefeitura, INSS, Detran, fisco e órgãos públicos), com órgão, protocolo, situação, andamentos, prazos e exigências.', 'Atendimentos: ao abrir, escolha se o trabalho será judicial ou administrativo. O administrativo segue as mesmas etapas (cliente e caso, contrato, procuração, relato e documentos), terminando no requerimento redigido pela IA e no registro do protocolo, que cria a demanda.', 'Área do cliente: o cliente acompanha também as demandas administrativas.', 'Menu: Cadastros › Clientes passa para logo após a Visão geral.'] },
   { numero: '1.24.0', data: '17/11/2026', itens: ['Atendimentos: nova etapa “Procuração”, entre o contrato e o relato. Tipos ad judicia, ad extra (ad negotia) e ad judicia et extra, com ou sem poderes especiais — os do art. 105 do CPC e os do art. 661, § 1º, do Código Civil já vêm listados para marcar —, outorgados, finalidade e substabelecimento. O texto abre no editor para ajustes e sai impresso no papel timbrado.'] },
   { numero: '1.23.3', data: '16/11/2026', itens: ['Link direto da área do cliente: o endereço do app terminado em “?cliente” (usado no QR code da placa do escritório) abre já na tela de acesso do cliente.'] },
@@ -343,7 +344,7 @@ const ADM_TIPOS = [
   ['Notificação extrajudicial', 'Outros'], ['Outra demanda extrajudicial', 'Outros']
 ];
 const ADM_GRUPO = t => (ADM_TIPOS.find(x => x[0] === t) || [, 'Outros'])[1];
-const ADM_STATUS = ['Em preparação', 'Protocolado', 'Em análise', 'Com exigência', 'Em recurso', 'Deferido', 'Indeferido', 'Concluído', 'Arquivado'];
+const ADM_STATUS = ['Em preparação', 'Aguardando protocolo', 'Protocolado', 'Em análise', 'Com exigência', 'Em recurso', 'Deferido', 'Indeferido', 'Concluído', 'Arquivado'];
 const admAberta = d => !/Conclu|Arquiv|Indeferido/.test(d.status || '');
 const AREAS = {
   civil: { nome: 'Cível', icon: 'scale' },
@@ -1495,7 +1496,7 @@ const App = {
       ${item('/agenda', 'calendar', 'Agenda e prazos', DB.where('prazos', p => !p.concluido && daysUntil(p.data) !== null && daysUntil(p.data) <= 7).length || '')}
       <div class="nav-h">Contencioso · Administrativo</div>
       ${item('/administrativo', 'stamp', 'Demandas', Adm.abertas().length || '')}
-      ${item('/adm-atendimentos', 'briefcase', 'Atendimentos', DB.where('atendimentos', x => x.esfera === 'administrativo' && !/Protocolado|Não prosseguiu/.test(x.status || '')).length || '')}
+      ${item('/adm-atendimentos', 'briefcase', 'Atendimentos', DB.where('atendimentos', x => x.esfera === 'administrativo' && !/Protocolado|Concluído|Não prosseguiu/.test(x.status || '')).length || '')}
       <div class="nav-h">Consultoria jurídica</div>
       ${item('/empresas', 'building', 'Empresas', DB.all('empresas').length || '')}
       ${item('/remessas', 'upload', 'Remessas mensais', Remessa.fila().length || '')}
@@ -4554,14 +4555,21 @@ const DJEN = {
    ===================================================================== */
 const Atend = {
   STATUS: ['Em atendimento', 'Contrato gerado', 'Contrato assinado', 'Inicial em elaboração', 'Inicial pronta', 'Ajuizado', 'Não prosseguiu'],
-  STATUS_ADM: ['Em atendimento', 'Contrato gerado', 'Contrato assinado', 'Requerimento em elaboração', 'Requerimento pronto', 'Protocolado', 'Não prosseguiu'],
+  STATUS_ADM: ['Em atendimento', 'Contrato gerado', 'Contrato assinado', 'Requerimento em elaboração', 'Requerimento pronto', 'Concluído', 'Não prosseguiu'],
+  /** órgãos/cartórios do atendimento administrativo (pode ser mais de um) */
+  orgaos: a => (Array.isArray(a.orgaos) && a.orgaos.length ? a.orgaos : a.orgao ? [a.orgao] : []).map(x => String(x || '').trim()).filter(Boolean),
+  orgaosTxt: (a, sep = ' e ') => { const l = Atend.orgaos(a); return l.length > 1 ? l.slice(0, -1).join(', ') + sep + l[l.length - 1] : l[0] || ''; },
+  /** requerimentos por órgão; o antigo (inicialHtml) vale para o primeiro órgão */
+  reqs: a => { const r = { ...(a.reqs || {}) }, o = Atend.orgaos(a); if (a.inicialHtml && o[0] && !r[o[0]]) r[o[0]] = { html: a.inicialHtml, opcoes: a.opcoesInicial || {} }; return r; },
+  /** demandas criadas a partir do atendimento */
+  demandas: a => DB.where('demandas', d => d.atendimentoId === a.id || d.id === a.demandaId || (a.demandaIds || []).includes(d.id)),
   TABS: [['caso', 'Cliente e caso', 'user'], ['contrato', 'Contrato de honorários', 'file'], ['procuracao', 'Procuração', 'edit'], ['fatos', 'Relato e documentos', 'list'], ['inicial', 'Petição inicial', 'gavel']],
   /** atendimento da esfera administrativa/extrajudicial (cartórios, prefeitura, INSS…) */
   adm: a => a?.esfera === 'administrativo',
   stList: a => Atend.adm(a) ? Atend.STATUS_ADM : Atend.STATUS,
   tabs: a => Atend.adm(a) ? Atend.TABS.map(t => t[0] === 'inicial' ? ['inicial', 'Requerimento', 'stamp'] : t) : Atend.TABS,
-  fim: /Ajuizado|Protocolado|Não prosseguiu/,
-  tom: s => /Ajuizado|Protocolado/.test(s) ? 'good' : /Não prosseguiu/.test(s) ? 'neutral' : /assinado|pront/.test(s) ? 'info' : 'warn',
+  fim: /Ajuizado|Protocolado|Concluído|Não prosseguiu/,
+  tom: s => /Ajuizado|Protocolado|Concluído/.test(s) ? 'good' : /Não prosseguiu/.test(s) ? 'neutral' : /assinado|pront/.test(s) ? 'info' : 'warn',
   cli: a => DB.get('clientes', a.clienteId),
 
   /* ---------- lista ---------- */
@@ -4574,7 +4582,7 @@ const Atend = {
       <div class="actions"><button class="btn primary" id="aNovo">${icon('plus')} Novo atendimento</button></div></div>
       <div class="kpis sm">${kpi('Em aberto', abertos.length)}${kpi('Contratos assinados', l.filter(a => a.contratoAssinado).length)}${adm ? kpi('Requerimentos prontos', l.filter(a => a.status === 'Requerimento pronto').length) + kpi('Protocolados', l.filter(a => a.status === 'Protocolado').length) : kpi('Iniciais prontas', l.filter(a => a.status === 'Inicial pronta').length) + kpi('Ajuizados', l.filter(a => a.status === 'Ajuizado').length)}</div>
       <section class="card flush" id="atTbl"></section>`;
-    const rows = l.map(a => ({ ...a, _cli: Atend.cli(a)?.nome || '—', _area: adm ? (a.tipoAdm || '') : AREAS[a.area]?.nome || '', _pc: adm ? a.orgao : a.parteContraria, _upd: String(a.atualizadoEm || a.criadoEm || a.updatedAt || '').slice(0, 10) }));
+    const rows = l.map(a => ({ ...a, _cli: Atend.cli(a)?.nome || '—', _area: adm ? (a.tipoAdm || '') : AREAS[a.area]?.nome || '', _pc: adm ? Atend.orgaosTxt(a, '; ') : a.parteContraria, _upd: String(a.atualizadoEm || a.criadoEm || a.updatedAt || '').slice(0, 10) }));
     dataTable($('#atTbl'), {
       id: adm ? 'atendAdm' : 'atend', rows, schema: { fields: [F('_cli', 'Cliente'), F('assunto', adm ? 'Assunto / pedido' : 'Assunto / ação'), F('_area', adm ? 'Tipo de demanda' : 'Área'), F('_pc', adm ? 'Órgão / cartório' : 'Parte contrária'), F('status', 'Situação'), F('_upd', 'Atualizado', 'date')] },
       cols: ['_cli', 'assunto', '_area', '_pc', 'status', '_upd'],
@@ -4595,7 +4603,7 @@ const Atend = {
       <div class="fld" data-esf="judicial"><label>Área *</label><select name="area">${Object.entries(AREAS).map(([k, a]) => `<option value="${k}">${esc(a.nome)}</option>`).join('')}</select></div>
       <div class="fld" data-esf="judicial"><label>Parte contrária</label><input name="pc" placeholder="Ex.: Hapvida Assistência Médica S.A."></div>
       <div class="fld" data-esf="administrativo"><label>Tipo de demanda *</label><select name="tipoAdm">${Adm.optTipos()}</select></div>
-      <div class="fld" data-esf="administrativo"><label>Órgão / cartório</label><input name="orgao" placeholder="Ex.: Cartório do 2º Ofício de Notas de João Pessoa"></div>
+      <div class="fld" data-esf="administrativo"><label>Órgão(s) / cartório(s)</label><input name="orgao" placeholder="Ex.: Prefeitura de João Pessoa; Registro de Imóveis da Zona Sul"><small class="hint">Mais de um? Separe com ponto e vírgula.</small></div>
       <div class="fld full" data-esf="administrativo"><label>Outros interessados</label><input name="interessados" placeholder="Ex.: demais herdeiros, cônjuge, confrontantes"></div>
       <div class="fld full"><label>Assunto / <span data-esf="judicial">ação pretendida</span><span data-esf="administrativo">pedido</span> *</label><input name="assunto" placeholder="Ex.: Negativa de cobertura de internação — obrigação de fazer e danos morais"></div></form>`,
       foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="anOk">${icon('check')} Abrir atendimento</button>` });
@@ -4609,7 +4617,7 @@ const Atend = {
       if (!f.cli.value || !f.assunto.value.trim() || (adm && !f.tipoAdm.value)) return UI.toast(adm ? 'Escolha o cliente, o tipo de demanda e informe o pedido.' : 'Escolha o cliente e informe o assunto.', 'bad');
       const hon = { tipo: adm ? 'fixo' : 'misto', abrangencia: 'primeiro', parcelas: 1, percentual: 30, cidade: 'João Pessoa' };
       const [a] = await DB.save('atendimentos', adm
-        ? { esfera: 'administrativo', clienteId: f.cli.value, tipoAdm: f.tipoAdm.value, orgao: f.orgao.value.trim(), parteContraria: f.interessados.value.trim(), assunto: f.assunto.value.trim(), status: 'Em atendimento', documentos: [], honorarios: hon }
+        ? { esfera: 'administrativo', clienteId: f.cli.value, tipoAdm: f.tipoAdm.value, orgaos: f.orgao.value.split(';').map(x => x.trim()).filter(Boolean), parteContraria: f.interessados.value.trim(), assunto: f.assunto.value.trim(), status: 'Em atendimento', documentos: [], honorarios: hon }
         : { esfera: 'judicial', clienteId: f.cli.value, area: f.area.value, assunto: f.assunto.value.trim(), parteContraria: f.pc.value.trim(), status: 'Em atendimento', documentos: [], honorarios: hon });
       UI.closeModal(); location.hash = '#/atendimento/' + a.id + '/caso';
     };
@@ -4622,11 +4630,11 @@ const Atend = {
     const c = Atend.cli(a);
     const adm = Atend.adm(a);
     App.crumbs([{ t: adm ? 'Atendimentos administrativos' : 'Atendimentos', href: adm ? '/adm-atendimentos' : '/atendimentos' }, { t: c?.nome || 'Atendimento' }]);
-    const feito = { caso: !!(c && a.assunto), contrato: !!a.contratoHtml, procuracao: !!a.procuracaoHtml, fatos: !!(a.relato || (a.documentos || []).length), inicial: !!a.inicialHtml };
+    const feito = { caso: !!(c && a.assunto), contrato: !!a.contratoHtml, procuracao: !!a.procuracaoHtml, fatos: !!(a.relato || (a.documentos || []).length), inicial: adm ? (Atend.demandas(a).length > 0 || /Concluído|Protocolado/.test(a.status || '')) : !!a.inicialHtml };
     v.innerHTML = `<div class="proc-h"><div>
-        <div class="proc-tags">${adm ? `<span class="pill neutral">${icon('stamp')} Administrativo</span> ${pill(a.tipoAdm || '')}` : pill(AREAS[a.area]?.nome || '')} <span class="pill ${Atend.tom(a.status)}">${esc(a.status || 'Em atendimento')}</span>${a.processoId ? ` <a class="tag" href="#/processo/${a.processoId}">${icon('link')} processo</a>` : ''}${a.demandaId ? ` <a class="tag" href="#/demanda/${a.demandaId}">${icon('link')} demanda</a>` : ''}</div>
+        <div class="proc-tags">${adm ? `<span class="pill neutral">${icon('stamp')} Administrativo</span> ${pill(a.tipoAdm || '')}` : pill(AREAS[a.area]?.nome || '')} <span class="pill ${Atend.tom(a.status)}">${esc(a.status || 'Em atendimento')}</span>${a.processoId ? ` <a class="tag" href="#/processo/${a.processoId}">${icon('link')} processo</a>` : ''}${adm && Atend.demandas(a).length ? ` <a class="tag" href="#/atendimento/${a.id}/inicial">${icon('link')} ${Atend.demandas(a).length} demanda(s)</a>` : ''}</div>
         <h1 class="at-tit">${esc(c?.nome || 'Cliente não encontrado')}</h1>
-        <p class="proc-sub">${esc(a.assunto || '')}${adm ? (a.orgao ? ` · ${esc(a.orgao)}` : '') : a.parteContraria ? ` <span class="vs">×</span> ${esc(a.parteContraria)}` : ''}</p></div>
+        <p class="proc-sub">${esc(a.assunto || '')}${adm ? (Atend.orgaos(a).length ? ` · ${esc(Atend.orgaosTxt(a, '; '))}` : '') : a.parteContraria ? ` <span class="vs">×</span> ${esc(a.parteContraria)}` : ''}</p></div>
         <div class="actions wrap"><select class="input" id="atSt" title="Situação do atendimento">${Atend.stList(a).map(s => `<option ${s === a.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div></div>
       <nav class="steps">${Atend.tabs(a).map(([k, t, ic], i) => `<a href="#/atendimento/${id}/${k}" class="${k === tab ? 'on' : ''} ${feito[k] ? 'ok' : ''}"><span class="n">${feito[k] ? icon('check') : i + 1}</span>${esc(t)}</a>`).join('')}</nav>
       <div id="atBody"></div>`;
@@ -4648,7 +4656,7 @@ const Atend = {
       <form class="grid-form" id="cf">
         <div class="fld"><label>Esfera</label><select name="esfera"><option value="judicial">Judicial</option><option value="administrativo" ${adm ? 'selected' : ''}>Administrativo / extrajudicial</option></select></div>
         ${adm ? `<div class="fld"><label>Tipo de demanda</label><select name="tipoAdm">${Adm.optTipos(a.tipoAdm)}</select></div>
-        <div class="fld"><label>Órgão / cartório</label><input name="orgao" value="${esc(a.orgao || '')}"></div>
+        <div class="fld full"><label>Órgãos / cartórios onde o caso vai tramitar</label><div class="org-list" id="orgL">${(Atend.orgaos(a).length ? Atend.orgaos(a) : ['']).map(o => `<div class="org-row"><input name="org" value="${esc(o)}" placeholder="Ex.: Prefeitura de João Pessoa (SEREM)"><button type="button" class="icon-btn sm" data-orgx title="Remover">${icon('x')}</button></div>`).join('')}</div><button type="button" class="link small" id="orgAdd">${icon('plus')} adicionar órgão ou cartório</button><small class="hint">Ex.: na atualização cadastral do imóvel, a Prefeitura (cadastro/IPTU) e o Registro de Imóveis (averbação na matrícula). Cada órgão terá requerimento e acompanhamento próprios.</small></div>
         <div class="fld"><label>Outros interessados</label><input name="parteContraria" value="${esc(a.parteContraria || '')}"></div>`
         : `<div class="fld"><label>Área</label><select name="area">${Object.entries(AREAS).map(([k, x]) => `<option value="${k}" ${k === a.area ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div>
         <div class="fld full"><label>Parte contrária</label><input name="parteContraria" value="${esc(a.parteContraria || '')}"></div>`}
@@ -4660,11 +4668,15 @@ const Atend = {
         ${fal.length ? `<div class="notice">${icon('alert')}<div>Para o contrato e a inicial saírem completos, falta no cadastro: <b>${esc(fal.join(', '))}</b>.</div></div>` : `<p class="muted small">${icon('check')} Qualificação completa para o contrato e a inicial.</p>`}
       </section>
       <section class="card"><header><h2>${icon('list')} Próximos passos</h2></header><ol class="next">
-        <li><a href="#/atendimento/${a.id}/contrato">Gerar o contrato de honorários</a></li><li><a href="#/atendimento/${a.id}/procuracao">Gerar a procuração</a></li><li><a href="#/atendimento/${a.id}/fatos">Registrar o relato e juntar os documentos</a></li><li><a href="#/atendimento/${a.id}/inicial">${adm ? 'Redigir o requerimento e registrar o protocolo' : 'Redigir a petição inicial'}</a></li></ol></section></div></div>`;
+        <li><a href="#/atendimento/${a.id}/contrato">Gerar o contrato de honorários</a></li><li><a href="#/atendimento/${a.id}/procuracao">Gerar a procuração</a></li><li><a href="#/atendimento/${a.id}/fatos">Registrar o relato e juntar os documentos</a></li><li><a href="#/atendimento/${a.id}/inicial">${adm ? 'Redigir o(s) requerimento(s) e concluir — o protocolo é informado depois, em cada demanda' : 'Redigir a petição inicial'}</a></li></ol></section></div></div>`;
     $('#cliEd').onclick = () => c && UI.editRecord('clientes', c, { onSaved: () => App.render(true) });
+    const orgRow = () => `<div class="org-row"><input name="org" placeholder="Ex.: Cartório de Registro de Imóveis da Zona Sul"><button type="button" class="icon-btn sm" data-orgx title="Remover">${icon('x')}</button></div>`;
+    $('#orgL')?.addEventListener('click', e => { const b = e.target.closest('[data-orgx]'); if (!b) return; if ($$('.org-row', $('#orgL')).length > 1) b.parentElement.remove(); else b.parentElement.querySelector('input').value = ''; });
+    $('#orgAdd')?.addEventListener('click', () => { $('#orgL').insertAdjacentHTML('beforeend', orgRow()); $$('#orgL input').pop().focus(); });
+    $('#cf').esfera.onchange = () => { if (!adm && $('#cf').esfera.value === 'administrativo') UI.toast('Clique em Salvar para mostrar os campos do administrativo.', '', 4000); };
     $('#cfOk').onclick = () => {
       const f = $('#cf'), e = f.esfera.value;
-      const campos = { esfera: e, parteContraria: f.parteContraria.value.trim(), assunto: f.assunto.value.trim(), obs: f.obs.value, ...(adm ? { tipoAdm: f.tipoAdm.value, orgao: f.orgao.value.trim() } : { area: f.area.value }) };
+      const campos = { esfera: e, parteContraria: f.parteContraria.value.trim(), assunto: f.assunto.value.trim(), obs: f.obs.value, ...(adm ? { tipoAdm: f.tipoAdm.value, orgaos: $$('[name=org]', f).map(x => x.value.trim()).filter(Boolean), orgao: '' } : { area: f.area.value }) };
       if (e === 'administrativo' && !adm && !campos.tipoAdm) campos.tipoAdm = '';
       if (e !== (adm ? 'administrativo' : 'judicial') && !Atend.stList({ esfera: e }).includes(a.status)) campos.status = 'Em atendimento';
       Atend.salvar(a, campos, e !== (adm ? 'administrativo' : 'judicial') ? 'Esfera alterada. Complete os dados do caso.' : 'Salvo.').then(() => App.render(true));
@@ -4683,7 +4695,7 @@ const Atend = {
   /* ---------- 2. contrato de honorários ---------- */
   tContrato(host, a, c) {
     const h = a.honorarios || {}, adm = Atend.adm(a);
-    const objPadrao = adm ? 'atuação administrativa e extrajudicial para ' + (a.assunto || a.tipoAdm || '[COMPLETAR: pedido]').replace(/^./, x => x.toLowerCase()) + (a.orgao ? ' perante ' + a.orgao : '') + ', incluindo a preparação e o protocolo do requerimento, o acompanhamento do procedimento e o cumprimento de exigências'
+    const objPadrao = adm ? 'atuação administrativa e extrajudicial para ' + (a.assunto || a.tipoAdm || '[COMPLETAR: pedido]').replace(/^./, x => x.toLowerCase()) + (Atend.orgaos(a).length ? ' perante ' + Atend.orgaosTxt(a) : '') + ', incluindo a preparação e o protocolo ' + (Atend.orgaos(a).length > 1 ? 'dos requerimentos, o acompanhamento dos procedimentos' : 'do requerimento, o acompanhamento do procedimento') + ' e o cumprimento de exigências'
       : 'propositura e acompanhamento de ' + (a.assunto || '[COMPLETAR: ação]') + (a.parteContraria ? ' em face de ' + a.parteContraria : '');
     host.innerHTML = `<section class="card"><header><h2>${icon('settings')} Condições dos honorários</h2></header>
       <form class="grid-form" id="hf">
@@ -4766,7 +4778,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
         <div class="fld full" data-pf="j"><label>Poderes especiais judiciais <span class="muted small">(art. 105 do CPC)</span></label><div class="chk-list">${Atend.PODERES_J.map(([k, t]) => `<label class="chk"><input type="checkbox" name="pj" value="${k}" ${sj.includes(k) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div></div>
         <div class="fld full" data-pf="e"><label>Poderes especiais extrajudiciais <span class="muted small">(art. 661, § 1º, do Código Civil)</span></label><div class="chk-list">${Atend.PODERES_E.map(([k, t]) => `<label class="chk"><input type="checkbox" name="pe" value="${k}" ${se.includes(k) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div></div>
         <div class="fld full"><label>Outorgado(s) — um por linha (nome e OAB)</label><textarea name="outorgados" rows="2">${esc(p.outorgados || outPadrao)}</textarea></div>
-        <div class="fld full"><label>Finalidade (opcional — deixe em branco para uma procuração geral)</label><input name="fim" value="${esc(p.fim ?? (Atend.adm(a) ? 'especialmente para representar o(a) OUTORGANTE perante ' + (a.orgao || 'os cartórios, órgãos e repartições competentes') + ' no procedimento de ' + (a.tipoAdm || a.assunto || '[COMPLETAR]').replace(/^./, x => x.toLowerCase()) + (a.assunto && a.tipoAdm && a.assunto !== a.tipoAdm ? ' (' + a.assunto + ')' : '') : (a.assunto ? 'especialmente para ' + (tipo === 'extra' ? 'atuar em ' : 'propor ') + a.assunto : '') + (a.parteContraria ? ' em face de ' + a.parteContraria : '')))}"></div>
+        <div class="fld full"><label>Finalidade (opcional — deixe em branco para uma procuração geral)</label><input name="fim" value="${esc(p.fim ?? (Atend.adm(a) ? 'especialmente para representar o(a) OUTORGANTE perante ' + (Atend.orgaosTxt(a) || 'os cartórios, órgãos e repartições competentes') + (Atend.orgaos(a).length > 1 ? ' nos procedimentos de ' : ' no procedimento de ') + (a.tipoAdm || a.assunto || '[COMPLETAR]').replace(/^./, x => x.toLowerCase()) + (a.assunto && a.tipoAdm && a.assunto !== a.tipoAdm ? ' (' + a.assunto + ')' : '') : (a.assunto ? 'especialmente para ' + (tipo === 'extra' ? 'atuar em ' : 'propor ') + a.assunto : '') + (a.parteContraria ? ' em face de ' + a.parteContraria : '')))}"></div>
         <div class="fld"><label>Substabelecimento</label><select name="subst"><option value="com" ${p.subst !== 'sem' && p.subst !== 'nao' ? 'selected' : ''}>Pode substabelecer, com ou sem reserva</option><option value="sem" ${p.subst === 'sem' ? 'selected' : ''}>Só com reserva de poderes</option><option value="nao" ${p.subst === 'nao' ? 'selected' : ''}>Vedado substabelecer</option></select></div>
         <div class="fld"><label>Cidade</label><input name="cidade" value="${esc(p.cidade || a.honorarios?.cidade || 'João Pessoa')}"></div>
       </form>
@@ -4856,7 +4868,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
   },
   dadosIA(a, c) {
     const E = escritorio();
-    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: Atend.adm(a) ? 'Administrativo / extrajudicial — ' + (a.tipoAdm || '') : AREAS[a.area]?.nome || '', esfera: Atend.adm(a) ? 'administrativo' : 'judicial', tipoDemanda: a.tipoAdm || '', orgao: a.orgao || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
+    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: Atend.adm(a) ? 'Administrativo / extrajudicial — ' + (a.tipoAdm || '') : AREAS[a.area]?.nome || '', esfera: Atend.adm(a) ? 'administrativo' : 'judicial', tipoDemanda: a.tipoAdm || '', orgao: Atend.orgaosTxt(a) || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
   },
   async organizar(a, c) {
     const b = $('#rlIA'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está organizando os fatos…`;
@@ -4881,48 +4893,64 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
 
   /* ---------- 5b. requerimento administrativo / extrajudicial ---------- */
   tRequerimento(host, a, c) {
-    const an = a.analise || {}, o = a.opcoesInicial || {};
-    host.innerHTML = `<section class="card"><header><h2>${icon('settings')} Dados para o requerimento</h2></header>
+    const an = a.analise || {}, orgs = Atend.orgaos(a), reqs = Atend.reqs(a), dems = Atend.demandas(a);
+    if (!orgs.length) { host.innerHTML = `<div class="notice">${icon('alert')}<div>Informe primeiro, em <a href="#/atendimento/${a.id}/caso">Cliente e caso</a>, o órgão ou cartório (ou os órgãos) onde o caso vai tramitar.</div></div>`; return; }
+    Atend._ro = Atend._ro || {}; let i = Math.min(Atend._ro[a.id] || 0, orgs.length - 1);
+    const org = orgs[i], R = reqs[org] || {}, o = R.opcoes || {};
+    const demDe = x => dems.find(d => (d.orgao || '').trim() === x);
+    const faltam = orgs.filter(x => !demDe(x));
+    const linha = x => { const R2 = reqs[x] || {}, d = demDe(x);
+      return `<tr><td><b>${esc(x)}</b></td><td>${R2.html ? (R2.pronto ? `<span class="pill good">pronto</span>` : `<span class="pill info">redigido</span>`) : '<span class="pill neutral">não redigido</span>'}</td>
+        <td>${d ? `<a href="#/demanda/${d.id}">${Adm.st(d)}</a>` : '<span class="muted small">—</span>'}</td>
+        <td>${d ? (d.numero ? `<span class="mono">${esc(d.numero)}</span>${d.dataProtocolo ? ' <span class="muted small">em ' + esc(fmtDate(d.dataProtocolo)) + '</span>' : ''}` : `<span class="pill serious">protocolo pendente</span>`) : '<span class="muted small">—</span>'}</td></tr>`; };
+    host.innerHTML = `<section class="card"><header><h2>${icon('stamp')} Acompanhamento nos órgãos</h2><a class="link small" href="#/atendimento/${a.id}/caso">editar órgãos</a></header>
+      <div class="table-wrap"><table class="mini"><thead><tr><th>Órgão / cartório</th><th>Requerimento</th><th>Demanda</th><th>Protocolo</th></tr></thead><tbody>${orgs.map(linha).join('')}</tbody></table></div>
+      ${faltam.length ? `<div class="notice soft">${icon('check')}<div><b>Concluir o atendimento.</b> Abre ${faltam.length > 1 ? `uma demanda para cada órgão (${faltam.length})` : 'a demanda'} já com cliente, tipo, interessados e documentos vinculados. O número do protocolo fica <b>pendente</b> e é informado em cada demanda depois que a documentação der entrada no órgão; a pendência não impede nenhuma outra ação no sistema.</div></div>
+        <div class="btn-row right"><button class="btn primary" id="rqConc">${icon('check')} Concluir e abrir ${faltam.length > 1 ? 'as demandas' : 'a demanda'}</button></div>`
+      : `<p class="muted small">${icon('check')} Atendimento concluído: cada órgão tem a sua demanda. Informe o protocolo e lance andamentos e exigências na tela de cada demanda.</p>`}</section>
+    ${orgs.length > 1 ? `<div class="seg-tabs">${orgs.map((x, k) => `<button class="${k === i ? 'on' : ''}" data-ro="${k}">${esc(x)}${(reqs[x] || {}).html ? ' ✓' : ''}</button>`).join('')}</div>` : ''}
+    <section class="card"><header><h2>${icon('settings')} Requerimento${orgs.length > 1 ? ' — ' + esc(org) : ''}</h2></header>
       ${!a.analise ? `<div class="notice">${icon('alert')}<div>Ainda não há fatos organizados. A IA pode redigir só com o relato, mas fica melhor se você passar antes por <a href="#/atendimento/${a.id}/fatos">Relato e documentos › Organizar os fatos</a>.</div></div>` : ''}
       <form class="grid-form" id="if">
-        <div class="fld full"><label>Endereçamento (autoridade, órgão ou cartório)</label><input name="juizo" value="${esc(o.juizo || '')}" placeholder="Ex.: Ilmo(a). Sr(a). Oficial do Cartório de Registro de Imóveis da Zona Sul de João Pessoa/PB"></div>
+        <div class="fld full"><label>Endereçamento (autoridade, órgão ou cartório)</label><input name="juizo" value="${esc(o.juizo || '')}" placeholder="Ex.: Ilmo(a). Sr(a). ${/cart|regist|of[ií]cio|notas/i.test(org) ? 'Oficial do ' + org : 'Secretário(a) / responsável — ' + org}"></div>
         ${an.competencia ? `<p class="muted small full" style="grid-column:1/-1;margin:-4px 0 0">Sugestão da IA: ${esc(an.competencia)}</p>` : ''}
         <div class="fld full"><label>Título do requerimento</label><input name="acao" value="${esc(o.acao || an.acaoSugerida || a.tipoAdm || a.assunto || '')}"></div>
         <div class="fld"><label>Valor do bem ou do negócio (R$, se houver)</label><input name="valorCausa" inputmode="decimal" value="${esc(o.valorCausa || (an.valorCausaSugerido ? NUM.format(an.valorCausaSugerido) : ''))}"></div>
         <div class="fld"><label>Cidade</label><input name="cidade" value="${esc(o.cidade || a.honorarios?.cidade || 'João Pessoa')}"></div>
         <div class="fld check full"><label class="switch"><input type="checkbox" name="gratuidade" ${(o.gratuidade ?? an.justicaGratuita) ? 'checked' : ''}><span></span>Requerer gratuidade ou isenção de emolumentos/taxas</label></div>
         <div class="fld full"><label>Prioridade (se houver)</label><input name="prioridade" value="${esc(o.prioridade || '')}" placeholder="Ex.: pessoa idosa (art. 71 da Lei nº 10.741/2003)"></div>
-        <div class="fld full"><label>Instruções para a IA</label><textarea name="instrucoes" rows="3" placeholder="Ex.: incluir a nomeação da inventariante; listar os bens com as matrículas; pedir a averbação na matrícula…">${esc(o.instrucoes || '')}</textarea></div>
+        <div class="fld full"><label>Instruções para a IA</label><textarea name="instrucoes" rows="3" placeholder="Ex.: ${/regist|im[oó]ve/i.test(org) ? 'pedir a averbação da construção na matrícula nº …' : 'pedir a atualização do cadastro imobiliário e do IPTU, com a nova área construída…'}">${esc(o.instrucoes || '')}</textarea></div>
       </form>
-      <div class="btn-row right"><button class="btn ${a.inicialHtml ? 'ghost' : 'primary'}" id="iGer">${icon('sparkle')} ${a.inicialHtml ? 'Redigir de novo (substitui o texto)' : 'Redigir o requerimento com a IA'}</button></div></section>
-      <div id="inEd"></div>
-      ${!a.demandaId ? `<section class="card"><header><h2>${icon('stamp')} Depois do protocolo</h2></header><p class="muted small">Protocolou no órgão ou cartório? Informe o número e o app cria a demanda administrativa (cliente, tipo, órgão e documentos vinculados) para acompanhar andamentos, exigências e prazos.</p>
-        <div class="btn-row"><input class="input" id="iProt" placeholder="Nº do protocolo" style="max-width:220px"><input class="input" id="iData" type="date" value="${todayISO()}" style="max-width:170px"><button class="btn primary" id="iPr">${icon('check')} Registrar protocolo</button></div></section>` : ''}`;
+      <div class="btn-row right"><button class="btn ${R.html ? 'ghost' : 'primary'}" id="iGer">${icon('sparkle')} ${R.html ? 'Redigir de novo (substitui o texto)' : 'Redigir o requerimento com a IA'}</button></div></section>
+      <div id="inEd"></div>`;
+    $$('[data-ro]', host).forEach(b => b.onclick = () => { Atend._ro[a.id] = +b.dataset.ro; App.render(true); });
     const f = $('#if');
     const ler = () => ({ juizo: f.juizo.value.trim(), acao: f.acao.value.trim(), valorCausa: f.valorCausa.value.trim(), cidade: f.cidade.value.trim(), gratuidade: f.gratuidade.checked, prioridade: f.prioridade.value.trim(), instrucoes: f.instrucoes.value.trim() });
+    const gravar = async (campos, msg) => { const r = Atend.reqs(a); r[org] = { ...(r[org] || {}), ...campos }; const pr = orgs.every(x => r[x]?.pronto);
+      await Atend.salvar(a, { reqs: r, status: /Concluído|Protocolado|Não prosseguiu/.test(a.status || '') ? a.status : pr ? 'Requerimento pronto' : 'Requerimento em elaboração' }, msg); };
     $('#iGer').onclick = async () => {
-      if (a.inicialHtml && !await UI.confirm('Redigir de novo substitui o texto do requerimento, inclusive o que foi editado. Continuar?', 'Redigir de novo', false)) return;
+      if (R.html && !await UI.confirm('Redigir de novo substitui o texto deste requerimento, inclusive o que foi editado. Continuar?', 'Redigir de novo', false)) return;
       const b = $('#iGer'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está redigindo o requerimento… (pode levar 1 ou 2 minutos)`;
-      const op = { ...ler(), data: new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) };
+      const op = ler(), outros = orgs.filter(x => x !== org);
+      const opIA = { ...op, data: new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }), instrucoes: [op.instrucoes, outros.length ? `Este requerimento é dirigido somente a ${org}. O caso tramita em paralelo perante ${outros.join(' e ')}, em requerimento próprio: peça apenas o que compete a ${org} e, se for útil, mencione o procedimento paralelo.` : ''].filter(Boolean).join(' ') };
       try {
-        const r = await apiT('redigir', { tipo: 'requerimento', dados: { ...Atend.dadosIA(a, c), fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: op } }, 300000);
+        const r = await apiT('redigir', { tipo: 'requerimento', dados: { ...Atend.dadosIA(a, c), orgao: org, fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: opIA } }, 300000);
         const html = Editor.limpar(r.html || '');
         if (!html) throw new Error('a IA devolveu texto vazio');
-        await Atend.salvar(a, { opcoesInicial: ler(), inicialHtml: html, status: /Protocolado/.test(a.status) ? a.status : 'Requerimento em elaboração' }, 'Requerimento redigido. Revise com atenção: trechos [COMPLETAR] estão destacados.');
+        await gravar({ html, opcoes: op, pronto: false }, 'Requerimento redigido. Revise com atenção: trechos [COMPLETAR] estão destacados.');
         App.render(true);
       } catch (e) { UI.toast('IA: ' + e.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Redigir o requerimento com a IA`; }
     };
-    if (a.inicialHtml) Editor.montar($('#inEd'), { html: a.inicialHtml, titulo: 'Requerimento', salvar: html => Atend.salvar(a, { inicialHtml: html }), peticao: true,
-      extra: `<button class="btn ghost sm" id="inPronta">${icon('check')} Marcar como pronto</button>`,
-      imprimir: html => Timbre.imprimir(html, 'Requerimento — ' + (c?.nome || ''), { peticao: true }) });
-    $('#inPronta')?.addEventListener('click', async () => { await Atend.salvar(a, { status: 'Requerimento pronto' }, 'Requerimento marcado como pronto.'); App.render(true); });
-    $('#iPr')?.addEventListener('click', async () => {
-      const n = $('#iProt').value.trim(), dt = $('#iData').value || todayISO();
-      if (!n && !await UI.confirm('Registrar o protocolo sem número? Você pode informá-lo depois em “Editar”.', 'Registrar', false)) return;
-      const [d] = await DB.save('demandas', { tipo: a.tipoAdm || 'Outra demanda extrajudicial', clienteIds: a.clienteId ? [a.clienteId] : [], orgao: a.orgao || '', numero: n, dataProtocolo: dt, interessados: a.parteContraria || (an.partesContrarias || []).map(x => x.nome).join('; '), status: 'Protocolado', responsavel: escritorio().advogado || '', arquivos: (a.documentos || []).filter(x => x.link).map(x => ({ nome: x.nome, link: x.link, tipo: x.tipo || '', data: x.data })), obs: 'Originada do atendimento de ' + fmtDate(String(a.criadoEm || a.createdAt || todayISO()).slice(0, 10)) + (a.assunto ? ' — ' + a.assunto : '') + '.' });
-      await DB.save('movimentos', { demandaId: d.id, data: dt, titulo: 'Requerimento protocolado' + (n ? ' sob o nº ' + n : ''), descricao: a.opcoesInicial?.acao || '', origem: 'escritorio', visivelCliente: true });
-      await Atend.salvar(a, { demandaId: d.id, status: 'Protocolado' }, 'Protocolo registrado: a demanda foi criada e passa a ser acompanhada.');
-      location.hash = '#/demanda/' + d.id;
+    if (R.html) Editor.montar($('#inEd'), { html: R.html, titulo: 'Requerimento' + (orgs.length > 1 ? ' — ' + org : ''), salvar: html => gravar({ html }), peticao: true,
+      extra: `<button class="btn ghost sm" id="inPronta">${icon('check')} ${R.pronto ? 'Pronto' : 'Marcar como pronto'}</button>`,
+      imprimir: html => Timbre.imprimir(html, 'Requerimento — ' + org + ' — ' + (c?.nome || ''), { peticao: true }) });
+    $('#inPronta')?.addEventListener('click', async () => { await gravar({ pronto: true }, 'Requerimento marcado como pronto.'); App.render(true); });
+    $('#rqConc')?.addEventListener('click', async () => {
+      const base = { tipo: a.tipoAdm || 'Outra demanda extrajudicial', clienteIds: a.clienteId ? [a.clienteId] : [], atendimentoId: a.id, interessados: a.parteContraria || (an.partesContrarias || []).map(x => x.nome).join('; '), status: 'Aguardando protocolo', responsavel: escritorio().advogado || '', honorarios: '', arquivos: (a.documentos || []).filter(x => x.link).map(x => ({ nome: x.nome, link: x.link, tipo: x.tipo || '', data: x.data })), obs: 'Originada do atendimento de ' + fmtDate(String(a.criadoEm || a.createdAt || todayISO()).slice(0, 10)) + (a.assunto ? ' — ' + a.assunto : '') + '.' };
+      const novas = await DB.save('demandas', faltam.map(x => ({ ...base, orgao: x })));
+      await DB.save('movimentos', novas.map(d => ({ demandaId: d.id, data: todayISO(), titulo: 'Documentação em preparação para protocolo', descricao: 'Requerimento e documentos sendo reunidos pelo escritório para dar entrada em ' + d.orgao + '.', origem: 'escritorio', visivelCliente: true })));
+      await Atend.salvar(a, { demandaIds: [...new Set([...(a.demandaIds || []), ...(a.demandaId ? [a.demandaId] : []), ...novas.map(d => d.id)])], status: 'Concluído' }, novas.length > 1 ? `${novas.length} demandas abertas. Informe o protocolo de cada uma quando der entrada.` : 'Demanda aberta. Informe o protocolo quando der entrada.');
+      App.render(true);
     });
   },
 
@@ -6185,7 +6213,7 @@ const Adm = {
     const g = {}; ADM_TIPOS.forEach(([t, o]) => (g[o] = g[o] || []).push(t));
     return `<option value="">— escolha —</option>` + Object.entries(g).map(([o, ts]) => `<optgroup label="${esc(o)}">${ts.map(t => `<option ${t === sel ? 'selected' : ''}>${esc(t)}</option>`).join('')}</optgroup>`).join('');
   },
-  tom: s => /Deferido|Concluído/.test(s || '') ? 'good' : /Indeferido/.test(s || '') ? 'critical' : /exigência|recurso/i.test(s || '') ? 'serious' : /Arquivado/.test(s || '') ? 'neutral' : 'info',
+  tom: s => /Deferido|Concluído/.test(s || '') ? 'good' : /Indeferido/.test(s || '') ? 'critical' : /exigência|recurso/i.test(s || '') ? 'serious' : /Aguardando/.test(s || '') ? 'warn' : /Arquivado/.test(s || '') ? 'neutral' : 'info',
   st: d => `<span class="pill ${Adm.tom(d.status)}">${esc(d.status || 'Em preparação')}</span>`,
   abertas: () => DB.where('demandas', admAberta),
   /** prazos/exigências em aberto das demandas */
@@ -6216,6 +6244,7 @@ const Adm = {
       ${kpi('Demandas em andamento', ab.length, [...new Set(ab.map(d => ADM_GRUPO(d.tipo)))].map(g => `${g} ${ab.filter(d => ADM_GRUPO(d.tipo) === g).length}`).join(' · ') || 'nenhuma', '', '#/administrativo')}
       ${kpi('Com exigência', exig.length, exig.length ? 'cumprir para não perder o protocolo' : 'nenhuma pendente', exig.length ? 'warn' : '', '#/administrativo')}
       ${kpi('Prazos em 7 dias', p7.length, atr.length ? `<b class="t-bad">${atr.length} em atraso</b>` : 'nenhum em atraso', atr.length ? 'bad' : '', '#/agenda')}
+      ${(n => kpi('Aguardando protocolo', n, n ? 'informar o nº após dar entrada' : 'nenhuma pendente', n ? 'warn' : '', '#/administrativo'))(ab.filter(d => !d.numero).length)}
       ${kpi('Concluídas / deferidas', DB.where('demandas', d => /Deferido|Concluído/.test(d.status || '')).length, 'desde o início')}
     </div>`;
   },
@@ -6236,7 +6265,9 @@ const Adm = {
     const movs = DB.where('movimentos', m => m.demandaId === id).sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(b.createdAt).localeCompare(String(a.createdAt)));
     const prazos = DB.where('prazos', x => x.demandaId === id).sort((a, b) => String(a.data).localeCompare(String(b.data)));
     const clientes = (d.clienteIds || []).map(c => DB.get('clientes', c)).filter(Boolean);
-    const at = DB.all('atendimentos').find(a => a.demandaId === id);
+    const at = DB.get('atendimentos', d.atendimentoId) || DB.all('atendimentos').find(a => a.demandaId === id || (a.demandaIds || []).includes(id));
+    const rel = at ? Atend.demandas(at).filter(x => x.id !== id) : [];
+    const pend = !d.numero && !/Deferido|Indeferido|Concluído|Arquivado/.test(d.status || '');
     v.innerHTML = `
     <div class="proc-h"><div>
         <div class="proc-tags">${pill(ADM_GRUPO(d.tipo))} ${Adm.st(d)} ${at ? `<a class="tag" href="#/atendimento/${at.id}">${icon('link')} atendimento</a>` : ''}</div>
@@ -6248,6 +6279,9 @@ const Adm = {
         <button class="btn ghost" id="dEdit">${icon('edit')} Editar</button>
         <button class="btn ghost" id="dPrev">${icon('eye')} Ver como o cliente</button>
       </div></div>
+    ${pend ? `<section class="card prot-pend"><header><h2>${icon('clock')} Protocolo pendente</h2></header>
+      <p class="muted small">Quando a documentação der entrada em ${esc(d.orgao || 'o órgão')}, informe o número e a data. Enquanto isso, a demanda segue normalmente: dá para lançar andamentos, prazos e exigências.</p>
+      <div class="btn-row"><input class="input" id="dProt" placeholder="Nº do protocolo" style="max-width:240px"><input class="input" id="dProtD" type="date" value="${todayISO()}" style="max-width:170px"><button class="btn primary" id="dProtOk">${icon('check')} Registrar protocolo</button></div></section>` : ''}
     <section class="card dados-card"><header><h2>${icon('file')} Dados da demanda</h2></header>
       <dl class="dl cols">
         <dt>Cliente(s)</dt><dd>${clientes.map(c => `<a href="#/clientes?c=${c.id}">${esc(c.nome)}</a>`).join(', ') || '—'}</dd>
@@ -6267,6 +6301,7 @@ const Adm = {
       <div class="col">
         <section class="card"><header><h2>${icon('calendar')} Prazos e exigências</h2><button class="btn ghost sm" id="aAdd">${icon('plus')} Novo</button></header>
           ${prazos.length ? `<ul class="agenda-list compact">${prazos.map(Views.agendaItem).join('')}</ul>` : '<p class="muted small">Nenhum prazo ou exigência. Lance aqui o prazo para cumprir nota devolutiva, recorrer ou retirar o documento.</p>'}</section>
+        ${rel.length ? `<section class="card"><header><h2>${icon('link')} Procedimentos relacionados</h2></header><p class="muted small">Mesmo caso, em outros órgãos.</p><ul class="plain">${rel.map(x => `<li><a href="#/demanda/${x.id}">${icon('stamp')} ${esc(x.orgao || x.tipo || 'Demanda')}</a> ${Adm.st(x)}${x.numero ? ` <span class="muted small mono">${esc(x.numero)}</span>` : ' <span class="muted small">protocolo pendente</span>'}</li>`).join('')}</ul></section>` : ''}
         <section class="card"><header><h2>${icon('file')} Documentos</h2></header>
           ${(d.arquivos || []).length ? `<ul class="plain files">${d.arquivos.map(a => `<li>${icon('file')} ${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>` : esc(a.nome)}</li>`).join('')}</ul>` : `<p class="muted small">${at ? `Os documentos do cliente estão no <a href="#/atendimento/${at.id}/fatos">atendimento</a>.` : 'Os documentos ficam no atendimento que originou a demanda.'}</p>`}</section>
       </div>
@@ -6277,6 +6312,12 @@ const Adm = {
       UI.toast('Situação atualizada e registrada nos andamentos.'); App.render(true);
     };
     $('#dEdit').onclick = () => Adm.edit(d);
+    $('#dProtOk')?.addEventListener('click', async () => {
+      const n = $('#dProt').value.trim(), dt = $('#dProtD').value || todayISO(); if (!n) return UI.toast('Informe o número do protocolo.', 'bad');
+      await DB.save('demandas', { ...d, numero: n, dataProtocolo: dt, status: /Em preparação|Aguardando protocolo/.test(d.status || '') || !d.status ? 'Protocolado' : d.status });
+      await DB.save('movimentos', { demandaId: d.id, data: dt, titulo: 'Requerimento protocolado sob o nº ' + n, descricao: d.orgao || '', origem: 'escritorio', visivelCliente: true });
+      UI.toast('Protocolo registrado.'); App.render(true);
+    });
     $('#dPrev').onclick = () => { if (!clientes.length) return UI.toast('Vincule um cliente à demanda.', 'warn'); Portal.preview(clientes[0].id, d.id); };
     $('#mAdd').onclick = () => Adm.editMov(null, d);
     $('#aAdd').onclick = () => Adm.editPrazo(null, d.id);
@@ -6291,7 +6332,7 @@ const Adm = {
   painelHtml() {
     const ab = Adm.abertas(), pz = Adm.prazos();
     const movs = DB.where('movimentos', m => m.demandaId).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
-    const ats = DB.where('atendimentos', a => a.esfera === 'administrativo' && !/Protocolado|Não prosseguiu/.test(a.status || ''));
+    const ats = DB.where('atendimentos', a => a.esfera === 'administrativo' && !/Protocolado|Concluído|Não prosseguiu/.test(a.status || ''));
     const grupos = [...new Set(ADM_TIPOS.map(t => t[1]))].map(g => ({ label: g, value: ab.filter(d => ADM_GRUPO(d.tipo) === g).length, color: 'var(--s2)' })).filter(x => x.value);
     return `
     <div class="pn-sec adm"><h2>${icon('stamp')} Administrativo</h2></div>
