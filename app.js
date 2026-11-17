@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.24.0';
+const APP_VERSAO = '1.25.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.25.0', data: '17/11/2026', itens: ['Contencioso: a visão geral passa a ter o card “Contencioso”, com as seções Judicial (como antes) e Administrativo.', 'Nova seção Administrativo: demandas extrajudiciais e administrativas (cartórios de notas, registro civil, registro de imóveis, prefeitura, INSS, Detran, fisco e órgãos públicos), com órgão, protocolo, situação, andamentos, prazos e exigências.', 'Atendimentos: ao abrir, escolha se o trabalho será judicial ou administrativo. O administrativo segue as mesmas etapas (cliente e caso, contrato, procuração, relato e documentos), terminando no requerimento redigido pela IA e no registro do protocolo, que cria a demanda.', 'Área do cliente: o cliente acompanha também as demandas administrativas.', 'Menu: Cadastros › Clientes passa para logo após a Visão geral.'] },
   { numero: '1.24.0', data: '17/11/2026', itens: ['Atendimentos: nova etapa “Procuração”, entre o contrato e o relato. Tipos ad judicia, ad extra (ad negotia) e ad judicia et extra, com ou sem poderes especiais — os do art. 105 do CPC e os do art. 661, § 1º, do Código Civil já vêm listados para marcar —, outorgados, finalidade e substabelecimento. O texto abre no editor para ajustes e sai impresso no papel timbrado.'] },
   { numero: '1.23.3', data: '16/11/2026', itens: ['Link direto da área do cliente: o endereço do app terminado em “?cliente” (usado no QR code da placa do escritório) abre já na tela de acesso do cliente.'] },
   { numero: '1.23.2', data: '13/11/2026', itens: ['Auditoria reorganizada em cartões: locais de acesso (escritório e cada empresa) → usuários → movimentações, com caminho para voltar e filtro de acessos/alterações.'] },
@@ -257,7 +258,7 @@ const Session = {
 };
 
 /* ---------- Banco de dados local + sincronização ---------- */
-const COLLS = ['clientes', 'processos', 'movimentos', 'prazos', 'empresas', 'contratos', 'obrigacoes', 'maoDeObra', 'materiais', 'financeiro', 'medicoes', 'indicadores', 'achados', 'documentos', 'aditivos', 'config', 'atendimentos', 'supervenientes', 'remessas'];
+const COLLS = ['clientes', 'processos', 'movimentos', 'prazos', 'empresas', 'contratos', 'obrigacoes', 'maoDeObra', 'materiais', 'financeiro', 'medicoes', 'indicadores', 'achados', 'documentos', 'aditivos', 'config', 'atendimentos', 'supervenientes', 'remessas', 'demandas'];
 const DB = {
   data: {}, outbox: [], syncing: false, lastSync: null,
   key() { return 'db:' + (Session.mode || 'x') + ':' + (Session.user?.email || 'local'); },
@@ -329,6 +330,21 @@ window.addEventListener('online', () => DB.flush());
 const F = (k, label, type = 'text', o = {}) => ({ k, label, type, ...o });
 const SIM_NAO = ['Sim', 'Não', 'Parcial', 'Não verificado', 'Não aplicável'];
 const RISCOS = ['Baixo', 'Médio', 'Alto', 'Crítico'];
+/* tipos de demanda administrativa/extrajudicial: [nome, órgão onde tramita] */
+const ADM_TIPOS = [
+  ['Inventário e partilha extrajudicial', 'Cartório de notas'], ['Divórcio ou separação extrajudicial', 'Cartório de notas'], ['Escritura pública (compra e venda, doação, união estável)', 'Cartório de notas'], ['Ata notarial', 'Cartório de notas'],
+  ['Retificação de registro civil', 'Registro civil'], ['Alteração de nome ou sobrenome', 'Registro civil'], ['Alteração de prenome e gênero', 'Registro civil'], ['Reconhecimento de paternidade / filiação socioafetiva', 'Registro civil'], ['Registro tardio / segunda via de certidões', 'Registro civil'],
+  ['Usucapião extrajudicial', 'Registro de imóveis'], ['Registro de escritura ou formal de partilha', 'Registro de imóveis'], ['Retificação de área ou de matrícula', 'Registro de imóveis'], ['Averbação de construção ou demolição', 'Registro de imóveis'], ['Adjudicação compulsória extrajudicial', 'Registro de imóveis'], ['Regularização fundiária (Reurb)', 'Registro de imóveis'],
+  ['Atualização cadastral de imóvel (IPTU)', 'Prefeitura'], ['Revisão ou impugnação de IPTU / ITBI', 'Prefeitura'], ['Alvará, licença ou habite-se', 'Prefeitura'],
+  ['Requerimento de benefício previdenciário', 'INSS / previdência'], ['Recurso administrativo previdenciário (CRPS)', 'INSS / previdência'],
+  ['Defesa de autuação ou recurso de multa', 'Trânsito (Detran / Jari)'], ['Processo de habilitação ou de suspensão da CNH', 'Trânsito (Detran / Jari)'],
+  ['Defesa em auto de infração ou lançamento fiscal', 'Fisco (Receita / Sefaz)'], ['Restituição, compensação ou parcelamento de tributo', 'Fisco (Receita / Sefaz)'],
+  ['Processo administrativo disciplinar (defesa)', 'Administração pública'], ['Requerimento a órgão público', 'Administração pública'], ['Recurso administrativo', 'Administração pública'],
+  ['Notificação extrajudicial', 'Outros'], ['Outra demanda extrajudicial', 'Outros']
+];
+const ADM_GRUPO = t => (ADM_TIPOS.find(x => x[0] === t) || [, 'Outros'])[1];
+const ADM_STATUS = ['Em preparação', 'Protocolado', 'Em análise', 'Com exigência', 'Em recurso', 'Deferido', 'Indeferido', 'Concluído', 'Arquivado'];
+const admAberta = d => !/Conclu|Arquiv|Indeferido/.test(d.status || '');
 const AREAS = {
   civil: { nome: 'Cível', icon: 'scale' },
   penal: { nome: 'Penal', icon: 'gavel' },
@@ -379,6 +395,23 @@ const SCHEMAS = {
       F('obs', 'Anotações internas (não visíveis ao cliente)', 'long')
     ]
   },
+  /* ---------------- Contencioso administrativo (demandas extrajudiciais) ---------------- */
+  demandas: {
+    titulo: 'Demandas administrativas', singular: 'demanda administrativa', fields: [
+      F('tipo', 'Tipo de demanda', 'select', { opts: ADM_TIPOS.map(t => t[0]), req: 1, list: 1 }),
+      F('clienteIds', 'Cliente(s)', 'clientes', { w: 'full', req: 1 }),
+      F('orgao', 'Órgão / cartório / repartição', 'text', { list: 1, hint: 'Ex.: 2º Ofício de Notas de João Pessoa · Cartório de Registro de Imóveis da Zona Sul · Secretaria da Receita Municipal (SEREM)' }),
+      F('numero', 'Nº do protocolo / procedimento', 'text', { list: 1 }),
+      F('dataProtocolo', 'Data do protocolo', 'date'),
+      F('interessados', 'Outros interessados / parte contrária', 'text', { w: 'full' }),
+      F('status', 'Situação', 'select', { opts: ADM_STATUS, list: 1 }),
+      F('custas', 'Emolumentos, taxas e custas (R$)', 'money'),
+      F('responsavel', 'Advogado responsável', 'text'),
+      F('honorarios', 'Honorários contratados', 'text'),
+      F('notificarCliente', 'Avisar o cliente por e-mail a cada novo andamento', 'bool', { w: 'full' }),
+      F('obs', 'Anotações internas (não visíveis ao cliente)', 'long')
+    ]
+  },
   movimentos: {
     titulo: 'Movimentações', singular: 'movimentação', fields: [
       F('data', 'Data', 'date', { req: 1 }),
@@ -390,7 +423,7 @@ const SCHEMAS = {
   },
   prazos: {
     titulo: 'Agenda e prazos', singular: 'compromisso', fields: [
-      F('tipo', 'Tipo', 'select', { opts: ['Prazo', 'Audiência', 'Perícia', 'Reunião', 'Diligência', 'Julgamento', 'Outro'], req: 1 }),
+      F('tipo', 'Tipo', 'select', { opts: ['Prazo', 'Audiência', 'Perícia', 'Reunião', 'Diligência', 'Julgamento', 'Exigência', 'Outro'], req: 1 }),
       F('data', 'Data', 'date', { req: 1 }),
       F('hora', 'Hora', 'time'),
       F('descricao', 'Descrição', 'text', { req: 1, w: 'full' }),
@@ -970,6 +1003,7 @@ const ICONS = {
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
   scale: '<path d="M12 3v18"/><path d="M5 21h14"/><path d="M3 7h18"/><path d="m6 7-3 7a3 3 0 0 0 6 0Z"/><path d="m18 7-3 7a3 3 0 0 0 6 0Z"/>',
   gavel: '<path d="m14 13-7.5 7.5a2.1 2.1 0 0 1-3-3L11 10"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/><path d="m21 11-8-8"/>',
+  stamp: '<path d="M5 21h14"/><path d="M5 17h14v-2a2 2 0 0 0-2-2h-3l-.6-3.2A3.5 3.5 0 1 0 9.6 9.8L9 13H7a2 2 0 0 0-2 2Z"/>',
   landmark: '<path d="M3 21h18"/><path d="M5 21V10M9 21V10M15 21V10M19 21V10"/><path d="M12 3 3 8h18Z"/>',
   shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6Z"/><path d="m9 12 2 2 4-4"/>',
   briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>',
@@ -1452,29 +1486,33 @@ const App = {
     const item = (href, ic, label, badge = '') => `<a href="#${href}" class="${route === href || (href !== '/painel' && route.startsWith(href)) ? 'on' : ''}">${icon(ic)}<span>${label}</span>${badge !== '' ? `<em>${badge}</em>` : ''}</a>`;
     $('#nav').innerHTML = `
       ${item('/painel', 'home', 'Visão geral')}
-      <div class="nav-h">Judicial</div>
+      <div class="nav-h">Cadastros</div>
+      ${item('/clientes', 'users', 'Clientes', DB.all('clientes').length || '')}
+      <div class="nav-h">Contencioso · Judicial</div>
       ${item('/judicial/todos', 'layers', 'Todos os processos', DB.where('processos', p => p.status !== 'Encerrado').length || '')}
       ${Object.entries(AREAS).map(([k, a]) => item('/judicial/' + k, a.icon, a.nome, cnt(k) || '')).join('')}
-      ${item('/atendimentos', 'briefcase', 'Atendimentos', DB.where('atendimentos', x => !/Ajuizado|Não prosseguiu/.test(x.status || '')).length || '')}
+      ${item('/atendimentos', 'briefcase', 'Atendimentos', DB.where('atendimentos', x => x.esfera !== 'administrativo' && !/Ajuizado|Não prosseguiu/.test(x.status || '')).length || '')}
       ${item('/agenda', 'calendar', 'Agenda e prazos', DB.where('prazos', p => !p.concluido && daysUntil(p.data) !== null && daysUntil(p.data) <= 7).length || '')}
+      <div class="nav-h">Contencioso · Administrativo</div>
+      ${item('/administrativo', 'stamp', 'Demandas', Adm.abertas().length || '')}
+      ${item('/adm-atendimentos', 'briefcase', 'Atendimentos', DB.where('atendimentos', x => x.esfera === 'administrativo' && !/Protocolado|Não prosseguiu/.test(x.status || '')).length || '')}
       <div class="nav-h">Consultoria jurídica</div>
       ${item('/empresas', 'building', 'Empresas', DB.all('empresas').length || '')}
       ${item('/remessas', 'upload', 'Remessas mensais', Remessa.fila().length || '')}
       ${DB.all('achados').length ? item('/achados', 'alert', 'Achados de auditoria', DB.where('achados', x => achadoAberto(x) && /alto|cr[ií]tico/i.test(x.risco || '')).length || '') : ''}
       ${DB.all('empresas').sort((a, b) => (a.fantasia || a.razao).localeCompare(b.fantasia || b.razao)).map(e => `<a href="#/empresa/${e.id}" class="sub ${route.startsWith('/empresa/' + e.id) ? 'on' : ''}"><span>${esc(e.fantasia || e.razao)}</span></a>`).join('')}
-      <div class="nav-h">Cadastros</div>
-      ${item('/clientes', 'users', 'Clientes', DB.all('clientes').length || '')}`;
+`;
     $('#lnkGestao')?.classList.toggle('on', route.startsWith('/gestao'));
   },
   /** páginas de primeiro nível (menu) não têm "Voltar"; as de detalhe têm */
-  TOPO: /^#?\/?(painel|judicial\/[a-z]+|agenda|atendimentos|clientes|empresas|achados|remessas|consulta|gestao(\/[a-z]+)?)?$/,
+  TOPO: /^#?\/?(painel|judicial\/[a-z]+|agenda|atendimentos|administrativo|adm-atendimentos|clientes|empresas|achados|remessas|consulta|gestao(\/[a-z]+)?)?$/,
   voltar(parts) {
     if (App._nav > 0) { App._nav -= 2; history.back(); return; }
     const pai = [...parts].reverse().slice(1).find(p => p.href); location.hash = '#' + (pai ? pai.href : '/painel');
   },
   crumbs(parts) {
     const topo = App.TOPO.test(location.hash), h = location.hash, inicio = !h || /^#\/?(painel)?$/.test(h);
-    const sec = /^#\/(judicial|processo|agenda|atendimentos)/.test(h) ? 'jud' : /^#\/(empresa|achados|contrato|remessas)/.test(h) ? 'con' : '';
+    const sec = /^#\/(administrativo|demanda|adm-atendimentos)/.test(h) || (/^#\/atendimento\//.test(h) && DB.get('atendimentos', h.split('/')[2])?.esfera === 'administrativo') ? 'adm' : /^#\/(judicial|processo|agenda|atendimentos?)/.test(h) ? 'jud' : /^#\/(empresa|achados|contrato|remessas)/.test(h) ? 'con' : '';
     if (sec) try { localStorage.setItem('af-painel-aba', sec); } catch (_) {}
     $('#crumbs').innerHTML = (topo ? (inicio ? '' : `<a class="back-btn" href="#/painel" title="Voltar à visão geral">${icon('chevL')}<span>Visão geral</span></a>`) : `<button class="back-btn" id="btnVoltar" title="Voltar à página anterior">${icon('chevL')}<span>Voltar</span></button>`) + parts.map((p, i) => i < parts.length - 1 && p.href ? `<a href="#${p.href}">${esc(p.t)}</a>` : `<b>${esc(p.t)}</b>`).join(`<span class="sep">/</span>`);
     $('#btnVoltar')?.addEventListener('click', () => App.voltar(parts));
@@ -1492,7 +1530,10 @@ const App = {
       else if (a === 'judicial') Judicial.list(v, b || 'todos');
       else if (a === 'processo') Judicial.detail(v, b);
       else if (a === 'agenda') Views.agenda(v);
-      else if (a === 'atendimentos') Atend.list(v);
+      else if (a === 'atendimentos') Atend.list(v, 'judicial');
+      else if (a === 'adm-atendimentos') Atend.list(v, 'administrativo');
+      else if (a === 'administrativo') Adm.list(v);
+      else if (a === 'demanda') Adm.detail(v, b);
       else if (a === 'atendimento') Atend.detail(v, b, c || 'caso');
       else if (a === 'achados') Achados.view(v);
       else if (a === 'remessas') Remessa.view(v);
@@ -1511,6 +1552,7 @@ const App = {
       const t = norm(q.value); if (t.length < 2) { res.hidden = true; return; }
       const out = [];
       DB.all('processos').forEach(p => { const cl = clienteNomes(p); if (norm(p.numero + ' ' + fmtCNJ(p.numero) + ' ' + p.classe + ' ' + cl + ' ' + p.parteContraria).includes(t)) out.push({ h: '#/processo/' + p.id, i: AREAS[p.area]?.icon || 'scale', t: fmtCNJ(p.numero), s: cl || p.classe }); });
+      DB.all('demandas').forEach(d => { const cl = clienteNomes(d); if (norm(d.tipo + ' ' + d.orgao + ' ' + d.numero + ' ' + cl + ' ' + d.interessados).includes(t)) out.push({ h: '#/demanda/' + d.id, i: 'stamp', t: d.tipo || 'Demanda administrativa', s: [cl, d.orgao].filter(Boolean).join(' · ') }); });
       DB.all('clientes').forEach(c => { if (norm(c.nome + ' ' + c.doc + ' ' + c.email).includes(t)) out.push({ h: '#/clientes?c=' + c.id, i: 'user', t: c.nome, s: fmtDoc(c.doc) }); });
       DB.all('empresas').forEach(e => { if (norm(e.razao + ' ' + e.fantasia + ' ' + e.cnpj).includes(t)) out.push({ h: '#/empresa/' + e.id, i: 'building', t: e.fantasia || e.razao, s: fmtDoc(e.cnpj) }); });
       DB.all('contratos').forEach(c => { if (norm(c.codigo + ' ' + c.unidade + ' ' + c.tomador + ' ' + c.numero + ' ' + c.grupo).includes(t)) out.push({ h: `#/empresa/${c.empresaId}/contratos?k=${c.id}`, i: 'file', t: c.codigo + ' · ' + (c.unidade || c.grupo || ''), s: c.tomador }); });
@@ -1558,15 +1600,16 @@ const Views = {
   painel(v) {
     App.crumbs([{ t: 'Visão geral' }]);
     const procs = DB.where('processos', p => p.status !== 'Encerrado');
-    const prazos = DB.where('prazos', p => !p.concluido && isISO(p.data)).sort((a, b) => (a.data + (a.hora || '')).localeCompare(b.data + (b.hora || '')));
+    const prazos = DB.where('prazos', p => !p.demandaId && !p.concluido && isISO(p.data)).sort((a, b) => (a.data + (a.hora || '')).localeCompare(b.data + (b.hora || '')));
     const prox7 = prazos.filter(p => daysUntil(p.data) <= 7);
     const atras = prazos.filter(p => daysUntil(p.data) < 0);
     const venc90 = DB.where('contratos', c => isISO(c.fim) && daysUntil(c.fim) >= 0 && daysUntil(c.fim) <= 90);
     const achAlt = DB.where('achados', a => achadoAberto(a) && /alto|cr[ií]tico/i.test(a.risco || ''));
-    const movs = DB.all('movimentos').sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
+    const movs = DB.where('movimentos', m => !m.demandaId).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
     const esc0 = escritorio();
     const empresas = DB.all('empresas'), djPend = DJEN.pendentes().length;
     let aba = 'jud'; try { aba = localStorage.getItem('af-painel-aba') || 'jud'; } catch (_) {}
+    const admAb = Adm.abertas(), admPz = Adm.prazos().filter(p => daysUntil(p.data) <= 7);
     const jud = `
     <div class="pn-sec jud"><h2>${icon('scale')} Judicial</h2></div>
     <div class="pn-btns"><button class="btn ghost" id="nProc">${icon('plus')} Novo processo</button><button class="btn ghost" id="nProcDocs">${icon('upload')} Processo pelos arquivos</button></div>
@@ -1597,14 +1640,19 @@ const Views = {
     v.innerHTML = `
     <div class="page-h"><div><span class="eyebrow">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span><h1>${esc(tratamento(Session.user.nome))}</h1><p class="muted">Panorama do escritório ${esc(esc0.nome || 'Amorim Firmo')}.</p></div></div>
     <div class="pn-tabs">
-      <button type="button" data-aba="jud" class="jud ${aba === 'jud' ? 'on' : ''}">${icon('scale')}<b>Judicial</b><small>${procs.length} processo(s) · ${prox7.length} compromisso(s) em 7 dias</small></button>
+      <button type="button" data-aba="${aba === 'con' ? 'jud' : aba}" class="jud ${aba !== 'con' ? 'on' : ''}">${icon('gavel')}<b>Contencioso</b><small>${procs.length} processo(s) · ${admAb.length} demanda(s) administrativa(s)</small></button>
       <button type="button" data-aba="con" class="con ${aba === 'con' ? 'on' : ''}">${icon('building')}<b>Consultoria</b><small>${empresas.length} empresa(s) · ${achAlt.length} achado(s) de risco alto</small></button>
     </div>
-    ${aba === 'con' ? con : jud}`;
+    ${aba === 'con' ? '' : `<div class="pn-sub">
+      <button type="button" data-aba="jud" class="${aba === 'jud' ? 'on' : ''}">${icon('scale')}<span><b>Judicial</b><small>${procs.length} processo(s) · ${prox7.length} compromisso(s) em 7 dias</small></span></button>
+      <button type="button" data-aba="adm" class="${aba === 'adm' ? 'on' : ''}">${icon('stamp')}<span><b>Administrativo</b><small>${admAb.length} demanda(s) · ${admPz.length} prazo(s) em 7 dias</small></span></button>
+    </div>`}
+    ${aba === 'con' ? con : aba === 'adm' ? Adm.painelHtml() : jud}`;
     $$('[data-aba]', v).forEach(b => b.onclick = () => { try { localStorage.setItem('af-painel-aba', b.dataset.aba); } catch (_) {} App.render(true); });
     $$('a[href="#/painel?dj=1"]', v).forEach(a => a.onclick = ev => { ev.preventDefault(); DJEN.revisarPendentes(); });
     $$('a[href="#/painel?v90=1"]', v).forEach(a => a.onclick = ev => { ev.preventDefault(); Consult.vencLista(null, venc90, null, 90); });
-    if (aba === 'jud') {
+    if (aba === 'adm') Adm.bindPainel(v);
+    else if (aba === 'jud') {
       DJEN.bindCard(v);
       $('#nProc').onclick = () => Judicial.edit(null, 'civil');
       $('#nProcDocs').onclick = () => JudDocs.open();
@@ -1624,20 +1672,20 @@ const Views = {
     return `<div data-mxw><ul class="alerts">${mxItens(items.map(i => `<li class="${i.k}"><a href="${i.h}">${icon('alert')}<div><b>${esc(i.t)}</b><small>${esc(String(i.s || '').slice(0, 110))}</small></div></a></li>`), 8)}</ul>${mxBtn(items.length, 8, 'alerta(s)')}</div>`;
   },
   agendaItem(p) {
-    const proc = DB.get('processos', p.processoId), d = daysUntil(p.data);
+    const proc = DB.get('processos', p.processoId), dem = !proc && p.demandaId && DB.get('demandas', p.demandaId), d = daysUntil(p.data);
     const when = d === 0 ? 'Hoje' : d === 1 ? 'Amanhã' : d < 0 ? `${-d}d atrás` : `em ${d}d`;
-    return `<li class="${p.concluido ? 'done' : d < 0 ? 'late' : d <= 2 ? 'soon' : ''}"><a href="${proc ? '#/processo/' + proc.id : '#/agenda'}"><div class="ag-date"><b>${fmtDate(p.data).slice(0, 5)}</b><small>${esc(p.hora || '')}</small></div><div class="ag-body"><span class="pill ${p.tipo === 'Prazo' ? 'serious' : p.tipo === 'Audiência' ? 'info' : 'neutral'}">${esc(p.tipo)}</span> <b>${esc(p.descricao)}</b><small>${proc ? esc(fmtCNJ(proc.numero) + ' · ' + clienteNomes(proc)) : ''}</small></div><span class="ag-when">${p.concluido ? 'concluído' : when}</span><button class="icon-btn sm" data-done="${p.id}" title="${p.concluido ? 'Reabrir' : 'Marcar como concluído'}">${icon('check')}</button></a></li>`;
+    return `<li class="${p.concluido ? 'done' : d < 0 ? 'late' : d <= 2 ? 'soon' : ''}"><a href="${proc ? '#/processo/' + proc.id : dem ? '#/demanda/' + dem.id : '#/agenda'}"><div class="ag-date"><b>${fmtDate(p.data).slice(0, 5)}</b><small>${esc(p.hora || '')}</small></div><div class="ag-body"><span class="pill ${p.tipo === 'Prazo' || p.tipo === 'Exigência' ? 'serious' : p.tipo === 'Audiência' ? 'info' : 'neutral'}">${esc(p.tipo)}</span> <b>${esc(p.descricao)}</b><small>${proc ? esc(fmtCNJ(proc.numero) + ' · ' + clienteNomes(proc)) : dem ? esc((dem.tipo || 'Demanda administrativa') + ' · ' + clienteNomes(dem)) : ''}</small></div><span class="ag-when">${p.concluido ? 'concluído' : when}</span><button class="icon-btn sm" data-done="${p.id}" title="${p.concluido ? 'Reabrir' : 'Marcar como concluído'}">${icon('check')}</button></a></li>`;
   },
   async toggleDone(id) { const p = DB.get('prazos', id); if (!p) return; p.concluido = !p.concluido; await DB.save('prazos', p); App.render(true); },
   agenda(v) {
-    App.crumbs([{ t: 'Judicial' }, { t: 'Agenda e prazos' }]);
+    App.crumbs([{ t: 'Contencioso' }, { t: 'Agenda e prazos' }]);
     const st = Views._ag = Views._ag || { show: 'abertos', tipo: '' };
     let list = DB.all('prazos').filter(p => isISO(p.data));
     if (st.show === 'abertos') list = list.filter(p => !p.concluido); else if (st.show === 'concluidos') list = list.filter(p => p.concluido);
     if (st.tipo) list = list.filter(p => p.tipo === st.tipo);
     list.sort((a, b) => (a.data + (a.hora || '')).localeCompare(b.data + (b.hora || '')) * (st.show === 'concluidos' ? -1 : 1));
     const groups = {}; list.forEach(p => { const k = p.data.slice(0, 7); (groups[k] = groups[k] || []).push(p); });
-    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Judicial</span><h1>Agenda e prazos</h1><p class="muted">Prazos processuais, audiências e compromissos de todos os processos.</p></div><div class="actions"><button class="btn primary" id="nAg">${icon('plus')} Novo compromisso</button></div></div>
+    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Contencioso</span><h1>Agenda e prazos</h1><p class="muted">Prazos processuais, audiências, exigências e compromissos dos processos judiciais e das demandas administrativas.</p></div><div class="actions"><button class="btn primary" id="nAg">${icon('plus')} Novo compromisso</button></div></div>
     <div class="seg-tabs">${[['abertos', 'Em aberto'], ['concluidos', 'Concluídos'], ['todos', 'Todos']].map(([k, l]) => `<button class="${st.show === k ? 'on' : ''}" data-show="${k}">${l}</button>`).join('')}<select id="agTipo"><option value="">Todos os tipos</option>${SCHEMAS.prazos.fields[0].opts.map(o => `<option ${st.tipo === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
     ${Object.keys(groups).length ? Object.entries(groups).map(([k, arr]) => `<section class="card"><header><h2>${MESES[+k.slice(5) - 1].replace(/^./, c => c.toUpperCase())} de ${k.slice(0, 4)}</h2><span class="muted small">${arr.length} compromisso(s)</span></header><ul class="agenda-list">${arr.map(Views.agendaItem).join('')}</ul></section>`).join('') : `<div class="empty">${icon('calendar')}<p>Nenhum compromisso ${st.show === 'abertos' ? 'em aberto' : ''}.</p></div>`}`;
     $$('[data-show]', v).forEach(b => b.onclick = () => { st.show = b.dataset.show; App.render(); });
@@ -1658,10 +1706,14 @@ const Views = {
     const c = DB.get('clientes', id); if (!c) return;
     const procs = DB.where('processos', p => (p.clienteIds || []).includes(id));
     const emps = DB.where('empresas', e => e.clienteId === id);
+    const dems = DB.where('demandas', d => (d.clienteIds || []).includes(id));
+    const ats = DB.where('atendimentos', a => a.clienteId === id && !a.processoId && !a.demandaId && !/Não prosseguiu/.test(a.status || ''));
     const m = UI.modal({
       title: c.nome, sub: `${esc(c.tipo || '')} ${c.doc ? '· ' + esc(fmtDoc(c.doc)) : ''}`, wide: true,
       body: `<div class="detail-grid"><div><span class="lbl">E-mail</span>${esc(c.email || '—')}</div><div><span class="lbl">Telefone</span>${esc(c.telefone || '—')}</div><div class="full"><span class="lbl">Endereço</span>${esc(c.endereco || '—')}</div></div>
       <h4 class="sec">Processos (${procs.length})</h4>${procs.length ? `<ul class="plain">${procs.map(p => `<li><a href="#/processo/${p.id}" data-close>${icon(AREAS[p.area]?.icon || 'scale')} <span class="mono">${esc(fmtCNJ(p.numero))}</span> · ${esc(p.classe || AREAS[p.area]?.nome || '')} ${pill(p.status || 'Ativo')}</a></li>`).join('')}</ul>` : '<p class="muted small">Nenhum processo vinculado.</p>'}
+      <h4 class="sec">Demandas administrativas (${dems.length})</h4>${dems.length ? `<ul class="plain">${dems.map(d => `<li><a href="#/demanda/${d.id}" data-close>${icon('stamp')} ${esc(d.tipo || 'Demanda')}${d.orgao ? ' · ' + esc(d.orgao) : ''} ${Adm.st(d)}</a></li>`).join('')}</ul>` : '<p class="muted small">Nenhuma demanda administrativa.</p>'}
+      ${ats.length ? `<h4 class="sec">Atendimentos em andamento</h4><ul class="plain">${ats.map(a => `<li><a href="#/atendimento/${a.id}" data-close>${icon('briefcase')} ${esc(a.assunto || '')} <span class="muted small">· ${a.esfera === 'administrativo' ? 'administrativo' : 'judicial'} · ${esc(a.status || '')}</span></a></li>`).join('')}</ul>` : ''}
       ${emps.length ? `<h4 class="sec">Consultoria</h4><ul class="plain">${emps.map(e => `<li><a href="#/empresa/${e.id}" data-close>${icon('building')} ${esc(e.razao)}</a></li>`).join('')}</ul>` : ''}
       <div class="notice soft">${icon('key')}<div><b>Portal do cliente.</b> ${c.email ? `Ao conceder acesso, ${esc(c.email)} poderá entrar com código enviado por e-mail e ver apenas os próprios processos (somente as movimentações marcadas como visíveis).` : 'Cadastre um e-mail para conceder acesso.'}</div></div>`,
       foot: `<button class="btn ghost" id="cEdit">${icon('edit')} Editar</button><button class="btn ghost" id="cPrev">${icon('eye')} Ver como o cliente</button><button class="btn ghost" id="cAt">${icon('briefcase')} Novo atendimento</button><span class="sp"></span>${c.email ? `<button class="btn primary" id="cAcc">${icon('key')} Conceder acesso ao portal</button>` : ''}`
@@ -3172,23 +3224,30 @@ const Portal = {
     const esc0 = escritorio();
     const procs = DB.where('processos', p => (p.clienteIds || []).includes(clienteId));
     const kx = !preview && Portal.ctx(), emps = DB.where('empresas', e => e.clienteId === clienteId && (!kx?.e || e.id === kx.e.id));
-    const vis = id => DB.where('movimentos', m => m.processoId === id && m.visivelCliente).sort((a, b) => String(b.data).localeCompare(String(a.data)));
-    const ag = DB.where('prazos', x => procs.some(p => p.id === x.processoId) && x.visivelCliente && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data));
+    const dems = DB.where('demandas', d => (d.clienteIds || []).includes(clienteId));
+    const vis = id => DB.where('movimentos', m => (m.processoId || m.demandaId) === id && m.visivelCliente).sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    const ag = DB.where('prazos', x => (procs.some(p => p.id === x.processoId) || dems.some(d => d.id === x.demandaId)) && x.visivelCliente && !x.concluido && isISO(x.data) && daysUntil(x.data) >= 0).sort((a, b) => a.data.localeCompare(b.data));
     const e0 = emps[0], pf = e0 ? Perfis.de(e0, preview) : null;
-    const tabs = [...(procs.length || !emps.length ? [['processos', 'Meus processos'], ['agenda', 'Agenda']] : []), ...(e0 ? Perfis.abas(pf) : []), ['contato', 'Fale com o escritório']];
+    const tabs = [...(procs.length || dems.length || !emps.length ? [['processos', procs.length && dems.length ? 'Processos e procedimentos' : dems.length ? 'Meus procedimentos' : 'Meus processos'], ['agenda', 'Agenda']] : []), ...(e0 ? Perfis.abas(pf) : []), ['contato', 'Fale com o escritório']];
     if (!tabs.some(t => t[0] === st.tab)) { st.tab = tabs[0][0]; st.proc = null; }
     const wa = onlyDigits(esc0.whatsapp);
     let body = '';
-    if (st.tab === 'processos' && st.proc) {
+    if (st.tab === 'processos' && st.proc && DB.get('demandas', st.proc)) {
+      const d = DB.get('demandas', st.proc), ms = vis(d.id);
+      body = `<button class="link" data-back>${icon('chevL')} Voltar</button>
+      <section class="card p-proc"><div class="proc-tags">${pill(ADM_GRUPO(d.tipo))} ${pill(d.status || 'Em preparação')}</div><h2>${esc(d.tipo || 'Procedimento administrativo')}</h2><p class="muted">${esc(d.orgao || '')}${d.numero ? ' · protocolo ' + esc(d.numero) : ''}</p>
+        <dl class="dl cols"><dt>Órgão / cartório</dt><dd>${esc(d.orgao || '—')}</dd><dt>Protocolo</dt><dd>${esc(d.numero || '—')}${d.dataProtocolo ? ' em ' + esc(fmtDate(d.dataProtocolo)) : ''}</dd><dt>Advogado</dt><dd>${esc(d.responsavel || esc0.advogado || '—')}</dd><dt>Situação</dt><dd>${esc(d.status || '—')}</dd></dl></section>
+      <section class="card"><header><h2>Andamento do procedimento</h2></header>${ms.length ? `<ol class="timeline client">${ms.map(m => `<li><span class="tl-dot"></span><time>${esc(fmtDate(m.data))}</time><b class="tl-t">${esc(m.titulo)}</b>${m.explicacao ? `<p class="explain">${esc(m.explicacao)}</p>` : m.descricao ? `<p>${esc(m.descricao)}</p>` : ''}</li>`).join('')}</ol>` : '<p class="muted">Ainda não há andamentos disponíveis.</p>'}</section>`;
+    } else if (st.tab === 'processos' && st.proc) {
       const p = DB.get('processos', st.proc); const ms = vis(p.id);
       body = `<button class="link" data-back>${icon('chevL')} Meus processos</button>
       <section class="card p-proc"><div class="proc-tags">${pill(AREAS[p.area]?.nome || '')} ${pill(p.status || 'Ativo')} ${p.transito ? `<span class="pill tj">Transitado em julgado em ${esc(fmtDate(p.transito))}</span>` : ''}</div><h2 class="mono">${esc(fmtCNJ(p.numero))}</h2><p class="muted">${esc(p.classe || '')}${p.orgao ? ' · ' + esc(p.orgao) : ''}${p.comarca ? ' · ' + esc(p.comarca) : ''}</p>
         <dl class="dl cols"><dt>Parte contrária</dt><dd>${esc(p.parteContraria || '—')}</dd><dt>Fase</dt><dd>${esc(p.fase || '—')}</dd><dt>Advogado</dt><dd>${esc(p.responsavel || esc0.advogado || '—')}</dd><dt>Tribunal</dt><dd>${esc(p.tribunal || '—')}</dd></dl></section>
       <section class="card"><header><h2>Andamento do processo</h2></header>${ms.length ? `<ol class="timeline client">${ms.map(m => `<li><span class="tl-dot"></span><time>${esc(fmtDate(m.data))}</time><b class="tl-t">${esc(m.titulo)}</b>${m.explicacao ? `<p class="explain">${esc(m.explicacao)}</p>` : m.descricao ? `<p>${esc(DJEN.ehDecisao(m.titulo) ? DJEN.dispositivo(m.descricao).texto : m.descricao)}</p>` : ''}</li>`).join('')}</ol>` : '<p class="muted">Ainda não há movimentações disponíveis.</p>'}</section>`;
     } else if (st.tab === 'processos') {
-      body = procs.length ? `<div class="p-cards">${procs.map(p => { const m = vis(p.id)[0]; return `<button class="p-card" data-proc="${p.id}"><div class="p-card-h">${icon(AREAS[p.area]?.icon || 'scale')}<span>${esc(AREAS[p.area]?.nome || '')}</span>${pill(p.status || 'Ativo')}</div><b class="mono">${esc(fmtCNJ(p.numero))}</b><small>${esc(p.classe || '')}</small><div class="p-last">${m ? `<time>${esc(fmtDate(m.data))}</time> ${esc(m.titulo)}` : 'Sem movimentações ainda'}</div><span class="p-more">Ver andamento ${icon('chevR')}</span></button>`; }).join('')}</div>` : `<div class="empty">${icon('scale')}<p>Nenhum processo vinculado ao seu cadastro.</p></div>`;
+      body = procs.length || dems.length ? `<div class="p-cards">${procs.map(p => { const m = vis(p.id)[0]; return `<button class="p-card" data-proc="${p.id}"><div class="p-card-h">${icon(AREAS[p.area]?.icon || 'scale')}<span>${esc(AREAS[p.area]?.nome || '')}</span>${pill(p.status || 'Ativo')}</div><b class="mono">${esc(fmtCNJ(p.numero))}</b><small>${esc(p.classe || '')}</small><div class="p-last">${m ? `<time>${esc(fmtDate(m.data))}</time> ${esc(m.titulo)}` : 'Sem movimentações ainda'}</div><span class="p-more">Ver andamento ${icon('chevR')}</span></button>`; }).join('')}${dems.map(d => { const m = vis(d.id)[0]; return `<button class="p-card" data-proc="${d.id}"><div class="p-card-h">${icon('stamp')}<span>${esc(ADM_GRUPO(d.tipo))}</span>${pill(d.status || 'Em preparação')}</div><b>${esc(d.tipo || 'Procedimento administrativo')}</b><small>${esc(d.orgao || '')}</small><div class="p-last">${m ? `<time>${esc(fmtDate(m.data))}</time> ${esc(m.titulo)}` : 'Sem andamentos ainda'}</div><span class="p-more">Ver andamento ${icon('chevR')}</span></button>`; }).join('')}</div>` : `<div class="empty">${icon('scale')}<p>Nenhum processo vinculado ao seu cadastro.</p></div>`;
     } else if (st.tab === 'agenda') {
-      body = ag.length ? `<section class="card"><ul class="agenda-list">${ag.map(x => { const p = DB.get('processos', x.processoId); return `<li><div class="ag-date"><b>${fmtDate(x.data).slice(0, 5)}</b><small>${esc(x.hora || '')}</small></div><div class="ag-body"><span class="pill info">${esc(x.tipo)}</span> <b>${esc(x.descricao)}</b><small>${esc(x.local || '')} · ${esc(fmtCNJ(p?.numero))}</small></div></li>`; }).join('')}</ul></section>` : `<div class="empty">${icon('calendar')}<p>Nenhum compromisso agendado.</p></div>`;
+      body = ag.length ? `<section class="card"><ul class="agenda-list">${ag.map(x => { const p = DB.get('processos', x.processoId); return `<li><div class="ag-date"><b>${fmtDate(x.data).slice(0, 5)}</b><small>${esc(x.hora || '')}</small></div><div class="ag-body"><span class="pill info">${esc(x.tipo)}</span> <b>${esc(x.descricao)}</b><small>${esc(x.local || '')} · ${esc(p ? fmtCNJ(p.numero) : DB.get('demandas', x.demandaId)?.tipo || '')}</small></div></li>`; }).join('')}</ul></section>` : `<div class="empty">${icon('calendar')}<p>Nenhum compromisso agendado.</p></div>`;
     } else if (st.tab === 'remessa') {
       body = '<div id="pRem"></div>';
     } else if (['contratos', 'plano', 'equipe', 'diretoria'].includes(st.tab)) {
@@ -3206,7 +3265,7 @@ const Portal = {
         ${esc0.endereco ? `<p class="muted small">${esc(esc0.endereco)}</p>` : ''}</section>`;
     }
     root.innerHTML = `<header class="p-top"><button class="p-me" id="pMe" title="Meu menu"><span>${icon('menu')}</span>${Portal.ini(Portal.pessoa(preview, cli).nome || cli.nome)}</button><img src="${BRAND.logoDark}" alt="Amorim Firmo" class="p-logo"><div class="p-brand"><b>${esc(esc0.nome || 'Amorim Firmo')}</b><span class="caption dark">${BRAND.caption}</span></div><span class="sp"></span><button class="btn ghost sm p-home" id="pHome" title="${!preview && Portal.ctxs().length > 1 ? 'Voltar à escolha da empresa' : 'Voltar ao início'}">${icon('home')}<span>Início</span></button></header>
-      <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá${(n => n ? ', ' + esc(n.split(' ')[0]) : '')(Portal.pessoa(preview, cli).nome || (e0 ? '' : cli.nome))}!</h1><p>${e0 ? `${esc(e0.fantasia || e0.razao)} · <b>${esc(Perfis.NOMES[pf])}</b>. ${pf === 'dir' ? 'Visão estratégica da carteira de contratos.' : pf === 'ger' ? 'Contratos, plano de ação, remessa mensal e equipe.' : 'Seus contratos, pendências e a remessa mensal.'}` : 'Acompanhe aqui o andamento dos seus processos. As informações são atualizadas pelo escritório.'}</p></div>
+      <div class="p-hero"><span class="eyebrow">Área do cliente</span><h1>Olá${(n => n ? ', ' + esc(n.split(' ')[0]) : '')(Portal.pessoa(preview, cli).nome || (e0 ? '' : cli.nome))}!</h1><p>${e0 ? `${esc(e0.fantasia || e0.razao)} · <b>${esc(Perfis.NOMES[pf])}</b>. ${pf === 'dir' ? 'Visão estratégica da carteira de contratos.' : pf === 'ger' ? 'Contratos, plano de ação, remessa mensal e equipe.' : 'Seus contratos, pendências e a remessa mensal.'}` : `Acompanhe aqui o andamento dos seus ${procs.length && dems.length ? 'processos e procedimentos' : dems.length ? 'procedimentos' : 'processos'}. As informações são atualizadas pelo escritório.`}</p></div>
       ${!preview && e0 && pf !== Perfis.real(e0) ? `<div class="pf-band">${icon('users')} Você está atuando como <b>${esc(Perfis.NOMES[pf])}</b> (seu perfil: ${esc(Perfis.NOMES[Perfis.real(e0)])}). <button class="link small" id="pfVolta">Voltar ao meu perfil</button></div>` : ''}
       <nav class="p-tabs">${tabs.map(([k, l]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
       <main class="p-main">${body}</main>
@@ -4495,43 +4554,63 @@ const DJEN = {
    ===================================================================== */
 const Atend = {
   STATUS: ['Em atendimento', 'Contrato gerado', 'Contrato assinado', 'Inicial em elaboração', 'Inicial pronta', 'Ajuizado', 'Não prosseguiu'],
+  STATUS_ADM: ['Em atendimento', 'Contrato gerado', 'Contrato assinado', 'Requerimento em elaboração', 'Requerimento pronto', 'Protocolado', 'Não prosseguiu'],
   TABS: [['caso', 'Cliente e caso', 'user'], ['contrato', 'Contrato de honorários', 'file'], ['procuracao', 'Procuração', 'edit'], ['fatos', 'Relato e documentos', 'list'], ['inicial', 'Petição inicial', 'gavel']],
-  tom: s => /Ajuizado/.test(s) ? 'good' : /Não prosseguiu/.test(s) ? 'neutral' : /assinado|pronta/.test(s) ? 'info' : 'warn',
+  /** atendimento da esfera administrativa/extrajudicial (cartórios, prefeitura, INSS…) */
+  adm: a => a?.esfera === 'administrativo',
+  stList: a => Atend.adm(a) ? Atend.STATUS_ADM : Atend.STATUS,
+  tabs: a => Atend.adm(a) ? Atend.TABS.map(t => t[0] === 'inicial' ? ['inicial', 'Requerimento', 'stamp'] : t) : Atend.TABS,
+  fim: /Ajuizado|Protocolado|Não prosseguiu/,
+  tom: s => /Ajuizado|Protocolado/.test(s) ? 'good' : /Não prosseguiu/.test(s) ? 'neutral' : /assinado|pront/.test(s) ? 'info' : 'warn',
   cli: a => DB.get('clientes', a.clienteId),
 
   /* ---------- lista ---------- */
-  list(v) {
-    App.crumbs([{ t: 'Judicial' }, { t: 'Atendimentos' }]);
-    const l = DB.all('atendimentos').sort((a, b) => String(b.atualizadoEm || b.criadoEm || '').localeCompare(String(a.atualizadoEm || a.criadoEm || '')));
-    const abertos = l.filter(a => !/Ajuizado|Não prosseguiu/.test(a.status || ''));
-    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Judicial</span><h1>${icon('briefcase', 'h-ic')} Atendimentos</h1><p class="muted">Do primeiro contato com o cliente ao ajuizamento: contrato de honorários, relato dos fatos, documentos e petição inicial.</p></div>
+  list(v, esfera = 'judicial') {
+    const adm = esfera === 'administrativo', sec = adm ? 'Contencioso administrativo' : 'Judicial';
+    App.crumbs([{ t: sec }, { t: 'Atendimentos' }]);
+    const l = DB.where('atendimentos', a => Atend.adm(a) === adm).sort((a, b) => String(b.atualizadoEm || b.criadoEm || '').localeCompare(String(a.atualizadoEm || a.criadoEm || '')));
+    const abertos = l.filter(a => !Atend.fim.test(a.status || ''));
+    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">${sec}</span><h1>${icon('briefcase', 'h-ic')} Atendimentos</h1><p class="muted">${adm ? 'Do primeiro contato ao protocolo no órgão ou cartório: contrato de honorários, procuração, relato, documentos e requerimento.' : 'Do primeiro contato com o cliente ao ajuizamento: contrato de honorários, relato dos fatos, documentos e petição inicial.'}</p></div>
       <div class="actions"><button class="btn primary" id="aNovo">${icon('plus')} Novo atendimento</button></div></div>
-      <div class="kpis sm">${kpi('Em aberto', abertos.length)}${kpi('Contratos assinados', l.filter(a => a.contratoAssinado).length)}${kpi('Iniciais prontas', l.filter(a => a.status === 'Inicial pronta').length)}${kpi('Ajuizados', l.filter(a => a.status === 'Ajuizado').length)}</div>
+      <div class="kpis sm">${kpi('Em aberto', abertos.length)}${kpi('Contratos assinados', l.filter(a => a.contratoAssinado).length)}${adm ? kpi('Requerimentos prontos', l.filter(a => a.status === 'Requerimento pronto').length) + kpi('Protocolados', l.filter(a => a.status === 'Protocolado').length) : kpi('Iniciais prontas', l.filter(a => a.status === 'Inicial pronta').length) + kpi('Ajuizados', l.filter(a => a.status === 'Ajuizado').length)}</div>
       <section class="card flush" id="atTbl"></section>`;
-    const rows = l.map(a => ({ ...a, _cli: Atend.cli(a)?.nome || '—', _area: AREAS[a.area]?.nome || '', _upd: String(a.atualizadoEm || a.criadoEm || '').slice(0, 10) }));
+    const rows = l.map(a => ({ ...a, _cli: Atend.cli(a)?.nome || '—', _area: adm ? (a.tipoAdm || '') : AREAS[a.area]?.nome || '', _pc: adm ? a.orgao : a.parteContraria, _upd: String(a.atualizadoEm || a.criadoEm || a.updatedAt || '').slice(0, 10) }));
     dataTable($('#atTbl'), {
-      id: 'atend', rows, schema: { fields: [F('_cli', 'Cliente'), F('assunto', 'Assunto / ação'), F('_area', 'Área'), F('parteContraria', 'Parte contrária'), F('status', 'Situação'), F('_upd', 'Atualizado', 'date')] },
-      cols: ['_cli', 'assunto', '_area', 'parteContraria', 'status', '_upd'],
-      filters: [{ k: 'status', label: 'Situação', opts: Atend.STATUS }],
+      id: adm ? 'atendAdm' : 'atend', rows, schema: { fields: [F('_cli', 'Cliente'), F('assunto', adm ? 'Assunto / pedido' : 'Assunto / ação'), F('_area', adm ? 'Tipo de demanda' : 'Área'), F('_pc', adm ? 'Órgão / cartório' : 'Parte contrária'), F('status', 'Situação'), F('_upd', 'Atualizado', 'date')] },
+      cols: ['_cli', 'assunto', '_area', '_pc', 'status', '_upd'],
+      filters: [{ k: 'status', label: 'Situação', opts: adm ? Atend.STATUS_ADM : Atend.STATUS }],
       onOpen: a => location.hash = '#/atendimento/' + a.id, emptyMsg: 'Nenhum atendimento. Comece por “Novo atendimento” (ou pelo cadastro do cliente).'
     });
-    $('#aNovo').onclick = () => Atend.novo();
+    $('#aNovo').onclick = () => Atend.novo(null, esfera);
   },
 
   /* ---------- novo ---------- */
-  novo(clienteId) {
+  novo(clienteId, esfera) {
     const cls = DB.all('clientes').sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-    const m = UI.modal({ title: 'Novo atendimento', sub: 'Abra o atendimento; o contrato, o relato e a inicial vêm nas próximas etapas.', body: `<form class="grid-form" id="anf">
+    const m = UI.modal({ title: 'Novo atendimento', sub: 'Abra o atendimento; o contrato, a procuração, o relato e a peça vêm nas próximas etapas.', body: `<form class="grid-form" id="anf">
+      <div class="fld full"><label>O trabalho do escritório será *</label><div class="esf-sel">
+        <label><input type="radio" name="esf" value="judicial" ${esfera !== 'administrativo' ? 'checked' : ''}><span>${icon('scale')}<b>Judicial</b><small>ação perante o Poder Judiciário</small></span></label>
+        <label><input type="radio" name="esf" value="administrativo" ${esfera === 'administrativo' ? 'checked' : ''}><span>${icon('stamp')}<b>Administrativo / extrajudicial</b><small>cartório, prefeitura, INSS, Detran, fisco, órgão público</small></span></label></div></div>
       <div class="fld full"><label>Cliente *</label><select name="cli"><option value="">— escolha —</option>${cls.map(c => `<option value="${c.id}" ${c.id === clienteId ? 'selected' : ''}>${esc(c.nome)}${c.doc ? ' · ' + esc(fmtDoc(c.doc)) : ''}</option>`).join('')}<option value="_novo">+ Cadastrar novo cliente…</option></select></div>
-      <div class="fld"><label>Área *</label><select name="area">${Object.entries(AREAS).map(([k, a]) => `<option value="${k}">${esc(a.nome)}</option>`).join('')}</select></div>
-      <div class="fld"><label>Parte contrária</label><input name="pc" placeholder="Ex.: Hapvida Assistência Médica S.A."></div>
-      <div class="fld full"><label>Assunto / ação pretendida *</label><input name="assunto" placeholder="Ex.: Negativa de cobertura de internação — obrigação de fazer e danos morais"></div></form>`,
+      <div class="fld" data-esf="judicial"><label>Área *</label><select name="area">${Object.entries(AREAS).map(([k, a]) => `<option value="${k}">${esc(a.nome)}</option>`).join('')}</select></div>
+      <div class="fld" data-esf="judicial"><label>Parte contrária</label><input name="pc" placeholder="Ex.: Hapvida Assistência Médica S.A."></div>
+      <div class="fld" data-esf="administrativo"><label>Tipo de demanda *</label><select name="tipoAdm">${Adm.optTipos()}</select></div>
+      <div class="fld" data-esf="administrativo"><label>Órgão / cartório</label><input name="orgao" placeholder="Ex.: Cartório do 2º Ofício de Notas de João Pessoa"></div>
+      <div class="fld full" data-esf="administrativo"><label>Outros interessados</label><input name="interessados" placeholder="Ex.: demais herdeiros, cônjuge, confrontantes"></div>
+      <div class="fld full"><label>Assunto / <span data-esf="judicial">ação pretendida</span><span data-esf="administrativo">pedido</span> *</label><input name="assunto" placeholder="Ex.: Negativa de cobertura de internação — obrigação de fazer e danos morais"></div></form>`,
       foot: `<span class="sp"></span><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="anOk">${icon('check')} Abrir atendimento</button>` });
-    const f = $('#anf', m);
-    f.cli.onchange = () => { if (f.cli.value === '_novo') { f.cli.value = ''; UI.editRecord('clientes', null, { onSaved: c => Atend.novo(c.id) }); } };
+    const f = $('#anf', m), esf = () => $('[name=esf]:checked', f).value;
+    const vis = () => { const e = esf(); $$('[data-esf]', f).forEach(x => x.hidden = x.dataset.esf !== e); f.assunto.placeholder = e === 'administrativo' ? 'Ex.: Inventário extrajudicial dos bens deixados por José da Silva' : 'Ex.: Negativa de cobertura de internação — obrigação de fazer e danos morais'; };
+    $$('[name=esf]', f).forEach(r => r.onchange = vis); vis();
+    f.tipoAdm.onchange = () => { if (!f.assunto.value.trim() && f.tipoAdm.value) f.assunto.value = f.tipoAdm.value; };
+    f.cli.onchange = () => { if (f.cli.value === '_novo') { f.cli.value = ''; const e = esf(); UI.editRecord('clientes', null, { onSaved: c => Atend.novo(c.id, e) }); } };
     $('#anOk', m).onclick = async () => {
-      if (!f.cli.value || !f.assunto.value.trim()) return UI.toast('Escolha o cliente e informe o assunto.', 'bad');
-      const [a] = await DB.save('atendimentos', { clienteId: f.cli.value, area: f.area.value, assunto: f.assunto.value.trim(), parteContraria: f.pc.value.trim(), status: 'Em atendimento', documentos: [], honorarios: { tipo: 'misto', abrangencia: 'primeiro', parcelas: 1, percentual: 30, cidade: 'João Pessoa' } });
+      const adm = esf() === 'administrativo';
+      if (!f.cli.value || !f.assunto.value.trim() || (adm && !f.tipoAdm.value)) return UI.toast(adm ? 'Escolha o cliente, o tipo de demanda e informe o pedido.' : 'Escolha o cliente e informe o assunto.', 'bad');
+      const hon = { tipo: adm ? 'fixo' : 'misto', abrangencia: 'primeiro', parcelas: 1, percentual: 30, cidade: 'João Pessoa' };
+      const [a] = await DB.save('atendimentos', adm
+        ? { esfera: 'administrativo', clienteId: f.cli.value, tipoAdm: f.tipoAdm.value, orgao: f.orgao.value.trim(), parteContraria: f.interessados.value.trim(), assunto: f.assunto.value.trim(), status: 'Em atendimento', documentos: [], honorarios: hon }
+        : { esfera: 'judicial', clienteId: f.cli.value, area: f.area.value, assunto: f.assunto.value.trim(), parteContraria: f.pc.value.trim(), status: 'Em atendimento', documentos: [], honorarios: hon });
       UI.closeModal(); location.hash = '#/atendimento/' + a.id + '/caso';
     };
   },
@@ -4541,18 +4620,19 @@ const Atend = {
     const a = DB.get('atendimentos', id);
     if (!a) { v.innerHTML = `<div class="empty">${icon('alert')}<p>Atendimento não encontrado.</p></div>`; return; }
     const c = Atend.cli(a);
-    App.crumbs([{ t: 'Atendimentos', href: '/atendimentos' }, { t: c?.nome || 'Atendimento' }]);
+    const adm = Atend.adm(a);
+    App.crumbs([{ t: adm ? 'Atendimentos administrativos' : 'Atendimentos', href: adm ? '/adm-atendimentos' : '/atendimentos' }, { t: c?.nome || 'Atendimento' }]);
     const feito = { caso: !!(c && a.assunto), contrato: !!a.contratoHtml, procuracao: !!a.procuracaoHtml, fatos: !!(a.relato || (a.documentos || []).length), inicial: !!a.inicialHtml };
     v.innerHTML = `<div class="proc-h"><div>
-        <div class="proc-tags">${pill(AREAS[a.area]?.nome || '')} <span class="pill ${Atend.tom(a.status)}">${esc(a.status || 'Em atendimento')}</span>${a.processoId ? ` <a class="tag" href="#/processo/${a.processoId}">${icon('link')} processo</a>` : ''}</div>
+        <div class="proc-tags">${adm ? `<span class="pill neutral">${icon('stamp')} Administrativo</span> ${pill(a.tipoAdm || '')}` : pill(AREAS[a.area]?.nome || '')} <span class="pill ${Atend.tom(a.status)}">${esc(a.status || 'Em atendimento')}</span>${a.processoId ? ` <a class="tag" href="#/processo/${a.processoId}">${icon('link')} processo</a>` : ''}${a.demandaId ? ` <a class="tag" href="#/demanda/${a.demandaId}">${icon('link')} demanda</a>` : ''}</div>
         <h1 class="at-tit">${esc(c?.nome || 'Cliente não encontrado')}</h1>
-        <p class="proc-sub">${esc(a.assunto || '')}${a.parteContraria ? ` <span class="vs">×</span> ${esc(a.parteContraria)}` : ''}</p></div>
-        <div class="actions wrap"><select class="input" id="atSt" title="Situação do atendimento">${Atend.STATUS.map(s => `<option ${s === a.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div></div>
-      <nav class="steps">${Atend.TABS.map(([k, t, ic], i) => `<a href="#/atendimento/${id}/${k}" class="${k === tab ? 'on' : ''} ${feito[k] ? 'ok' : ''}"><span class="n">${feito[k] ? icon('check') : i + 1}</span>${esc(t)}</a>`).join('')}</nav>
+        <p class="proc-sub">${esc(a.assunto || '')}${adm ? (a.orgao ? ` · ${esc(a.orgao)}` : '') : a.parteContraria ? ` <span class="vs">×</span> ${esc(a.parteContraria)}` : ''}</p></div>
+        <div class="actions wrap"><select class="input" id="atSt" title="Situação do atendimento">${Atend.stList(a).map(s => `<option ${s === a.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div></div>
+      <nav class="steps">${Atend.tabs(a).map(([k, t, ic], i) => `<a href="#/atendimento/${id}/${k}" class="${k === tab ? 'on' : ''} ${feito[k] ? 'ok' : ''}"><span class="n">${feito[k] ? icon('check') : i + 1}</span>${esc(t)}</a>`).join('')}</nav>
       <div id="atBody"></div>`;
     $('#atSt').onchange = async e => { await DB.save('atendimentos', { ...a, status: e.target.value }); UI.toast('Situação atualizada.'); App.render(true); };
     const host = $('#atBody');
-    ({ caso: Atend.tCaso, contrato: Atend.tContrato, procuracao: Atend.tProcuracao, fatos: Atend.tFatos, inicial: Atend.tInicial }[tab] || Atend.tCaso)(host, a, c);
+    ({ caso: Atend.tCaso, contrato: Atend.tContrato, procuracao: Atend.tProcuracao, fatos: Atend.tFatos, inicial: adm ? Atend.tRequerimento : Atend.tInicial }[tab] || Atend.tCaso)(host, a, c);
   },
   async salvar(a, campos, msg) { Object.assign(a, campos); await DB.save('atendimentos', a); if (msg) UI.toast(msg); },
 
@@ -4563,12 +4643,16 @@ const Atend = {
     return (pj ? [['doc', 'CNPJ'], ['endereco', 'endereço da sede'], ['representante', 'representante legal']] : [['doc', 'CPF'], ['rg', 'RG'], ['nacionalidade', 'nacionalidade'], ['estadoCivil', 'estado civil'], ['profissao', 'profissão'], ['endereco', 'endereço']]).filter(([k]) => !c[k]).map(([, l]) => l);
   },
   tCaso(host, a, c) {
-    const fal = Atend.faltas(c);
+    const fal = Atend.faltas(c), adm = Atend.adm(a);
     host.innerHTML = `<div class="grid-main"><section class="card"><header><h2>${icon('briefcase')} O caso</h2></header>
       <form class="grid-form" id="cf">
-        <div class="fld"><label>Área</label><select name="area">${Object.entries(AREAS).map(([k, x]) => `<option value="${k}" ${k === a.area ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div>
-        <div class="fld"><label>Parte contrária</label><input name="parteContraria" value="${esc(a.parteContraria || '')}"></div>
-        <div class="fld full"><label>Assunto / ação pretendida</label><input name="assunto" value="${esc(a.assunto || '')}"></div>
+        <div class="fld"><label>Esfera</label><select name="esfera"><option value="judicial">Judicial</option><option value="administrativo" ${adm ? 'selected' : ''}>Administrativo / extrajudicial</option></select></div>
+        ${adm ? `<div class="fld"><label>Tipo de demanda</label><select name="tipoAdm">${Adm.optTipos(a.tipoAdm)}</select></div>
+        <div class="fld"><label>Órgão / cartório</label><input name="orgao" value="${esc(a.orgao || '')}"></div>
+        <div class="fld"><label>Outros interessados</label><input name="parteContraria" value="${esc(a.parteContraria || '')}"></div>`
+        : `<div class="fld"><label>Área</label><select name="area">${Object.entries(AREAS).map(([k, x]) => `<option value="${k}" ${k === a.area ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></div>
+        <div class="fld full"><label>Parte contrária</label><input name="parteContraria" value="${esc(a.parteContraria || '')}"></div>`}
+        <div class="fld full"><label>Assunto / ${adm ? 'pedido' : 'ação pretendida'}</label><input name="assunto" value="${esc(a.assunto || '')}"></div>
         <div class="fld full"><label>Anotações internas do atendimento</label><textarea name="obs" rows="4" placeholder="Como chegou ao escritório, urgência, combinações…">${esc(a.obs || '')}</textarea></div>
       </form><div class="right"><button class="btn primary" id="cfOk">${icon('check')} Salvar</button></div></section>
       <div class="col"><section class="card"><header><h2>${icon('user')} Cliente</h2><button class="btn ghost sm" id="cliEd">${icon('edit')} Editar cadastro</button></header>
@@ -4576,9 +4660,15 @@ const Atend = {
         ${fal.length ? `<div class="notice">${icon('alert')}<div>Para o contrato e a inicial saírem completos, falta no cadastro: <b>${esc(fal.join(', '))}</b>.</div></div>` : `<p class="muted small">${icon('check')} Qualificação completa para o contrato e a inicial.</p>`}
       </section>
       <section class="card"><header><h2>${icon('list')} Próximos passos</h2></header><ol class="next">
-        <li><a href="#/atendimento/${a.id}/contrato">Gerar o contrato de honorários</a></li><li><a href="#/atendimento/${a.id}/procuracao">Gerar a procuração</a></li><li><a href="#/atendimento/${a.id}/fatos">Registrar o relato e juntar os documentos</a></li><li><a href="#/atendimento/${a.id}/inicial">Redigir a petição inicial</a></li></ol></section></div></div>`;
+        <li><a href="#/atendimento/${a.id}/contrato">Gerar o contrato de honorários</a></li><li><a href="#/atendimento/${a.id}/procuracao">Gerar a procuração</a></li><li><a href="#/atendimento/${a.id}/fatos">Registrar o relato e juntar os documentos</a></li><li><a href="#/atendimento/${a.id}/inicial">${adm ? 'Redigir o requerimento e registrar o protocolo' : 'Redigir a petição inicial'}</a></li></ol></section></div></div>`;
     $('#cliEd').onclick = () => c && UI.editRecord('clientes', c, { onSaved: () => App.render(true) });
-    $('#cfOk').onclick = () => { const f = $('#cf'); Atend.salvar(a, { area: f.area.value, parteContraria: f.parteContraria.value.trim(), assunto: f.assunto.value.trim(), obs: f.obs.value }, 'Salvo.').then(() => App.render(true)); };
+    $('#cfOk').onclick = () => {
+      const f = $('#cf'), e = f.esfera.value;
+      const campos = { esfera: e, parteContraria: f.parteContraria.value.trim(), assunto: f.assunto.value.trim(), obs: f.obs.value, ...(adm ? { tipoAdm: f.tipoAdm.value, orgao: f.orgao.value.trim() } : { area: f.area.value }) };
+      if (e === 'administrativo' && !adm && !campos.tipoAdm) campos.tipoAdm = '';
+      if (e !== (adm ? 'administrativo' : 'judicial') && !Atend.stList({ esfera: e }).includes(a.status)) campos.status = 'Em atendimento';
+      Atend.salvar(a, campos, e !== (adm ? 'administrativo' : 'judicial') ? 'Esfera alterada. Complete os dados do caso.' : 'Salvo.').then(() => App.render(true));
+    };
   },
   /** qualificação do cliente para contrato e petição; o que falta vem marcado */
   qualif(c, html = true) {
@@ -4592,7 +4682,9 @@ const Atend = {
 
   /* ---------- 2. contrato de honorários ---------- */
   tContrato(host, a, c) {
-    const h = a.honorarios || {};
+    const h = a.honorarios || {}, adm = Atend.adm(a);
+    const objPadrao = adm ? 'atuação administrativa e extrajudicial para ' + (a.assunto || a.tipoAdm || '[COMPLETAR: pedido]').replace(/^./, x => x.toLowerCase()) + (a.orgao ? ' perante ' + a.orgao : '') + ', incluindo a preparação e o protocolo do requerimento, o acompanhamento do procedimento e o cumprimento de exigências'
+      : 'propositura e acompanhamento de ' + (a.assunto || '[COMPLETAR: ação]') + (a.parteContraria ? ' em face de ' + a.parteContraria : '');
     host.innerHTML = `<section class="card"><header><h2>${icon('settings')} Condições dos honorários</h2></header>
       <form class="grid-form" id="hf">
         <div class="fld"><label>Modalidade</label><select name="tipo"><option value="fixo" ${h.tipo === 'fixo' ? 'selected' : ''}>Valor fixo</option><option value="exito" ${h.tipo === 'exito' ? 'selected' : ''}>Só êxito (percentual)</option><option value="misto" ${!h.tipo || h.tipo === 'misto' ? 'selected' : ''}>Fixo + êxito</option></select></div>
@@ -4600,9 +4692,9 @@ const Atend = {
         <div class="fld" data-hf="fixo"><label>Parcelas</label><input name="parcelas" type="number" min="1" max="48" value="${esc(h.parcelas || 1)}"></div>
         <div class="fld" data-hf="fixo"><label>1º vencimento</label><input name="venc" type="date" value="${esc(h.venc || '')}"></div>
         <div class="fld" data-hf="exito"><label>Êxito (% do proveito econômico)</label><input name="percentual" inputmode="decimal" value="${esc(h.percentual ?? 30)}"></div>
-        <div class="fld"><label>Abrangência</label><select name="abrangencia"><option value="primeiro" ${h.abrangencia !== 'todas' ? 'selected' : ''}>1º grau (recursos com novo ajuste)</option><option value="todas" ${h.abrangencia === 'todas' ? 'selected' : ''}>Todas as instâncias, até o trânsito</option></select></div>
+        <div class="fld"><label>Abrangência</label><select name="abrangencia"><option value="primeiro" ${h.abrangencia !== 'todas' ? 'selected' : ''}>${adm ? 'Até a decisão do órgão (recursos com novo ajuste)' : '1º grau (recursos com novo ajuste)'}</option><option value="todas" ${h.abrangencia === 'todas' ? 'selected' : ''}>${adm ? 'Inclui recursos administrativos' : 'Todas as instâncias, até o trânsito'}</option></select></div>
         <div class="fld"><label>Foro (comarca)</label><input name="cidade" value="${esc(h.cidade || 'João Pessoa')}"></div>
-        <div class="fld full"><label>Objeto (o que o escritório vai fazer)</label><input name="objeto" value="${esc(h.objeto || ('propositura e acompanhamento de ' + (a.assunto || '[COMPLETAR: ação]') + (a.parteContraria ? ' em face de ' + a.parteContraria : '')))}"></div>
+        <div class="fld full"><label>Objeto (o que o escritório vai fazer)</label><input name="objeto" value="${esc(h.objeto || objPadrao)}"></div>
       </form>
       <div class="btn-row right"><button class="btn ${a.contratoHtml ? 'ghost' : 'primary'}" id="hGer">${icon('sparkle')} ${a.contratoHtml ? 'Gerar de novo (substitui o texto)' : 'Gerar contrato'}</button></div></section>
       <div id="ctEd"></div>`;
@@ -4625,18 +4717,19 @@ const Atend = {
     const hoje = new Date(), dataExt = hoje.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
     const contratado = `<b>${esc(String(E.advogado || '[COMPLETAR: advogado]').toUpperCase())}</b>, advogado(a) inscrito(a) na ${esc(oabFmt(E.oab) || '[COMPLETAR: OAB]')}${E.nome ? `, integrante de ${esc(E.nome)}` : ''}, com escritório profissional em ${E.endereco ? esc(E.endereco) : '<mark>[COMPLETAR: endereço do escritório]</mark>'}${E.email ? ', e-mail ' + esc(E.email) : ''}`;
     const rs = v => `${fmtMoney(v)} (${extenso(v)})`;
-    const parc = h.parcelas > 1 ? `em ${h.parcelas} (${extensoN(h.parcelas)}) parcelas mensais e sucessivas de ${rs(Math.round(h.valor / h.parcelas * 100) / 100)}, vencendo-se a primeira em ${h.venc ? fmtDate(h.venc) : '<mark>[COMPLETAR: data]</mark>'} e as demais no mesmo dia dos meses subsequentes` : `à vista, até ${h.venc ? fmtDate(h.venc) : '<mark>[COMPLETAR: data]</mark>'}`;
+    const parc = h.parcelas > 1 ? `em ${h.parcelas} (${extensoN(h.parcelas).replace(/\bum$/, 'uma').replace(/\bdois$/, 'duas')}) parcelas mensais e sucessivas de ${rs(Math.round(h.valor / h.parcelas * 100) / 100)}, vencendo-se a primeira em ${h.venc ? fmtDate(h.venc) : '<mark>[COMPLETAR: data]</mark>'} e as demais no mesmo dia dos meses subsequentes` : `à vista, até ${h.venc ? fmtDate(h.venc) : '<mark>[COMPLETAR: data]</mark>'}`;
     const fixo = `<p><b>a)</b> honorários iniciais no valor de ${h.valor ? rs(h.valor) : '<mark>[COMPLETAR: valor]</mark>'}, pagos ${parc}, por PIX ou transferência bancária em favor do CONTRATADO;</p>`;
     const exito = `<p><b>${h.tipo === 'misto' ? 'b' : 'a'})</b> honorários de êxito correspondentes a ${NUM.format(h.percentual || 0)}% (${extensoN(h.percentual || 0)} por cento) sobre o proveito econômico obtido pelo CONTRATANTE — valor da condenação, do acordo ou do benefício alcançado, inclusive parcelas vencidas e, quando houver, doze vincendas —, devidos no momento do recebimento, a qualquer título.</p>`;
+    const adm = Atend.adm(a);
     let n = 0; const C = t => `<h2>CLÁUSULA ${['PRIMEIRA', 'SEGUNDA', 'TERCEIRA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÉTIMA', 'OITAVA', 'NONA', 'DÉCIMA', 'DÉCIMA PRIMEIRA', 'DÉCIMA SEGUNDA'][n++]} — ${t}</h2>`;
     return `<h1>CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS E HONORÁRIOS</h1>
 <p>Pelo presente instrumento particular, de um lado, ${c ? Atend.qualif(c) : '<mark>[COMPLETAR: cliente]</mark>'}, doravante denominado(a) <b>CONTRATANTE</b>; e, de outro, ${contratado}, doravante denominado(a) <b>CONTRATADO</b>, têm entre si justo e contratado o seguinte:</p>
-${C('DO OBJETO')}<p>O CONTRATADO prestará ao CONTRATANTE serviços profissionais de advocacia consistentes na ${esc(h.objeto)}, ${h.abrangencia === 'todas' ? 'em todas as instâncias, até o trânsito em julgado da fase de conhecimento' : 'em primeiro grau de jurisdição'}.</p>
-<p><b>Parágrafo único.</b> Não estão incluídos neste contrato ${h.abrangencia === 'todas' ? 'o cumprimento de sentença em autos apartados, ações autônomas, incidentais ou conexas' : 'recursos aos tribunais, o cumprimento de sentença, ações autônomas, incidentais ou conexas'}, que dependerão de novo ajuste entre as partes.</p>
+${C('DO OBJETO')}<p>O CONTRATADO prestará ao CONTRATANTE serviços profissionais de advocacia consistentes na ${esc(h.objeto)}, ${adm ? (h.abrangencia === 'todas' ? 'até a conclusão do procedimento na esfera administrativa ou extrajudicial, inclusive recursos administrativos' : 'até a decisão do órgão ou a conclusão do ato perante o cartório') : h.abrangencia === 'todas' ? 'em todas as instâncias, até o trânsito em julgado da fase de conhecimento' : 'em primeiro grau de jurisdição'}.</p>
+<p><b>Parágrafo único.</b> Não estão incluídos neste contrato ${adm ? (h.abrangencia === 'todas' ? 'medidas judiciais de qualquer natureza' : 'recursos administrativos e medidas judiciais de qualquer natureza') : h.abrangencia === 'todas' ? 'o cumprimento de sentença em autos apartados, ações autônomas, incidentais ou conexas' : 'recursos aos tribunais, o cumprimento de sentença, ações autônomas, incidentais ou conexas'}, que dependerão de novo ajuste entre as partes.</p>
 ${C('DOS HONORÁRIOS CONTRATUAIS')}<p>Pelos serviços descritos, o CONTRATANTE pagará ao CONTRATADO:</p>${h.tipo !== 'exito' ? fixo : ''}${h.tipo !== 'fixo' ? exito : ''}
-<p><b>Parágrafo primeiro.</b> Os honorários de sucumbência fixados em juízo pertencem exclusivamente ao CONTRATADO (art. 23 da Lei nº 8.906/1994 e art. 85, § 14, do CPC) e não se compensam com os honorários aqui contratados.</p>
-${h.tipo !== 'fixo' ? `<p><b>Parágrafo segundo.</b> Em caso de acordo, judicial ou extrajudicial, os honorários de êxito incidem sobre o valor acordado. Somados aos de sucumbência, os honorários não ultrapassarão as vantagens obtidas pelo CONTRATANTE (art. 50 do Código de Ética e Disciplina da OAB).</p>` : ''}
-${C('DAS DESPESAS')}<p>Custas, taxas, emolumentos, perícias, diligências, deslocamentos, cópias e demais despesas do processo correm por conta do CONTRATANTE, mediante prestação de contas, salvo se deferida a gratuidade da justiça.</p>
+${adm ? '' : `<p><b>Parágrafo primeiro.</b> Os honorários de sucumbência fixados em juízo pertencem exclusivamente ao CONTRATADO (art. 23 da Lei nº 8.906/1994 e art. 85, § 14, do CPC) e não se compensam com os honorários aqui contratados.</p>`}
+${h.tipo !== 'fixo' ? `<p><b>Parágrafo ${adm ? 'único' : 'segundo'}.</b> Em caso de acordo, judicial ou extrajudicial, os honorários de êxito incidem sobre o valor acordado. Somados aos de sucumbência, os honorários não ultrapassarão as vantagens obtidas pelo CONTRATANTE (art. 50 do Código de Ética e Disciplina da OAB).</p>` : ''}
+${C('DAS DESPESAS')}<p>Custas, taxas, emolumentos, perícias, diligências, deslocamentos, cópias e demais despesas do ${adm ? 'procedimento (inclusive emolumentos de cartório, taxas e tributos incidentes sobre o ato)' : 'processo'} correm por conta do CONTRATANTE, mediante prestação de contas, salvo se deferida a ${adm ? 'gratuidade ou isenção' : 'gratuidade da justiça'}.</p>
 ${C('DAS OBRIGAÇÕES DO CONTRATANTE')}<p>O CONTRATANTE obriga-se a: (i) fornecer informações verdadeiras e completas e os documentos necessários, nos prazos solicitados; (ii) comunicar ao CONTRATADO qualquer mudança de endereço, telefone ou e-mail; (iii) não celebrar acordo sobre o objeto deste contrato sem a ciência do CONTRATADO; e (iv) manter os pagamentos em dia.</p>
 ${C('DAS OBRIGAÇÕES DO CONTRATADO')}<p>O CONTRATADO obriga-se a atuar com zelo e diligência, a manter sigilo sobre as informações recebidas e a informar o CONTRATANTE do andamento da causa, inclusive pelo portal do cliente e por e-mail. A obrigação assumida é de meio, e não de resultado.</p>
 ${C('DO INADIMPLEMENTO')}<p>O atraso no pagamento de qualquer parcela sujeitará o CONTRATANTE a multa de 2% (dois por cento), juros de 1% (um por cento) ao mês e correção monetária pelo IPCA, e acarretará o vencimento antecipado das demais parcelas.</p>
@@ -4659,7 +4752,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
     ['renunE', 'renunciar a direitos e desistir de pedidos administrativos', 0], ['alien', 'alienar, onerar ou hipotecar bens', 0]],
   tProcuracao(host, a, c) {
     const p = a.procuracao || {}, E = escritorio();
-    const tipo = p.tipo || 'judicia_extra';
+    const tipo = p.tipo || (Atend.adm(a) ? 'extra' : 'judicia_extra');
     const marc = (lista, chave) => lista.map(([k, , def]) => (p[chave] ? p[chave].includes(k) : def) ? k : null).filter(Boolean);
     const sj = marc(Atend.PODERES_J, 'pj'), se = marc(Atend.PODERES_E, 'pe');
     const outPadrao = `${String(E.advogado || '[COMPLETAR: advogado]').toUpperCase()}, advogado(a) inscrito(a) na ${oabFmt(E.oab) || '[COMPLETAR: OAB]'}`;
@@ -4673,7 +4766,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
         <div class="fld full" data-pf="j"><label>Poderes especiais judiciais <span class="muted small">(art. 105 do CPC)</span></label><div class="chk-list">${Atend.PODERES_J.map(([k, t]) => `<label class="chk"><input type="checkbox" name="pj" value="${k}" ${sj.includes(k) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div></div>
         <div class="fld full" data-pf="e"><label>Poderes especiais extrajudiciais <span class="muted small">(art. 661, § 1º, do Código Civil)</span></label><div class="chk-list">${Atend.PODERES_E.map(([k, t]) => `<label class="chk"><input type="checkbox" name="pe" value="${k}" ${se.includes(k) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</div></div>
         <div class="fld full"><label>Outorgado(s) — um por linha (nome e OAB)</label><textarea name="outorgados" rows="2">${esc(p.outorgados || outPadrao)}</textarea></div>
-        <div class="fld full"><label>Finalidade (opcional — deixe em branco para uma procuração geral)</label><input name="fim" value="${esc(p.fim ?? ((a.assunto ? 'especialmente para ' + (tipo === 'extra' ? 'atuar em ' : 'propor ') + a.assunto : '') + (a.parteContraria ? ' em face de ' + a.parteContraria : '')))}"></div>
+        <div class="fld full"><label>Finalidade (opcional — deixe em branco para uma procuração geral)</label><input name="fim" value="${esc(p.fim ?? (Atend.adm(a) ? 'especialmente para representar o(a) OUTORGANTE perante ' + (a.orgao || 'os cartórios, órgãos e repartições competentes') + ' no procedimento de ' + (a.tipoAdm || a.assunto || '[COMPLETAR]').replace(/^./, x => x.toLowerCase()) + (a.assunto && a.tipoAdm && a.assunto !== a.tipoAdm ? ' (' + a.assunto + ')' : '') : (a.assunto ? 'especialmente para ' + (tipo === 'extra' ? 'atuar em ' : 'propor ') + a.assunto : '') + (a.parteContraria ? ' em face de ' + a.parteContraria : '')))}"></div>
         <div class="fld"><label>Substabelecimento</label><select name="subst"><option value="com" ${p.subst !== 'sem' && p.subst !== 'nao' ? 'selected' : ''}>Pode substabelecer, com ou sem reserva</option><option value="sem" ${p.subst === 'sem' ? 'selected' : ''}>Só com reserva de poderes</option><option value="nao" ${p.subst === 'nao' ? 'selected' : ''}>Vedado substabelecer</option></select></div>
         <div class="fld"><label>Cidade</label><input name="cidade" value="${esc(p.cidade || a.honorarios?.cidade || 'João Pessoa')}"></div>
       </form>
@@ -4728,7 +4821,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
         <div class="drop sm" id="atDrop">${icon('upload')}<b>Arraste aqui ou escolha</b><span>PDF, fotos e prints. Vão para o Drive do escritório e a IA resume o que cada um prova.</span><button class="btn ghost sm" id="atPick">Escolher arquivos</button><input type="file" id="atFile" multiple hidden accept=".pdf,image/*,.txt"></div>
         <ul class="at-docs">${docs.map((d, i) => `<li><div><b>Doc. ${i + 1}</b> ${d.link ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.nome)}</a>` : esc(d.nome)}${d.tipo ? ` <span class="tag">${esc(d.tipo)}</span>` : ''}${d.resumo ? `<small>${esc(d.resumo)}</small>` : d.erro ? `<small class="t-bad">${esc(d.erro)}</small>` : ''}</div><button class="icon-btn sm" data-dx="${i}" title="Tirar da lista">${icon('trash')}</button></li>`).join('')}</ul>
       </section></div></div>
-      ${an ? Atend.analiseHtml(an) : ''}`;
+      ${an ? Atend.analiseHtml(an, Atend.adm(a)) : ''}`;
     // relato: salva sozinho
     let t; $('#rel').oninput = e => { $('#rlIA').disabled = !e.target.value.trim() && !docs.length; $('#rlSt').textContent = 'editando…'; clearTimeout(t); t = setTimeout(() => Atend.salvar(a, { relato: e.target.value }).then(() => $('#rlSt') && ($('#rlSt').textContent = 'salvo')), 1500); };
     $('#rlIA').onclick = () => Atend.organizar(a, c);
@@ -4763,27 +4856,74 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
   },
   dadosIA(a, c) {
     const E = escritorio();
-    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: AREAS[a.area]?.nome || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
+    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: Atend.adm(a) ? 'Administrativo / extrajudicial — ' + (a.tipoAdm || '') : AREAS[a.area]?.nome || '', esfera: Atend.adm(a) ? 'administrativo' : 'judicial', tipoDemanda: a.tipoAdm || '', orgao: a.orgao || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
   },
   async organizar(a, c) {
     const b = $('#rlIA'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está organizando os fatos…`;
     try {
       const r = await apiT('redigir', { tipo: 'fatos', dados: Atend.dadosIA(a, c) }, 240000);
-      await Atend.salvar(a, { analise: r, status: a.status === 'Em atendimento' || /Contrato/.test(a.status) ? a.status : a.status }, 'Fatos organizados. Confira abaixo e siga para a petição inicial.');
+      await Atend.salvar(a, { analise: r, status: a.status === 'Em atendimento' || /Contrato/.test(a.status) ? a.status : a.status }, 'Fatos organizados. Confira abaixo e siga para ' + (Atend.adm(a) ? 'o requerimento.' : 'a petição inicial.'));
       App.render(true);
     } catch (e) { UI.toast('IA: ' + e.message, 'bad', 8000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Organizar os fatos com a IA`; }
   },
-  analiseHtml(an) {
+  analiseHtml(an, adm) {
     const li = l => (l || []).filter(Boolean).map(x => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('');
     return `<section class="card an-card"><header><h2>${icon('sparkle')} Caso organizado pela IA</h2><span class="muted small">confira — a IA pode errar</span></header>
-      ${an.acaoSugerida ? `<p><span class="lbl">Ação sugerida</span><b>${esc(an.acaoSugerida)}</b>${an.competencia ? `<br><small class="muted">${esc(an.competencia)}</small>` : ''}</p>` : ''}
+      ${an.acaoSugerida ? `<p><span class="lbl">${adm ? 'Procedimento sugerido' : 'Ação sugerida'}</span><b>${esc(an.acaoSugerida)}</b>${an.competencia ? `<br><small class="muted">${esc(an.competencia)}</small>` : ''}</p>` : ''}
       <div class="an-grid"><div><h4 class="sec">Fatos, em ordem</h4><ol class="an-fatos">${(an.fatos || []).map(f => `<li>${f.data ? `<time>${esc(fmtDate(f.data) || f.data)}</time>` : ''}${esc(f.descricao || '')}${f.prova ? ` <span class="tag">${esc(f.prova)}</span>` : ''}</li>`).join('')}</ol></div>
-      <div>${(an.partesContrarias || []).length ? `<h4 class="sec">Parte(s) contrária(s)</h4><ul>${an.partesContrarias.map(p => `<li><b>${esc(p.nome || '')}</b>${p.doc ? ' · ' + esc(p.doc) : ''}${p.qualificacao ? `<br><small>${esc(p.qualificacao)}</small>` : ''}</li>`).join('')}</ul>` : ''}
+      <div>${(an.partesContrarias || []).length ? `<h4 class="sec">${adm ? 'Outros interessados' : 'Parte(s) contrária(s)'}</h4><ul>${an.partesContrarias.map(p => `<li><b>${esc(p.nome || '')}</b>${p.doc ? ' · ' + esc(p.doc) : ''}${p.qualificacao ? `<br><small>${esc(p.qualificacao)}</small>` : ''}</li>`).join('')}</ul>` : ''}
         ${(an.pedidos || []).length ? `<h4 class="sec">Pedidos</h4><ul>${li(an.pedidos)}</ul>` : ''}
         ${(an.fundamentos || []).length ? `<h4 class="sec">Fundamentos legais</h4><ul>${li(an.fundamentos)}</ul>` : ''}</div></div>
       <div class="an-grid">${(an.documentosFaltantes || []).length ? `<div class="notice">${icon('file')}<div><b>Pedir ao cliente</b><ul>${li(an.documentosFaltantes)}</ul></div></div>` : ''}
         ${(an.perguntasAoCliente || []).length ? `<div class="notice">${icon('user')}<div><b>Perguntar ao cliente</b><ul>${li(an.perguntasAoCliente)}</ul></div></div>` : ''}
         ${(an.riscos || []).length ? `<div class="notice">${icon('alert')}<div><b>Pontos de atenção</b><ul>${li(an.riscos)}</ul></div></div>` : ''}</div></section>`;
+  },
+
+  /* ---------- 5b. requerimento administrativo / extrajudicial ---------- */
+  tRequerimento(host, a, c) {
+    const an = a.analise || {}, o = a.opcoesInicial || {};
+    host.innerHTML = `<section class="card"><header><h2>${icon('settings')} Dados para o requerimento</h2></header>
+      ${!a.analise ? `<div class="notice">${icon('alert')}<div>Ainda não há fatos organizados. A IA pode redigir só com o relato, mas fica melhor se você passar antes por <a href="#/atendimento/${a.id}/fatos">Relato e documentos › Organizar os fatos</a>.</div></div>` : ''}
+      <form class="grid-form" id="if">
+        <div class="fld full"><label>Endereçamento (autoridade, órgão ou cartório)</label><input name="juizo" value="${esc(o.juizo || '')}" placeholder="Ex.: Ilmo(a). Sr(a). Oficial do Cartório de Registro de Imóveis da Zona Sul de João Pessoa/PB"></div>
+        ${an.competencia ? `<p class="muted small full" style="grid-column:1/-1;margin:-4px 0 0">Sugestão da IA: ${esc(an.competencia)}</p>` : ''}
+        <div class="fld full"><label>Título do requerimento</label><input name="acao" value="${esc(o.acao || an.acaoSugerida || a.tipoAdm || a.assunto || '')}"></div>
+        <div class="fld"><label>Valor do bem ou do negócio (R$, se houver)</label><input name="valorCausa" inputmode="decimal" value="${esc(o.valorCausa || (an.valorCausaSugerido ? NUM.format(an.valorCausaSugerido) : ''))}"></div>
+        <div class="fld"><label>Cidade</label><input name="cidade" value="${esc(o.cidade || a.honorarios?.cidade || 'João Pessoa')}"></div>
+        <div class="fld check full"><label class="switch"><input type="checkbox" name="gratuidade" ${(o.gratuidade ?? an.justicaGratuita) ? 'checked' : ''}><span></span>Requerer gratuidade ou isenção de emolumentos/taxas</label></div>
+        <div class="fld full"><label>Prioridade (se houver)</label><input name="prioridade" value="${esc(o.prioridade || '')}" placeholder="Ex.: pessoa idosa (art. 71 da Lei nº 10.741/2003)"></div>
+        <div class="fld full"><label>Instruções para a IA</label><textarea name="instrucoes" rows="3" placeholder="Ex.: incluir a nomeação da inventariante; listar os bens com as matrículas; pedir a averbação na matrícula…">${esc(o.instrucoes || '')}</textarea></div>
+      </form>
+      <div class="btn-row right"><button class="btn ${a.inicialHtml ? 'ghost' : 'primary'}" id="iGer">${icon('sparkle')} ${a.inicialHtml ? 'Redigir de novo (substitui o texto)' : 'Redigir o requerimento com a IA'}</button></div></section>
+      <div id="inEd"></div>
+      ${!a.demandaId ? `<section class="card"><header><h2>${icon('stamp')} Depois do protocolo</h2></header><p class="muted small">Protocolou no órgão ou cartório? Informe o número e o app cria a demanda administrativa (cliente, tipo, órgão e documentos vinculados) para acompanhar andamentos, exigências e prazos.</p>
+        <div class="btn-row"><input class="input" id="iProt" placeholder="Nº do protocolo" style="max-width:220px"><input class="input" id="iData" type="date" value="${todayISO()}" style="max-width:170px"><button class="btn primary" id="iPr">${icon('check')} Registrar protocolo</button></div></section>` : ''}`;
+    const f = $('#if');
+    const ler = () => ({ juizo: f.juizo.value.trim(), acao: f.acao.value.trim(), valorCausa: f.valorCausa.value.trim(), cidade: f.cidade.value.trim(), gratuidade: f.gratuidade.checked, prioridade: f.prioridade.value.trim(), instrucoes: f.instrucoes.value.trim() });
+    $('#iGer').onclick = async () => {
+      if (a.inicialHtml && !await UI.confirm('Redigir de novo substitui o texto do requerimento, inclusive o que foi editado. Continuar?', 'Redigir de novo', false)) return;
+      const b = $('#iGer'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está redigindo o requerimento… (pode levar 1 ou 2 minutos)`;
+      const op = { ...ler(), data: new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) };
+      try {
+        const r = await apiT('redigir', { tipo: 'requerimento', dados: { ...Atend.dadosIA(a, c), fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: op } }, 300000);
+        const html = Editor.limpar(r.html || '');
+        if (!html) throw new Error('a IA devolveu texto vazio');
+        await Atend.salvar(a, { opcoesInicial: ler(), inicialHtml: html, status: /Protocolado/.test(a.status) ? a.status : 'Requerimento em elaboração' }, 'Requerimento redigido. Revise com atenção: trechos [COMPLETAR] estão destacados.');
+        App.render(true);
+      } catch (e) { UI.toast('IA: ' + e.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Redigir o requerimento com a IA`; }
+    };
+    if (a.inicialHtml) Editor.montar($('#inEd'), { html: a.inicialHtml, titulo: 'Requerimento', salvar: html => Atend.salvar(a, { inicialHtml: html }), peticao: true,
+      extra: `<button class="btn ghost sm" id="inPronta">${icon('check')} Marcar como pronto</button>`,
+      imprimir: html => Timbre.imprimir(html, 'Requerimento — ' + (c?.nome || ''), { peticao: true }) });
+    $('#inPronta')?.addEventListener('click', async () => { await Atend.salvar(a, { status: 'Requerimento pronto' }, 'Requerimento marcado como pronto.'); App.render(true); });
+    $('#iPr')?.addEventListener('click', async () => {
+      const n = $('#iProt').value.trim(), dt = $('#iData').value || todayISO();
+      if (!n && !await UI.confirm('Registrar o protocolo sem número? Você pode informá-lo depois em “Editar”.', 'Registrar', false)) return;
+      const [d] = await DB.save('demandas', { tipo: a.tipoAdm || 'Outra demanda extrajudicial', clienteIds: a.clienteId ? [a.clienteId] : [], orgao: a.orgao || '', numero: n, dataProtocolo: dt, interessados: a.parteContraria || (an.partesContrarias || []).map(x => x.nome).join('; '), status: 'Protocolado', responsavel: escritorio().advogado || '', arquivos: (a.documentos || []).filter(x => x.link).map(x => ({ nome: x.nome, link: x.link, tipo: x.tipo || '', data: x.data })), obs: 'Originada do atendimento de ' + fmtDate(String(a.criadoEm || a.createdAt || todayISO()).slice(0, 10)) + (a.assunto ? ' — ' + a.assunto : '') + '.' });
+      await DB.save('movimentos', { demandaId: d.id, data: dt, titulo: 'Requerimento protocolado' + (n ? ' sob o nº ' + n : ''), descricao: a.opcoesInicial?.acao || '', origem: 'escritorio', visivelCliente: true });
+      await Atend.salvar(a, { demandaId: d.id, status: 'Protocolado' }, 'Protocolo registrado: a demanda foi criada e passa a ser acompanhada.');
+      location.hash = '#/demanda/' + d.id;
+    });
   },
 
   /* ---------- 5. petição inicial ---------- */
@@ -6032,5 +6172,140 @@ const Diretoria = {
       body{background:#fff!important;padding:18px}.dr-flt,.no-print{display:none!important}.card{break-inside:avoid;box-shadow:none!important}@page{size:A4;margin:12mm}</style></head>
       <body class="client"><div class="pdf-h"><img src="${BRAND.logoDark}" alt="" style="height:54px"><div><b style="font:700 20px var(--serif)">${esc(e.fantasia || e.razao)}</b><div class="muted small">Painel executivo da diretoria · ${fmtDateTime(new Date())} · ${esc(escritorio().nome || 'Amorim Firmo')}</div></div></div>${$('#drRoot', host).outerHTML}</body></html>`);
     w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 600);
+  }
+};
+/* =====================================================================
+   CONTENCIOSO ADMINISTRATIVO — demandas extrajudiciais
+   (cartórios de notas, registro civil, registro de imóveis, prefeitura,
+   INSS, Detran, fisco, órgãos públicos). Reaproveita andamentos
+   (movimentos.demandaId) e prazos/exigências (prazos.demandaId).
+   ===================================================================== */
+const Adm = {
+  optTipos(sel) {
+    const g = {}; ADM_TIPOS.forEach(([t, o]) => (g[o] = g[o] || []).push(t));
+    return `<option value="">— escolha —</option>` + Object.entries(g).map(([o, ts]) => `<optgroup label="${esc(o)}">${ts.map(t => `<option ${t === sel ? 'selected' : ''}>${esc(t)}</option>`).join('')}</optgroup>`).join('');
+  },
+  tom: s => /Deferido|Concluído/.test(s || '') ? 'good' : /Indeferido/.test(s || '') ? 'critical' : /exigência|recurso/i.test(s || '') ? 'serious' : /Arquivado/.test(s || '') ? 'neutral' : 'info',
+  st: d => `<span class="pill ${Adm.tom(d.status)}">${esc(d.status || 'Em preparação')}</span>`,
+  abertas: () => DB.where('demandas', admAberta),
+  /** prazos/exigências em aberto das demandas */
+  prazos: () => DB.where('prazos', p => p.demandaId && !p.concluido && isISO(p.data)).sort((a, b) => (a.data + (a.hora || '')).localeCompare(b.data + (b.hora || ''))),
+
+  /* ---------- lista ---------- */
+  list(v) {
+    App.crumbs([{ t: 'Contencioso administrativo' }, { t: 'Demandas' }]);
+    const l = DB.all('demandas');
+    const rows = l.map(d => ({ ...d, _cli: clienteNomes(d) || '—', _grupo: ADM_GRUPO(d.tipo), _st: d.status || 'Em preparação' }));
+    v.innerHTML = `<div class="page-h"><div><span class="eyebrow">Contencioso administrativo</span><h1>${icon('stamp', 'h-ic')} Demandas administrativas</h1><p class="muted">Procedimentos extrajudiciais e administrativos: cartórios, prefeitura, INSS, Detran, fisco e demais órgãos públicos.</p></div>
+      <div class="actions"><button class="btn ghost" id="dAt">${icon('briefcase')} Novo atendimento</button><button class="btn primary" id="dNova">${icon('plus')} Nova demanda</button></div></div>
+      ${Adm.kpis()}
+      <section class="card flush" id="dTbl"></section>`;
+    dataTable($('#dTbl'), {
+      id: 'demandas', rows, schema: { fields: [F('_cli', 'Cliente'), F('tipo', 'Tipo de demanda'), F('_grupo', 'Órgão (grupo)'), F('orgao', 'Órgão / cartório'), F('numero', 'Protocolo'), F('_st', 'Situação'), F('dataProtocolo', 'Protocolado em', 'date')] },
+      cols: ['_cli', 'tipo', 'orgao', 'numero', '_st', 'dataProtocolo'],
+      filters: [{ k: '_st', label: 'Situação', opts: ADM_STATUS }, { k: '_grupo', label: 'Órgão', opts: [...new Set(ADM_TIPOS.map(t => t[1]))] }],
+      onOpen: d => location.hash = '#/demanda/' + d.id, emptyMsg: 'Nenhuma demanda administrativa. Cadastre direto (“Nova demanda”) ou comece por um atendimento.'
+    });
+    $('#dNova').onclick = () => Adm.edit(null);
+    $('#dAt').onclick = () => Atend.novo(null, 'administrativo');
+  },
+  kpis() {
+    const ab = Adm.abertas(), pz = Adm.prazos(), p7 = pz.filter(p => daysUntil(p.data) <= 7), atr = pz.filter(p => daysUntil(p.data) < 0);
+    const exig = ab.filter(d => d.status === 'Com exigência');
+    return `<div class="kpis">
+      ${kpi('Demandas em andamento', ab.length, [...new Set(ab.map(d => ADM_GRUPO(d.tipo)))].map(g => `${g} ${ab.filter(d => ADM_GRUPO(d.tipo) === g).length}`).join(' · ') || 'nenhuma', '', '#/administrativo')}
+      ${kpi('Com exigência', exig.length, exig.length ? 'cumprir para não perder o protocolo' : 'nenhuma pendente', exig.length ? 'warn' : '', '#/administrativo')}
+      ${kpi('Prazos em 7 dias', p7.length, atr.length ? `<b class="t-bad">${atr.length} em atraso</b>` : 'nenhum em atraso', atr.length ? 'bad' : '', '#/agenda')}
+      ${kpi('Concluídas / deferidas', DB.where('demandas', d => /Deferido|Concluído/.test(d.status || '')).length, 'desde o início')}
+    </div>`;
+  },
+
+  /* ---------- cadastro ---------- */
+  edit(d, base = {}) {
+    const rec = d || { status: 'Em preparação', responsavel: escritorio().advogado || '', ...base };
+    const m = UI.editRecord('demandas', rec, { title: d ? 'Editar demanda administrativa' : 'Nova demanda administrativa', onSaved: s => { location.hash = '#/demanda/' + s.id; App.render(); } });
+    const t = $('#f_tipo', m); if (t) t.innerHTML = Adm.optTipos(rec.tipo);
+    return m;
+  },
+
+  /* ---------- detalhe ---------- */
+  detail(v, id) {
+    const d = DB.get('demandas', id);
+    if (!d) { v.innerHTML = `<div class="empty">${icon('alert')}<p>Demanda não encontrada.</p></div>`; return; }
+    App.crumbs([{ t: 'Contencioso administrativo', href: '/administrativo' }, { t: d.tipo || 'Demanda' }]);
+    const movs = DB.where('movimentos', m => m.demandaId === id).sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(b.createdAt).localeCompare(String(a.createdAt)));
+    const prazos = DB.where('prazos', x => x.demandaId === id).sort((a, b) => String(a.data).localeCompare(String(b.data)));
+    const clientes = (d.clienteIds || []).map(c => DB.get('clientes', c)).filter(Boolean);
+    const at = DB.all('atendimentos').find(a => a.demandaId === id);
+    v.innerHTML = `
+    <div class="proc-h"><div>
+        <div class="proc-tags">${pill(ADM_GRUPO(d.tipo))} ${Adm.st(d)} ${at ? `<a class="tag" href="#/atendimento/${at.id}">${icon('link')} atendimento</a>` : ''}</div>
+        <h1 class="at-tit">${esc(d.tipo || 'Demanda administrativa')}</h1>
+        <p class="proc-sub">${esc(d.orgao || 'Órgão não informado')}${d.numero ? ` · protocolo <span class="mono">${esc(d.numero)}</span>` : ''}</p>
+        <p class="proc-parts"><b>${esc(clientes.map(c => c.nome).join(', ') || 'Cliente não vinculado')}</b>${d.interessados ? ` <span class="muted">· ${esc(d.interessados)}</span>` : ''}</p></div>
+      <div class="actions wrap">
+        <select class="input" id="dSt" title="Situação" style="width:auto">${ADM_STATUS.map(s => `<option ${s === (d.status || 'Em preparação') ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        <button class="btn ghost" id="dEdit">${icon('edit')} Editar</button>
+        <button class="btn ghost" id="dPrev">${icon('eye')} Ver como o cliente</button>
+      </div></div>
+    <section class="card dados-card"><header><h2>${icon('file')} Dados da demanda</h2></header>
+      <dl class="dl cols">
+        <dt>Cliente(s)</dt><dd>${clientes.map(c => `<a href="#/clientes?c=${c.id}">${esc(c.nome)}</a>`).join(', ') || '—'}</dd>
+        <dt>Órgão / cartório</dt><dd>${esc(d.orgao || '—')}</dd>
+        <dt>Protocolo</dt><dd>${esc(d.numero || '—')}${d.dataProtocolo ? ' em ' + esc(fmtDate(d.dataProtocolo)) : ''}</dd>
+        <dt>Emolumentos e custas</dt><dd>${esc(fmtMoney(d.custas) || '—')}</dd>
+        <dt>Responsável</dt><dd>${esc(d.responsavel || '—')}</dd><dt>Honorários</dt><dd>${esc(d.honorarios || '—')}</dd>
+        <dt>Aviso ao cliente</dt><dd>${d.notificarCliente ? (clientes.some(c => c.email) ? 'por e-mail a cada andamento' : '<span class="t-warn">ligado, mas sem e-mail do cliente</span>') : 'desativado'}</dd>
+      </dl>
+      ${d.obs ? `<div class="note-box"><span class="lbl">Anotações internas</span>${esc(d.obs)}</div>` : ''}
+    </section>
+    <div class="grid-main">
+      <section class="card">
+        <header><h2>${icon('history')} Andamentos</h2><div class="hdr-actions"><span class="muted small">${movs.filter(m => m.visivelCliente).length} de ${movs.length} visíveis ao cliente</span><button class="btn ghost sm" id="mAdd">${icon('plus')} Lançar</button></div></header>
+        ${movs.length ? `<ol class="timeline">${movs.map(m => `<li class="${m.visivelCliente ? '' : 'hidden-mov'}"><span class="tl-dot"></span><div class="tl-head"><time>${esc(fmtDate(m.data))}</time><span class="badge soft">Escritório</span><span class="sp"></span><button class="icon-btn sm" data-vis="${m.id}" title="${m.visivelCliente ? 'Visível ao cliente — clique para ocultar' : 'Oculto do cliente — clique para mostrar'}">${icon(m.visivelCliente ? 'eye' : 'eyeOff')}</button><button class="icon-btn sm" data-mov="${m.id}" title="Editar">${icon('edit')}</button></div><b class="tl-t">${esc(m.titulo)}</b>${m.descricao ? `<p>${esc(m.descricao)}</p>` : ''}${m.explicacao ? `<p class="explain">${icon('user')} <span>${esc(m.explicacao)}</span></p>` : ''}</li>`).join('')}</ol>` : `<div class="empty sm">${icon('history')}<p>Nenhum andamento. Registre protocolo, exigências, notas devolutivas, decisões e a conclusão.</p></div>`}
+      </section>
+      <div class="col">
+        <section class="card"><header><h2>${icon('calendar')} Prazos e exigências</h2><button class="btn ghost sm" id="aAdd">${icon('plus')} Novo</button></header>
+          ${prazos.length ? `<ul class="agenda-list compact">${prazos.map(Views.agendaItem).join('')}</ul>` : '<p class="muted small">Nenhum prazo ou exigência. Lance aqui o prazo para cumprir nota devolutiva, recorrer ou retirar o documento.</p>'}</section>
+        <section class="card"><header><h2>${icon('file')} Documentos</h2></header>
+          ${(d.arquivos || []).length ? `<ul class="plain files">${d.arquivos.map(a => `<li>${icon('file')} ${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>` : esc(a.nome)}</li>`).join('')}</ul>` : `<p class="muted small">${at ? `Os documentos do cliente estão no <a href="#/atendimento/${at.id}/fatos">atendimento</a>.` : 'Os documentos ficam no atendimento que originou a demanda.'}</p>`}</section>
+      </div>
+    </div>`;
+    $('#dSt').onchange = async e => {
+      const st = e.target.value; await DB.save('demandas', { ...d, status: st });
+      await DB.save('movimentos', { demandaId: d.id, data: todayISO(), titulo: 'Situação: ' + st, origem: 'escritorio', visivelCliente: true });
+      UI.toast('Situação atualizada e registrada nos andamentos.'); App.render(true);
+    };
+    $('#dEdit').onclick = () => Adm.edit(d);
+    $('#dPrev').onclick = () => { if (!clientes.length) return UI.toast('Vincule um cliente à demanda.', 'warn'); Portal.preview(clientes[0].id, d.id); };
+    $('#mAdd').onclick = () => Adm.editMov(null, d);
+    $('#aAdd').onclick = () => Adm.editPrazo(null, d.id);
+    $$('[data-mov]', v).forEach(b => b.onclick = () => Adm.editMov(DB.get('movimentos', b.dataset.mov), d));
+    $$('[data-vis]', v).forEach(b => b.onclick = async () => { const m = DB.get('movimentos', b.dataset.vis); m.visivelCliente = !m.visivelCliente; await DB.save('movimentos', m); App.render(true); });
+    $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
+  },
+  editMov(m, d) { UI.editRecord('movimentos', m || { data: todayISO(), visivelCliente: true, origem: 'escritorio' }, { extraBase: { demandaId: d.id }, title: m ? 'Editar andamento' : 'Lançar andamento' }); },
+  editPrazo(x, demandaId) { UI.editRecord('prazos', x || { tipo: 'Exigência', data: todayISO(), visivelCliente: false }, { extraBase: { demandaId }, title: x ? 'Editar prazo' : 'Novo prazo ou exigência' }); },
+
+  /* ---------- visão geral (aba Administrativo do Contencioso) ---------- */
+  painelHtml() {
+    const ab = Adm.abertas(), pz = Adm.prazos();
+    const movs = DB.where('movimentos', m => m.demandaId).sort((a, b) => String(b.data).localeCompare(String(a.data))).slice(0, 8);
+    const ats = DB.where('atendimentos', a => a.esfera === 'administrativo' && !/Protocolado|Não prosseguiu/.test(a.status || ''));
+    const grupos = [...new Set(ADM_TIPOS.map(t => t[1]))].map(g => ({ label: g, value: ab.filter(d => ADM_GRUPO(d.tipo) === g).length, color: 'var(--s2)' })).filter(x => x.value);
+    return `
+    <div class="pn-sec adm"><h2>${icon('stamp')} Administrativo</h2></div>
+    <div class="pn-btns"><button class="btn ghost" id="nDem">${icon('plus')} Nova demanda</button><button class="btn ghost" id="nAtAdm">${icon('briefcase')} Novo atendimento</button>${ats.length ? `<a class="btn ghost" href="#/adm-atendimentos">${icon('list')} ${ats.length} atendimento(s) em aberto</a>` : ''}</div>
+    ${Adm.kpis()}
+    <section class="card"><header><h2>${icon('stamp')} Demandas por órgão</h2><a href="#/administrativo" class="link">Ver todas</a></header>${grupos.length ? hbarHtml(grupos, v => String(v)) : `<div class="empty sm">${icon('stamp')}<p>Nenhuma demanda em andamento.</p></div>`}</section>
+    <section class="card"><header><h2>${icon('calendar')} Prazos e exigências</h2><a href="#/agenda" class="link">Ver agenda</a></header>
+      ${pz.length ? `<div data-mxw><ul class="agenda-list">${mxItens(pz.map(Views.agendaItem), 7)}</ul>${mxBtn(pz.length, 7, 'prazo(s)')}</div>` : `<div class="empty sm">${icon('calendar')}<p>Nenhum prazo ou exigência em aberto.</p></div>`}</section>
+    <section class="card"><header><h2>${icon('history')} Últimos andamentos</h2></header>
+      ${movs.length ? `<ul class="feed">${movs.map(m => { const d = DB.get('demandas', m.demandaId); return `<li><a href="#/demanda/${m.demandaId}"><time>${fmtDate(m.data)}</time><div><b>${esc(m.titulo)}</b><small>${esc(d ? (d.tipo || '') + ' · ' + clienteNomes(d) : '')}</small></div></a></li>`; }).join('')}</ul>` : `<div class="empty sm">${icon('history')}<p>Os andamentos das demandas aparecerão aqui.</p></div>`}</section>`;
+  },
+  bindPainel(v) {
+    $('#nDem', v).onclick = () => Adm.edit(null);
+    $('#nAtAdm', v).onclick = () => Atend.novo(null, 'administrativo');
+    $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
   }
 };
