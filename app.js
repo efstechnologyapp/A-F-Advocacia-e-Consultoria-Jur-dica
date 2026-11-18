@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.26.0';
+const APP_VERSAO = '1.26.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.26.1', data: '18/11/2026', itens: ['Relato e documentos: ao lado do botão aparece “Fatos organizados em [data e hora]”, e o quadro “Caso organizado pela IA” mostra a data e a hora da versão. Ao terminar, a tela desce até o resultado e o destaca.'] },
   { numero: '1.26.0', data: '18/11/2026', itens: ['Cadastro do cliente: nova área “Documentos pessoais” para juntar RG, CPF, CNH, comprovante de residência e certidões (PDF ou foto). Os arquivos vão para a pasta do cliente no Drive do escritório.', 'A IA lê os documentos e completa nome, CPF, RG e endereço nos campos vazios; se ler algo diferente do que já está no cadastro, mostra a sugestão com o botão “Usar”.', 'Os documentos pessoais aparecem também na ficha do cliente, com link para a pasta no Drive.'] },
   { numero: '1.25.2', data: '18/11/2026', itens: ['IA mais insistente: sem versão fixa, o app passa por todos os modelos Gemini disponíveis na chave (começando pelo último que funcionou) até um responder, sem perder tempo esperando o modelo ocupado; só depois de tentar todos espera e faz nova rodada.', 'Arquivos acima de 4 MB vão à IA pelo envio de arquivos do Gemini, mais estável para PDFs grandes.', 'Atendimentos › Relato e documentos: botão “Ler de novo com a IA” nos documentos que a IA não leu (e ícone para reler os demais).'] },
   { numero: '1.25.1', data: '17/11/2026', itens: ['Administrativo: o atendimento aceita mais de um órgão ou cartório (ex.: Prefeitura e Registro de Imóveis), com um requerimento redigido para cada órgão.', 'Concluir o atendimento abre uma demanda por órgão, ligadas entre si (“Procedimentos relacionados”). O número do protocolo fica pendente e é informado depois, em cada demanda, sem travar o restante do sistema.', 'Nova situação “Aguardando protocolo” e indicador correspondente no painel do Administrativo.'] },
@@ -4832,15 +4833,16 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
     host.innerHTML = `<div class="grid-main"><section class="card"><header><h2>${icon('edit')} Relato do cliente</h2><span class="muted small" id="rlSt"></span></header>
         <p class="muted small">Escreva ou cole o relato como o cliente contou (pode ser a conversa do WhatsApp). Não precisa organizar — a IA faz isso.</p>
         <textarea id="rel" class="relato" rows="16" placeholder="Ex.: Em março a cliente teve a filha recém-nascida internada de urgência e o plano negou a cobertura alegando carência…">${esc(a.relato || '')}</textarea>
-        <div class="btn-row right"><button class="btn primary" id="rlIA" ${a.relato || docs.length ? '' : 'disabled'}>${icon('sparkle')} ${an ? 'Organizar os fatos de novo' : 'Organizar os fatos com a IA'}</button></div></section>
+        <div class="btn-row right">${an ? `<span class="muted small an-ult">${icon('check')} Fatos organizados${a.analiseEm ? ' em ' + esc(Atend.quando(a.analiseEm)) : ''} — <a href="#" id="anVer">ver abaixo</a></span>` : ''}<button class="btn primary" id="rlIA" ${a.relato || docs.length ? '' : 'disabled'}>${icon('sparkle')} ${an ? 'Organizar os fatos de novo' : 'Organizar os fatos com a IA'}</button></div></section>
       <div class="col"><section class="card"><header><h2>${icon('upload')} Documentos (${docs.length})</h2>${a.pastaLink ? `<a class="link small" href="${esc(a.pastaLink)}" target="_blank" rel="noopener">${icon('link')} pasta no Drive</a>` : ''}</header>
         <div class="drop sm" id="atDrop">${icon('upload')}<b>Arraste aqui ou escolha</b><span>PDF, fotos e prints. Vão para o Drive do escritório e a IA resume o que cada um prova.</span><button class="btn ghost sm" id="atPick">Escolher arquivos</button><input type="file" id="atFile" multiple hidden accept=".pdf,image/*,.txt"></div>
         <ul class="at-docs">${docs.map((d, i) => `<li><div><b>Doc. ${i + 1}</b> ${d.link ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.nome)}</a>` : esc(d.nome)}${d.tipo ? ` <span class="tag">${esc(d.tipo)}</span>` : ''}${d.resumo ? `<small>${esc(d.resumo)}</small>` : d.erro ? `<small class="t-bad">${esc(d.erro)}</small>` : ''}${d.fileId && !d.resumo ? `<button type="button" class="btn ghost sm at-reler" data-dr="${i}">${icon('sparkle')} Ler de novo com a IA</button>` : ''}</div><div class="at-doc-act">${d.fileId && d.resumo ? `<button class="icon-btn sm" data-dr="${i}" title="Ler de novo com a IA">${icon('sync')}</button>` : ''}<button class="icon-btn sm" data-dx="${i}" title="Tirar da lista">${icon('trash')}</button></div></li>`).join('')}</ul>
       </section></div></div>
-      ${an ? Atend.analiseHtml(an, Atend.adm(a)) : ''}`;
+      ${an ? Atend.analiseHtml(an, Atend.adm(a), a.analiseEm) : ''}`;
     // relato: salva sozinho
     let t; $('#rel').oninput = e => { $('#rlIA').disabled = !e.target.value.trim() && !docs.length; $('#rlSt').textContent = 'editando…'; clearTimeout(t); t = setTimeout(() => Atend.salvar(a, { relato: e.target.value }).then(() => $('#rlSt') && ($('#rlSt').textContent = 'salvo')), 1500); };
     $('#rlIA').onclick = () => Atend.organizar(a, c);
+    $('#anVer')?.addEventListener('click', e => { e.preventDefault(); $('.an-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
     // documentos
     const dz = $('#atDrop'), inp = $('#atFile');
     $('#atPick').onclick = () => inp.click(); inp.onchange = () => Atend.juntar(a, [...inp.files]);
@@ -4889,14 +4891,16 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
   async organizar(a, c) {
     const b = $('#rlIA'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está organizando os fatos…`;
     try {
-      const r = await apiT('redigir', { tipo: 'fatos', dados: Atend.dadosIA(a, c) }, 240000);
-      await Atend.salvar(a, { analise: r, status: a.status === 'Em atendimento' || /Contrato/.test(a.status) ? a.status : a.status }, 'Fatos organizados. Confira abaixo e siga para ' + (Atend.adm(a) ? 'o requerimento.' : 'a petição inicial.'));
+      const r = await apiT('redigir', { tipo: 'fatos', dados: Atend.dadosIA(a, c) }, 340000);
+      await Atend.salvar(a, { analise: r, analiseEm: new Date().toISOString(), status: a.status === 'Em atendimento' || /Contrato/.test(a.status) ? a.status : a.status }, 'Fatos organizados. Confira abaixo e siga para ' + (Atend.adm(a) ? 'o requerimento.' : 'a petição inicial.'));
       App.render(true);
-    } catch (e) { UI.toast('IA: ' + e.message, 'bad', 8000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Organizar os fatos com a IA`; }
+      setTimeout(() => { const el = $('.an-card'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('an-novo'); setTimeout(() => el.classList.remove('an-novo'), 2500); } }, 150);
+    } catch (e) { UI.toast('IA: ' + e.message, 'bad', 8000); b.disabled = false; b.innerHTML = `${icon('sparkle')} ${a.analise ? 'Organizar os fatos de novo' : 'Organizar os fatos com a IA'}`; }
   },
-  analiseHtml(an, adm) {
+  quando: iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); },
+  analiseHtml(an, adm, em) {
     const li = l => (l || []).filter(Boolean).map(x => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('');
-    return `<section class="card an-card"><header><h2>${icon('sparkle')} Caso organizado pela IA</h2><span class="muted small">confira — a IA pode errar</span></header>
+    return `<section class="card an-card"><header><h2>${icon('sparkle')} Caso organizado pela IA</h2><span class="muted small">${em ? `versão de <b>${esc(Atend.quando(em))}</b> · ` : ''}confira — a IA pode errar</span></header>
       ${an.acaoSugerida ? `<p><span class="lbl">${adm ? 'Procedimento sugerido' : 'Ação sugerida'}</span><b>${esc(an.acaoSugerida)}</b>${an.competencia ? `<br><small class="muted">${esc(an.competencia)}</small>` : ''}</p>` : ''}
       <div class="an-grid"><div><h4 class="sec">Fatos, em ordem</h4><ol class="an-fatos">${(an.fatos || []).map(f => `<li>${f.data ? `<time>${esc(fmtDate(f.data) || f.data)}</time>` : ''}${esc(f.descricao || '')}${f.prova ? ` <span class="tag">${esc(f.prova)}</span>` : ''}</li>`).join('')}</ol></div>
       <div>${(an.partesContrarias || []).length ? `<h4 class="sec">${adm ? 'Outros interessados' : 'Parte(s) contrária(s)'}</h4><ul>${an.partesContrarias.map(p => `<li><b>${esc(p.nome || '')}</b>${p.doc ? ' · ' + esc(p.doc) : ''}${p.qualificacao ? `<br><small>${esc(p.qualificacao)}</small>` : ''}</li>`).join('')}</ul>` : ''}
