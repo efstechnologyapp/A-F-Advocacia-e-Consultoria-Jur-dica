@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.25.1';
+const APP_VERSAO = '1.25.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.25.2', data: '18/11/2026', itens: ['IA mais insistente: sem versão fixa, o app passa por todos os modelos Gemini disponíveis na chave (começando pelo último que funcionou) até um responder, sem perder tempo esperando o modelo ocupado; só depois de tentar todos espera e faz nova rodada.', 'Arquivos acima de 4 MB vão à IA pelo envio de arquivos do Gemini, mais estável para PDFs grandes.', 'Atendimentos › Relato e documentos: botão “Ler de novo com a IA” nos documentos que a IA não leu (e ícone para reler os demais).'] },
   { numero: '1.25.1', data: '17/11/2026', itens: ['Administrativo: o atendimento aceita mais de um órgão ou cartório (ex.: Prefeitura e Registro de Imóveis), com um requerimento redigido para cada órgão.', 'Concluir o atendimento abre uma demanda por órgão, ligadas entre si (“Procedimentos relacionados”). O número do protocolo fica pendente e é informado depois, em cada demanda, sem travar o restante do sistema.', 'Nova situação “Aguardando protocolo” e indicador correspondente no painel do Administrativo.'] },
   { numero: '1.25.0', data: '17/11/2026', itens: ['Contencioso: a visão geral passa a ter o card “Contencioso”, com as seções Judicial (como antes) e Administrativo.', 'Nova seção Administrativo: demandas extrajudiciais e administrativas (cartórios de notas, registro civil, registro de imóveis, prefeitura, INSS, Detran, fisco e órgãos públicos), com órgão, protocolo, situação, andamentos, prazos e exigências.', 'Atendimentos: ao abrir, escolha se o trabalho será judicial ou administrativo. O administrativo segue as mesmas etapas (cliente e caso, contrato, procuração, relato e documentos), terminando no requerimento redigido pela IA e no registro do protocolo, que cria a demanda.', 'Área do cliente: o cliente acompanha também as demandas administrativas.', 'Menu: Cadastros › Clientes passa para logo após a Visão geral.'] },
   { numero: '1.24.0', data: '17/11/2026', itens: ['Atendimentos: nova etapa “Procuração”, entre o contrato e o relato. Tipos ad judicia, ad extra (ad negotia) e ad judicia et extra, com ou sem poderes especiais — os do art. 105 do CPC e os do art. 661, § 1º, do Código Civil já vêm listados para marcar —, outorgados, finalidade e substabelecimento. O texto abre no editor para ajustes e sai impresso no papel timbrado.'] },
@@ -3501,7 +3502,7 @@ const Docs = {
     });
     $$('[data-reler]', m).forEach(b => b.onclick = async () => {
       const r = res[+b.dataset.reler]; b.disabled = true; b.innerHTML = icon('sync', 'spin') + ' Lendo…';
-      try { r.ia = await apiT('reler', { fileId: r.fileId, nome: r.nome, leitura: r.leitura || null }, 300000); delete r.iaErro; UI.toast('Documento lido pela IA.'); }
+      try { r.ia = await apiT('reler', { fileId: r.fileId, nome: r.nome, leitura: r.leitura || null }, 340000); delete r.iaErro; UI.toast('Documento lido pela IA.'); }
       catch (err) { r.iaErro = /demorou/.test(err.message) ? 'a IA demorou demais — tente de novo em alguns minutos' : err.message; UI.toast('IA: ' + r.iaErro, 'warn', 7000); }
       Docs.revisar(e, res, erros);
     });
@@ -4113,7 +4114,7 @@ async function juntarELer(p, aviso) {
   const up = await apiT('juntar', { ...p, ler: false, leitura: null }, 240000);
   if (!p.ler) return up;
   aviso && aviso('guardado no Drive; lendo com a IA…');
-  try { up.ia = await apiT('reler', { fileId: up.id, nome: p.nome, modo: p.modo, leitura: p.leitura || null, contexto: p.contexto }, 300000); }
+  try { up.ia = await apiT('reler', { fileId: up.id, nome: p.nome, modo: p.modo, leitura: p.leitura || null, contexto: p.contexto }, 340000); }
   catch (e) { up.iaErro = /demorou/.test(e.message) ? 'a IA demorou demais (documento grande ou IA do Google ocupada) — use “Ler de novo” em alguns minutos' : e.message; }
   return up;
 }
@@ -4831,7 +4832,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
         <div class="btn-row right"><button class="btn primary" id="rlIA" ${a.relato || docs.length ? '' : 'disabled'}>${icon('sparkle')} ${an ? 'Organizar os fatos de novo' : 'Organizar os fatos com a IA'}</button></div></section>
       <div class="col"><section class="card"><header><h2>${icon('upload')} Documentos (${docs.length})</h2>${a.pastaLink ? `<a class="link small" href="${esc(a.pastaLink)}" target="_blank" rel="noopener">${icon('link')} pasta no Drive</a>` : ''}</header>
         <div class="drop sm" id="atDrop">${icon('upload')}<b>Arraste aqui ou escolha</b><span>PDF, fotos e prints. Vão para o Drive do escritório e a IA resume o que cada um prova.</span><button class="btn ghost sm" id="atPick">Escolher arquivos</button><input type="file" id="atFile" multiple hidden accept=".pdf,image/*,.txt"></div>
-        <ul class="at-docs">${docs.map((d, i) => `<li><div><b>Doc. ${i + 1}</b> ${d.link ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.nome)}</a>` : esc(d.nome)}${d.tipo ? ` <span class="tag">${esc(d.tipo)}</span>` : ''}${d.resumo ? `<small>${esc(d.resumo)}</small>` : d.erro ? `<small class="t-bad">${esc(d.erro)}</small>` : ''}</div><button class="icon-btn sm" data-dx="${i}" title="Tirar da lista">${icon('trash')}</button></li>`).join('')}</ul>
+        <ul class="at-docs">${docs.map((d, i) => `<li><div><b>Doc. ${i + 1}</b> ${d.link ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.nome)}</a>` : esc(d.nome)}${d.tipo ? ` <span class="tag">${esc(d.tipo)}</span>` : ''}${d.resumo ? `<small>${esc(d.resumo)}</small>` : d.erro ? `<small class="t-bad">${esc(d.erro)}</small>` : ''}${d.fileId && !d.resumo ? `<button type="button" class="btn ghost sm at-reler" data-dr="${i}">${icon('sparkle')} Ler de novo com a IA</button>` : ''}</div><div class="at-doc-act">${d.fileId && d.resumo ? `<button class="icon-btn sm" data-dr="${i}" title="Ler de novo com a IA">${icon('sync')}</button>` : ''}<button class="icon-btn sm" data-dx="${i}" title="Tirar da lista">${icon('trash')}</button></div></li>`).join('')}</ul>
       </section></div></div>
       ${an ? Atend.analiseHtml(an, Atend.adm(a)) : ''}`;
     // relato: salva sozinho
@@ -4842,6 +4843,18 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
     $('#atPick').onclick = () => inp.click(); inp.onchange = () => Atend.juntar(a, [...inp.files]);
     dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); }; dz.ondragleave = () => dz.classList.remove('over');
     dz.ondrop = e => { e.preventDefault(); dz.classList.remove('over'); Atend.juntar(a, [...(e.dataTransfer.files || [])]); };
+    $$('[data-dr]').forEach(b => b.onclick = async () => {
+      const i = +b.dataset.dr, d = { ...docs[i] }; b.disabled = true; b.innerHTML = `${icon('sync', 'spin')}${b.classList.contains('icon-btn') ? '' : ' A IA está lendo… (pode levar até 4 minutos)'}`;
+      try {
+        const r = await apiT('reler', { fileId: d.fileId, nome: d.nome, modo: 'atendimento', leitura: null }, 340000);
+        Object.assign(d, { tipo: r.tipoDocumento || d.tipo || '', resumo: r.resumo || '', datas: r.datas || [], valores: r.valores || [], pessoas: r.pessoas || [] }); delete d.erro;
+        const l = [...(a.documentos || [])]; l[i] = d; await Atend.salvar(a, { documentos: l }, 'Documento lido pela IA.');
+      } catch (e) {
+        const l = [...(a.documentos || [])]; l[i] = { ...l[i], erro: 'Guardado no Drive; a IA não leu agora (' + (/demorou/.test(e.message) ? 'a IA demorou demais — tente de novo em alguns minutos' : e.message) + ').' };
+        await Atend.salvar(a, { documentos: l }); UI.toast('IA: ' + e.message, 'warn', 8000);
+      }
+      App.render(true);
+    });
     $$('[data-dx]').forEach(b => b.onclick = async () => { if (!await UI.confirm('Tirar este documento da lista do atendimento? (O arquivo continua no Drive.)', 'Tirar')) return; const l = [...docs]; l.splice(+b.dataset.dx, 1); await Atend.salvar(a, { documentos: l }); App.render(true); });
   },
   async juntar(a, files) {
@@ -4934,7 +4947,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
       const op = ler(), outros = orgs.filter(x => x !== org);
       const opIA = { ...op, data: new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }), instrucoes: [op.instrucoes, outros.length ? `Este requerimento é dirigido somente a ${org}. O caso tramita em paralelo perante ${outros.join(' e ')}, em requerimento próprio: peça apenas o que compete a ${org} e, se for útil, mencione o procedimento paralelo.` : ''].filter(Boolean).join(' ') };
       try {
-        const r = await apiT('redigir', { tipo: 'requerimento', dados: { ...Atend.dadosIA(a, c), orgao: org, fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: opIA } }, 300000);
+        const r = await apiT('redigir', { tipo: 'requerimento', dados: { ...Atend.dadosIA(a, c), orgao: org, fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: opIA } }, 340000);
         const html = Editor.limpar(r.html || '');
         if (!html) throw new Error('a IA devolveu texto vazio');
         await gravar({ html, opcoes: op, pronto: false }, 'Requerimento redigido. Revise com atenção: trechos [COMPLETAR] estão destacados.');
@@ -4981,7 +4994,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
       const b = $('#iGer'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está redigindo a petição… (pode levar 1 ou 2 minutos)`;
       const op = { ...ler(), data: new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) };
       try {
-        const r = await apiT('redigir', { tipo: 'inicial', dados: { ...Atend.dadosIA(a, c), fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: op } }, 300000);
+        const r = await apiT('redigir', { tipo: 'inicial', dados: { ...Atend.dadosIA(a, c), fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: op } }, 340000);
         const html = Editor.limpar(r.html || '');
         if (!html) throw new Error('a IA devolveu texto vazio');
         await Atend.salvar(a, { opcoesInicial: ler(), inicialHtml: html, status: /Ajuizado/.test(a.status) ? a.status : 'Inicial em elaboração' }, 'Petição redigida. Revise com atenção: trechos [COMPLETAR] e [INSERIR PRECEDENTE] estão destacados.');
