@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.25.2';
+const APP_VERSAO = '1.26.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.26.0', data: '18/11/2026', itens: ['Cadastro do cliente: nova área “Documentos pessoais” para juntar RG, CPF, CNH, comprovante de residência e certidões (PDF ou foto). Os arquivos vão para a pasta do cliente no Drive do escritório.', 'A IA lê os documentos e completa nome, CPF, RG e endereço nos campos vazios; se ler algo diferente do que já está no cadastro, mostra a sugestão com o botão “Usar”.', 'Os documentos pessoais aparecem também na ficha do cliente, com link para a pasta no Drive.'] },
   { numero: '1.25.2', data: '18/11/2026', itens: ['IA mais insistente: sem versão fixa, o app passa por todos os modelos Gemini disponíveis na chave (começando pelo último que funcionou) até um responder, sem perder tempo esperando o modelo ocupado; só depois de tentar todos espera e faz nova rodada.', 'Arquivos acima de 4 MB vão à IA pelo envio de arquivos do Gemini, mais estável para PDFs grandes.', 'Atendimentos › Relato e documentos: botão “Ler de novo com a IA” nos documentos que a IA não leu (e ícone para reler os demais).'] },
   { numero: '1.25.1', data: '17/11/2026', itens: ['Administrativo: o atendimento aceita mais de um órgão ou cartório (ex.: Prefeitura e Registro de Imóveis), com um requerimento redigido para cada órgão.', 'Concluir o atendimento abre uma demanda por órgão, ligadas entre si (“Procedimentos relacionados”). O número do protocolo fica pendente e é informado depois, em cada demanda, sem travar o restante do sistema.', 'Nova situação “Aguardando protocolo” e indicador correspondente no painel do Administrativo.'] },
   { numero: '1.25.0', data: '17/11/2026', itens: ['Contencioso: a visão geral passa a ter o card “Contencioso”, com as seções Judicial (como antes) e Administrativo.', 'Nova seção Administrativo: demandas extrajudiciais e administrativas (cartórios de notas, registro civil, registro de imóveis, prefeitura, INSS, Detran, fisco e órgãos públicos), com órgão, protocolo, situação, andamentos, prazos e exigências.', 'Atendimentos: ao abrir, escolha se o trabalho será judicial ou administrativo. O administrativo segue as mesmas etapas (cliente e caso, contrato, procuração, relato e documentos), terminando no requerimento redigido pela IA e no registro do protocolo, que cria a demanda.', 'Área do cliente: o cliente acompanha também as demandas administrativas.', 'Menu: Cadastros › Clientes passa para logo após a Visão geral.'] },
@@ -1175,6 +1176,7 @@ const UI = {
       if (voltar) voltar();
     });
     if (coll === 'empresas' || coll === 'clientes') RFB.attach(m, coll);
+    if (coll === 'clientes') CliDocs.attach(m, rec);
     return m;
   },
   /* ---------- célula formatada ---------- */
@@ -1713,6 +1715,7 @@ const Views = {
     const m = UI.modal({
       title: c.nome, sub: `${esc(c.tipo || '')} ${c.doc ? '· ' + esc(fmtDoc(c.doc)) : ''}`, wide: true,
       body: `<div class="detail-grid"><div><span class="lbl">E-mail</span>${esc(c.email || '—')}</div><div><span class="lbl">Telefone</span>${esc(c.telefone || '—')}</div><div class="full"><span class="lbl">Endereço</span>${esc(c.endereco || '—')}</div></div>
+      ${CliDocs.html(c)}
       <h4 class="sec">Processos (${procs.length})</h4>${procs.length ? `<ul class="plain">${procs.map(p => `<li><a href="#/processo/${p.id}" data-close>${icon(AREAS[p.area]?.icon || 'scale')} <span class="mono">${esc(fmtCNJ(p.numero))}</span> · ${esc(p.classe || AREAS[p.area]?.nome || '')} ${pill(p.status || 'Ativo')}</a></li>`).join('')}</ul>` : '<p class="muted small">Nenhum processo vinculado.</p>'}
       <h4 class="sec">Demandas administrativas (${dems.length})</h4>${dems.length ? `<ul class="plain">${dems.map(d => `<li><a href="#/demanda/${d.id}" data-close>${icon('stamp')} ${esc(d.tipo || 'Demanda')}${d.orgao ? ' · ' + esc(d.orgao) : ''} ${Adm.st(d)}</a></li>`).join('')}</ul>` : '<p class="muted small">Nenhuma demanda administrativa.</p>'}
       ${ats.length ? `<h4 class="sec">Atendimentos em andamento</h4><ul class="plain">${ats.map(a => `<li><a href="#/atendimento/${a.id}" data-close>${icon('briefcase')} ${esc(a.assunto || '')} <span class="muted small">· ${a.esfera === 'administrativo' ? 'administrativo' : 'judicial'} · ${esc(a.status || '')}</span></a></li>`).join('')}</ul>` : ''}
@@ -6361,5 +6364,87 @@ const Adm = {
     $('#nDem', v).onclick = () => Adm.edit(null);
     $('#nAtAdm', v).onclick = () => Atend.novo(null, 'administrativo');
     $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
+  }
+};
+/* =====================================================================
+   DOCUMENTOS PESSOAIS DO CLIENTE (RG, CPF, CNH, comprovante, certidões)
+   Juntados no cadastro: vão para a pasta do cliente no Drive do escritório
+   e a IA lê para completar nome, CPF, RG e endereço.
+   ===================================================================== */
+const CliDocs = {
+  attach(m, rec) {
+    const form = $('form', m); if (!form) return;
+    if (!rec.id) rec.id = uid('cl');                         // pasta do cliente já existe antes de salvar
+    rec.documentos = [...(rec.documentos || [])];
+    form.insertAdjacentHTML('afterend', `<section class="cli-docs"><h4 class="sec">${icon('file')} Documentos pessoais <span class="muted small" id="cdN"></span>${rec.pastaDocs ? ` <a class="link small" href="${esc(rec.pastaDocs)}" target="_blank" rel="noopener">${icon('link')} pasta no Drive</a>` : ''}</h4>
+      <div class="drop sm" id="cdDrop">${icon('upload')}<b>Arraste aqui ou escolha</b><span>RG, CPF, CNH, comprovante de residência, certidões — PDF ou foto. Vão para o Drive do escritório e a IA completa nome, CPF, RG e endereço.</span><button type="button" class="btn ghost sm" id="cdPick">Escolher arquivos</button><input type="file" id="cdFile" multiple hidden accept=".pdf,image/*"></div>
+      <div id="cdSug"></div><ul class="at-docs" id="cdList"></ul></section>`);
+    const lista = () => {
+      $('#cdN', m).textContent = rec.documentos.length ? `(${rec.documentos.length})` : '';
+      $('#cdList', m).innerHTML = rec.documentos.map((d, i) => `<li><div><b>${esc(d.tipo || 'Documento')}</b> ${d.link ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.nome)}</a>` : esc(d.nome)}${d.resumo ? `<small>${esc(d.resumo)}</small>` : d.erro ? `<small class="t-bad">${esc(d.erro)}</small>` : ''}${d.fileId && !d.resumo ? `<button type="button" class="btn ghost sm at-reler" data-cdr="${i}">${icon('sparkle')} Ler de novo com a IA</button>` : ''}</div><div class="at-doc-act">${d.fileId && d.resumo ? `<button type="button" class="icon-btn sm" data-cdr="${i}" title="Ler de novo e completar o cadastro">${icon('sync')}</button>` : ''}<button type="button" class="icon-btn sm" data-cdx="${i}" title="Tirar da lista (o arquivo continua no Drive)">${icon('trash')}</button></div></li>`).join('');
+      $$('[data-cdx]', m).forEach(b => b.onclick = async () => { rec.documentos.splice(+b.dataset.cdx, 1); await gravar(); lista(); });
+      $$('[data-cdr]', m).forEach(b => b.onclick = () => reler(+b.dataset.cdr, b));
+    };
+    // cliente já cadastrado: guarda a lista na hora (sem depender do "Salvar")
+    const gravar = async () => { const cur = DB.get('clientes', rec.id); if (cur) await DB.save('clientes', { ...cur, documentos: rec.documentos, pastaDocs: rec.pastaDocs || cur.pastaDocs || '' }); };
+    const ler = ia => ({ tipo: ia.tipoDocumento || '', resumo: ia.resumo || '', dados: { nome: ia.nome || '', cpf: ia.cpf || '', rg: ia.rg || '', orgao: ia.orgaoExpedidor || '', endereco: ia.endereco || '', nascimento: ia.dataNascimento || '' } });
+    const sugs = [];
+    const aplicar = (d) => {
+      const x = d.dados || {}, comprov = /comprovante/i.test(d.tipo || '');
+      const campos = [
+        ['nome', 'Nome', comprov ? '' : x.nome],
+        ['doc', 'CPF', onlyDigits(x.cpf).length === 11 ? fmtDoc(onlyDigits(x.cpf)) : ''],
+        ['rg', 'RG', x.rg ? [x.rg, x.orgao].filter(Boolean).join(' ') : ''],
+        ['endereco', 'Endereço', x.endereco]];
+      const novos = [];
+      campos.forEach(([k, lbl, v]) => {
+        const el = $('#f_' + k, m); if (!el || !v) return;
+        const igual = a => String(a || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!el.value.trim()) { el.value = v; el.classList.add('ia-fill'); novos.push(lbl); }
+        else if (igual(el.value) !== igual(v) && !(k === 'rg' && igual(el.value).includes(igual(x.rg)))) sugs.push({ k, lbl, v, de: d.tipo || d.nome });
+      });
+      return novos;
+    };
+    const sugHtml = () => {
+      const u = sugs.filter((s, i) => sugs.findIndex(t => t.k === s.k && t.v === s.v) === i);
+      $('#cdSug', m).innerHTML = u.length ? `<div class="notice soft">${icon('sparkle')}<div><b>A IA leu valores diferentes do cadastro.</b> Confira e use se estiverem certos:<ul class="cd-sug">${u.map((s, i) => `<li><span>${esc(s.lbl)}: <b>${esc(s.v)}</b> <small class="muted">(${esc(s.de)})</small></span><button type="button" class="btn ghost sm" data-cdu="${i}">Usar</button></li>`).join('')}</ul></div></div>` : '';
+      $$('[data-cdu]', m).forEach(b => b.onclick = () => { const s = u[+b.dataset.cdu]; const el = $('#f_' + s.k, m); el.value = s.v; el.classList.add('ia-fill'); sugs.splice(sugs.findIndex(t => t.k === s.k && t.v === s.v), 1); sugHtml(); });
+    };
+    const avisar = novos => novos.length ? UI.toast('Preenchido pela IA: ' + novos.join(', ') + '. Confira e clique em Salvar.', 'ok', 6000) : null;
+    const reler = async (i, b) => {
+      const d = rec.documentos[i]; b.disabled = true; b.innerHTML = icon('sync', 'spin') + (b.classList.contains('icon-btn') ? '' : ' Lendo…');
+      try { const ia = await apiT('reler', { fileId: d.fileId, nome: d.nome, modo: 'pessoal', leitura: null }, 340000); Object.assign(d, ler(ia)); delete d.erro; await gravar(); avisar(aplicar(d)); sugHtml(); }
+      catch (e) { d.erro = 'Guardado no Drive; a IA não leu agora (' + e.message + ').'; UI.toast('IA: ' + e.message, 'warn', 7000); }
+      lista();
+    };
+    const juntar = async files => {
+      files = files.filter(f => f.size); if (!files.length) return;
+      if (!Session.remote) return UI.toast('Juntar documentos exige o servidor conectado.', 'warn');
+      const span = $('#cdDrop span', m), txt = span.textContent, novos = [];
+      for (const [i, f] of files.entries()) {
+        span.textContent = `Enviando e lendo ${i + 1} de ${files.length}: ${f.name}…`;
+        const d = { nome: f.name, data: todayISO() };
+        try {
+          if (f.size > 30 * 1048576) throw new Error('arquivo acima de 30 MB');
+          const nome = ($('#f_nome', m)?.value || rec.nome || 'Cliente').trim();
+          const r = await juntarELer({ modo: 'pessoal', destino: { key: rec.id, nome: nome.slice(0, 100) }, nome: f.name, mime: f.type || 'application/octet-stream', base64: await Docs.b64(f), ler: /pdf|image/.test(f.type || f.name), leitura: await PdfLeve.preparar(f, { inicio: 6, fim: 2 }) }, s => span.textContent = `${f.name}: ${s}`);
+          d.fileId = r.id; d.link = r.url; if (r.pasta) rec.pastaDocs = r.pasta;
+          if (r.ia) { Object.assign(d, ler(r.ia)); novos.push(...aplicar(d)); }
+          if (r.iaErro) d.erro = 'Guardado no Drive; a IA não leu agora (' + r.iaErro + ').';
+        } catch (e) { d.erro = 'Não enviado: ' + e.message; }
+        rec.documentos.push(d); lista();
+      }
+      span.textContent = txt; await gravar(); sugHtml(); avisar([...new Set(novos)]);
+    };
+    const dz = $('#cdDrop', m), inp = $('#cdFile', m);
+    $('#cdPick', m).onclick = () => inp.click(); inp.onchange = () => { juntar([...inp.files]); inp.value = ''; };
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); }; dz.ondragleave = () => dz.classList.remove('over');
+    dz.ondrop = e => { e.preventDefault(); dz.classList.remove('over'); juntar([...(e.dataTransfer.files || [])]); };
+    lista();
+  },
+  /** lista para o detalhe do cliente */
+  html(c) {
+    const l = c.documentos || [];
+    return `<h4 class="sec">Documentos pessoais (${l.length})${c.pastaDocs ? ` <a class="link small" href="${esc(c.pastaDocs)}" target="_blank" rel="noopener">${icon('link')} pasta no Drive</a>` : ''}</h4>${l.length ? `<ul class="plain">${l.map(d => `<li>${icon('file')} ${d.link ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.tipo || d.nome)}</a>` : esc(d.tipo || d.nome)}${d.tipo ? ` <span class="muted small">${esc(d.nome)}</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Nenhum documento. Junte RG, CPF e comprovante de residência em “Editar”.</p>'}`;
   }
 };
