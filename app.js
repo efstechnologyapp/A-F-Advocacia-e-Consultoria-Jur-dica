@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.26.1';
+const APP_VERSAO = '1.26.3';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,8 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.26.3', data: '18/11/2026', itens: ['Demanda administrativa: o quadro Documentos agora se divide em “Documentos pessoais” (do cadastro do cliente) e “Documentos do caso” (do atendimento), sempre atualizados — o que for juntado depois de abrir a demanda também aparece, com link para cada arquivo.'] },
+  { numero: '1.26.2', data: '18/11/2026', itens: ['Requerimentos e petições: a IA recebe o endereço, o e-mail e o telefone do escritório cadastrados no sistema e os usa na qualificação e na assinatura; se ainda sobrar algum [COMPLETAR] desses dados, o app preenche sozinho.', 'Requerimento e petição inicial: mostra quando o texto foi redigido pela IA e a data da última edição, e destaca o texto novo ao terminar.'] },
   { numero: '1.26.1', data: '18/11/2026', itens: ['Relato e documentos: ao lado do botão aparece “Fatos organizados em [data e hora]”, e o quadro “Caso organizado pela IA” mostra a data e a hora da versão. Ao terminar, a tela desce até o resultado e o destaca.'] },
   { numero: '1.26.0', data: '18/11/2026', itens: ['Cadastro do cliente: nova área “Documentos pessoais” para juntar RG, CPF, CNH, comprovante de residência e certidões (PDF ou foto). Os arquivos vão para a pasta do cliente no Drive do escritório.', 'A IA lê os documentos e completa nome, CPF, RG e endereço nos campos vazios; se ler algo diferente do que já está no cadastro, mostra a sugestão com o botão “Usar”.', 'Os documentos pessoais aparecem também na ficha do cliente, com link para a pasta no Drive.'] },
   { numero: '1.25.2', data: '18/11/2026', itens: ['IA mais insistente: sem versão fixa, o app passa por todos os modelos Gemini disponíveis na chave (começando pelo último que funcionou) até um responder, sem perder tempo esperando o modelo ocupado; só depois de tentar todos espera e faz nova rodada.', 'Arquivos acima de 4 MB vão à IA pelo envio de arquivos do Gemini, mais estável para PDFs grandes.', 'Atendimentos › Relato e documentos: botão “Ler de novo com a IA” nos documentos que a IA não leu (e ícone para reler os demais).'] },
@@ -4886,7 +4888,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
   },
   dadosIA(a, c) {
     const E = escritorio();
-    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: Atend.adm(a) ? 'Administrativo / extrajudicial — ' + (a.tipoAdm || '') : AREAS[a.area]?.nome || '', esfera: Atend.adm(a) ? 'administrativo' : 'judicial', tipoDemanda: a.tipoAdm || '', orgao: Atend.orgaosTxt(a) || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
+    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', enderecoEscritorio: E.endereco || '', emailEscritorio: E.email || '', telefoneEscritorio: E.whatsapp || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: Atend.adm(a) ? 'Administrativo / extrajudicial — ' + (a.tipoAdm || '') : AREAS[a.area]?.nome || '', esfera: Atend.adm(a) ? 'administrativo' : 'judicial', tipoDemanda: a.tipoAdm || '', orgao: Atend.orgaosTxt(a) || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
   },
   async organizar(a, c) {
     const b = $('#rlIA'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está organizando os fatos…`;
@@ -4894,10 +4896,22 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
       const r = await apiT('redigir', { tipo: 'fatos', dados: Atend.dadosIA(a, c) }, 340000);
       await Atend.salvar(a, { analise: r, analiseEm: new Date().toISOString(), status: a.status === 'Em atendimento' || /Contrato/.test(a.status) ? a.status : a.status }, 'Fatos organizados. Confira abaixo e siga para ' + (Atend.adm(a) ? 'o requerimento.' : 'a petição inicial.'));
       App.render(true);
-      setTimeout(() => { const el = $('.an-card'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('an-novo'); setTimeout(() => el.classList.remove('an-novo'), 2500); } }, 150);
+      Atend.destacar('.an-card');
     } catch (e) { UI.toast('IA: ' + e.message, 'bad', 8000); b.disabled = false; b.innerHTML = `${icon('sparkle')} ${a.analise ? 'Organizar os fatos de novo' : 'Organizar os fatos com a IA'}`; }
   },
+  /** troca [COMPLETAR: …] de dados do escritório/advogado pelo que está cadastrado no sistema */
+  dadosEsc(html) {
+    const E = escritorio(), t = [
+      [/\[COMPLETAR:[^\]]*endere[çc]o[^\]]*\]/gi, E.endereco, /escrit|profission|advog/i],
+      [/\[COMPLETAR:[^\]]*e-?mail[^\]]*\]/gi, E.email, /escrit|profission|advog/i],
+      [/\[COMPLETAR:[^\]]*(telefone|whatsapp)[^\]]*\]/gi, E.whatsapp, /escrit|profission|advog/i],
+      [/(OAB[\s/]*(n[ºo°.]*\s*)?)?\[COMPLETAR:[^\]]*\bOAB\b[^\]]*\]/gi, oabFmt(E.oab), null],
+      [/\[COMPLETAR:[^\]]*nome do (advogado|escrit[óo]rio)[^\]]*\]/gi, null, null]];
+    return t.reduce((h, [re, v, ctx]) => h.replace(re, m => { if (/nome do advogado/i.test(m)) return E.advogado || m; if (/nome do escrit/i.test(m)) return E.nome || m; return v && (!ctx || ctx.test(m)) ? v : m; }), String(html || ''));
+  },
   quando: iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); },
+  destacar(sel) { setTimeout(() => { const el = $(sel); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('an-novo'); setTimeout(() => el.classList.remove('an-novo'), 2500); } }, 150); },
+  versaoHtml(txt, em, ed) { return `<span class="muted small an-ult">${icon('check')} ${txt}${em ? ' em ' + esc(Atend.quando(em)) : ''}${ed ? ' · última edição em ' + esc(Atend.quando(ed)) : ''} — <a href="#inEd" onclick="event.preventDefault();document.getElementById('inEd').scrollIntoView({behavior:'smooth'})">ver texto</a></span>`; },
   analiseHtml(an, adm, em) {
     const li = l => (l || []).filter(Boolean).map(x => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('');
     return `<section class="card an-card"><header><h2>${icon('sparkle')} Caso organizado pela IA</h2><span class="muted small">${em ? `versão de <b>${esc(Atend.quando(em))}</b> · ` : ''}confira — a IA pode errar</span></header>
@@ -4941,7 +4955,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
         <div class="fld full"><label>Prioridade (se houver)</label><input name="prioridade" value="${esc(o.prioridade || '')}" placeholder="Ex.: pessoa idosa (art. 71 da Lei nº 10.741/2003)"></div>
         <div class="fld full"><label>Instruções para a IA</label><textarea name="instrucoes" rows="3" placeholder="Ex.: ${/regist|im[oó]ve/i.test(org) ? 'pedir a averbação da construção na matrícula nº …' : 'pedir a atualização do cadastro imobiliário e do IPTU, com a nova área construída…'}">${esc(o.instrucoes || '')}</textarea></div>
       </form>
-      <div class="btn-row right"><button class="btn ${R.html ? 'ghost' : 'primary'}" id="iGer">${icon('sparkle')} ${R.html ? 'Redigir de novo (substitui o texto)' : 'Redigir o requerimento com a IA'}</button></div></section>
+      <div class="btn-row right">${R.html ? Atend.versaoHtml('Requerimento redigido pela IA', R.em, R.editadoEm) : ''}<button class="btn ${R.html ? 'ghost' : 'primary'}" id="iGer">${icon('sparkle')} ${R.html ? 'Redigir de novo (substitui o texto)' : 'Redigir o requerimento com a IA'}</button></div></section>
       <div id="inEd"></div>`;
     $$('[data-ro]', host).forEach(b => b.onclick = () => { Atend._ro[a.id] = +b.dataset.ro; App.render(true); });
     const f = $('#if');
@@ -4955,13 +4969,13 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
       const opIA = { ...op, data: new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }), instrucoes: [op.instrucoes, outros.length ? `Este requerimento é dirigido somente a ${org}. O caso tramita em paralelo perante ${outros.join(' e ')}, em requerimento próprio: peça apenas o que compete a ${org} e, se for útil, mencione o procedimento paralelo.` : ''].filter(Boolean).join(' ') };
       try {
         const r = await apiT('redigir', { tipo: 'requerimento', dados: { ...Atend.dadosIA(a, c), orgao: org, fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: opIA } }, 340000);
-        const html = Editor.limpar(r.html || '');
+        const html = Editor.limpar(Atend.dadosEsc(r.html || ''));
         if (!html) throw new Error('a IA devolveu texto vazio');
-        await gravar({ html, opcoes: op, pronto: false }, 'Requerimento redigido. Revise com atenção: trechos [COMPLETAR] estão destacados.');
-        App.render(true);
+        await gravar({ html, opcoes: op, pronto: false, em: new Date().toISOString(), editadoEm: '' }, 'Requerimento redigido. Revise com atenção: trechos [COMPLETAR] estão destacados.');
+        App.render(true); Atend.destacar('#inEd .ed-card');
       } catch (e) { UI.toast('IA: ' + e.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Redigir o requerimento com a IA`; }
     };
-    if (R.html) Editor.montar($('#inEd'), { html: R.html, titulo: 'Requerimento' + (orgs.length > 1 ? ' — ' + org : ''), salvar: html => gravar({ html }), peticao: true,
+    if (R.html) Editor.montar($('#inEd'), { html: R.html, titulo: 'Requerimento' + (orgs.length > 1 ? ' — ' + org : ''), salvar: html => gravar({ html, editadoEm: new Date().toISOString() }), peticao: true,
       extra: `<button class="btn ghost sm" id="inPronta">${icon('check')} ${R.pronto ? 'Pronto' : 'Marcar como pronto'}</button>`,
       imprimir: html => Timbre.imprimir(html, 'Requerimento — ' + org + ' — ' + (c?.nome || ''), { peticao: true }) });
     $('#inPronta')?.addEventListener('click', async () => { await gravar({ pronto: true }, 'Requerimento marcado como pronto.'); App.render(true); });
@@ -4991,7 +5005,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
         <div class="fld full"><label>Prioridade de tramitação (se houver)</label><input name="prioridade" value="${esc(o.prioridade || '')}" placeholder="Ex.: idoso (art. 1.048, I, do CPC)"></div>
         <div class="fld full"><label>Instruções para a IA</label><textarea name="instrucoes" rows="3" placeholder="Ex.: dar ênfase à urgência da internação; pedir danos morais de R$ 30.000,00; incluir a Gabriela como litisconsorte…">${esc(o.instrucoes || '')}</textarea></div>
       </form>
-      <div class="btn-row right"><button class="btn ${a.inicialHtml ? 'ghost' : 'primary'}" id="iGer">${icon('sparkle')} ${a.inicialHtml ? 'Redigir de novo (substitui o texto)' : 'Redigir a petição inicial com a IA'}</button></div></section>
+      <div class="btn-row right">${a.inicialHtml ? Atend.versaoHtml('Petição redigida pela IA', a.inicialEm, a.inicialEditadoEm) : ''}<button class="btn ${a.inicialHtml ? 'ghost' : 'primary'}" id="iGer">${icon('sparkle')} ${a.inicialHtml ? 'Redigir de novo (substitui o texto)' : 'Redigir a petição inicial com a IA'}</button></div></section>
       <div id="inEd"></div>
       ${a.inicialHtml && !a.processoId ? `<section class="card"><header><h2>${icon('gavel')} Depois do protocolo</h2></header><p class="muted small">Ajuizou? Informe o número e o app cria o processo (cliente, parte contrária, área e documentos já vinculados) e passa a acompanhar as movimentações.</p><div class="btn-row"><input class="input" id="iCnj" placeholder="0000000-00.0000.0.00.0000" style="max-width:280px"><button class="btn primary" id="iAj">${icon('check')} Registrar ajuizamento</button></div></section>` : ''}`;
     const f = $('#if');
@@ -5002,13 +5016,13 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
       const op = { ...ler(), data: new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }) };
       try {
         const r = await apiT('redigir', { tipo: 'inicial', dados: { ...Atend.dadosIA(a, c), fatos: an.fatos || [], reus: an.partesContrarias || [], fundamentos: an.fundamentos || [], pedidos: an.pedidos || [], opcoes: op } }, 340000);
-        const html = Editor.limpar(r.html || '');
+        const html = Editor.limpar(Atend.dadosEsc(r.html || ''));
         if (!html) throw new Error('a IA devolveu texto vazio');
-        await Atend.salvar(a, { opcoesInicial: ler(), inicialHtml: html, status: /Ajuizado/.test(a.status) ? a.status : 'Inicial em elaboração' }, 'Petição redigida. Revise com atenção: trechos [COMPLETAR] e [INSERIR PRECEDENTE] estão destacados.');
-        App.render(true);
+        await Atend.salvar(a, { opcoesInicial: ler(), inicialHtml: html, inicialEm: new Date().toISOString(), inicialEditadoEm: '', status: /Ajuizado/.test(a.status) ? a.status : 'Inicial em elaboração' }, 'Petição redigida. Revise com atenção: trechos [COMPLETAR] e [INSERIR PRECEDENTE] estão destacados.');
+        App.render(true); Atend.destacar('#inEd .ed-card');
       } catch (e) { UI.toast('IA: ' + e.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Redigir a petição inicial com a IA`; }
     };
-    if (a.inicialHtml) Editor.montar($('#inEd'), { html: a.inicialHtml, titulo: 'Petição inicial', salvar: html => Atend.salvar(a, { inicialHtml: html }), peticao: true,
+    if (a.inicialHtml) Editor.montar($('#inEd'), { html: a.inicialHtml, titulo: 'Petição inicial', salvar: html => Atend.salvar(a, { inicialHtml: html, inicialEditadoEm: new Date().toISOString() }), peticao: true,
       extra: `<button class="btn ghost sm" id="inPronta">${icon('check')} Marcar como pronta</button>`,
       imprimir: html => Timbre.imprimir(html, 'Petição inicial — ' + (c?.nome || ''), { peticao: true }) });
     $('#inPronta')?.addEventListener('click', async () => { await Atend.salvar(a, { status: 'Inicial pronta' }, 'Petição marcada como pronta.'); App.render(true); });
@@ -6322,8 +6336,7 @@ const Adm = {
         <section class="card"><header><h2>${icon('calendar')} Prazos e exigências</h2><button class="btn ghost sm" id="aAdd">${icon('plus')} Novo</button></header>
           ${prazos.length ? `<ul class="agenda-list compact">${prazos.map(Views.agendaItem).join('')}</ul>` : '<p class="muted small">Nenhum prazo ou exigência. Lance aqui o prazo para cumprir nota devolutiva, recorrer ou retirar o documento.</p>'}</section>
         ${rel.length ? `<section class="card"><header><h2>${icon('link')} Procedimentos relacionados</h2></header><p class="muted small">Mesmo caso, em outros órgãos.</p><ul class="plain">${rel.map(x => `<li><a href="#/demanda/${x.id}">${icon('stamp')} ${esc(x.orgao || x.tipo || 'Demanda')}</a> ${Adm.st(x)}${x.numero ? ` <span class="muted small mono">${esc(x.numero)}</span>` : ' <span class="muted small">protocolo pendente</span>'}</li>`).join('')}</ul></section>` : ''}
-        <section class="card"><header><h2>${icon('file')} Documentos</h2></header>
-          ${(d.arquivos || []).length ? `<ul class="plain files">${d.arquivos.map(a => `<li>${icon('file')} ${a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>` : esc(a.nome)}</li>`).join('')}</ul>` : `<p class="muted small">${at ? `Os documentos do cliente estão no <a href="#/atendimento/${at.id}/fatos">atendimento</a>.` : 'Os documentos ficam no atendimento que originou a demanda.'}</p>`}</section>
+        ${Adm.docsHtml(d, at, clientes)}
       </div>
     </div>`;
     $('#dSt').onchange = async e => {
@@ -6344,6 +6357,20 @@ const Adm = {
     $$('[data-mov]', v).forEach(b => b.onclick = () => Adm.editMov(DB.get('movimentos', b.dataset.mov), d));
     $$('[data-vis]', v).forEach(b => b.onclick = async () => { const m = DB.get('movimentos', b.dataset.vis); m.visivelCliente = !m.visivelCliente; await DB.save('movimentos', m); App.render(true); });
     $$('[data-done]', v).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); Views.toggleDone(b.dataset.done); });
+  },
+  /** documentos lidos ao vivo: pessoais (cadastro do cliente) e do caso (atendimento + os juntados à demanda) */
+  docsHtml(d, at, clientes) {
+    const item = x => `<li>${icon('file')} ${x.link ? `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.tipo || x.nome)}</a>` : `<span>${esc(x.tipo || x.nome)}</span> <small class="t-warn">sem arquivo no Drive</small>`}${x.tipo ? ` <small class="muted">${esc(x.nome)}</small>` : ''}</li>`;
+    const pess = clientes.flatMap(c => (c.documentos || []).map(x => ({ ...x, tipo: (clientes.length > 1 ? c.nome.split(' ')[0] + ' — ' : '') + (x.tipo || '') })));
+    const caso = [], vistos = new Set();
+    [...((at && at.documentos) || []), ...(d.arquivos || [])].forEach(x => { const k = x.fileId || x.link || x.nome; if (!vistos.has(k)) { vistos.add(k); caso.push(x); } });
+    const pasta = (at && at.pastaLink) ? ` <a class="link small" href="${esc(at.pastaLink)}" target="_blank" rel="noopener">${icon('link')} pasta</a>` : '';
+    return `<section class="card"><header><h2>${icon('file')} Documentos</h2></header>
+      <h4 class="sec">Documentos pessoais (${pess.length})${clientes[0]?.pastaDocs ? ` <a class="link small" href="${esc(clientes[0].pastaDocs)}" target="_blank" rel="noopener">${icon('link')} pasta</a>` : ''}</h4>
+      ${pess.length ? `<ul class="plain files">${pess.map(item).join('')}</ul>` : `<p class="muted small">Nenhum. Junte RG, CPF e comprovante de residência no cadastro do cliente (Clientes › Editar).</p>`}
+      <h4 class="sec">Documentos do caso (${caso.length})${pasta}</h4>
+      ${caso.length ? `<ul class="plain files">${caso.map(item).join('')}</ul>` : '<p class="muted small">Nenhum documento do caso.</p>'}
+      ${at ? `<p class="muted small"><a href="#/atendimento/${at.id}/fatos">${icon('plus')} juntar documentos do caso</a></p>` : ''}</section>`;
   },
   editMov(m, d) { UI.editRecord('movimentos', m || { data: todayISO(), visivelCliente: true, origem: 'escritorio' }, { extraBase: { demandaId: d.id }, title: m ? 'Editar andamento' : 'Lançar andamento' }); },
   editPrazo(x, demandaId) { UI.editRecord('prazos', x || { tipo: 'Exigência', data: todayISO(), visivelCliente: false }, { extraBase: { demandaId }, title: x ? 'Editar prazo' : 'Novo prazo ou exigência' }); },
