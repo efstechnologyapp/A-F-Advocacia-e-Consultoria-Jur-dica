@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.26.3';
+const APP_VERSAO = '1.26.4';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.26.4', data: '18/11/2026', itens: ['Pastas do escritório no Drive compartilhadas automaticamente com cada membro da equipe (administrador ou equipe): os links dos documentos abrem com a própria conta Google de cada um, sem pedir acesso. Clientes não recebem acesso às pastas.', 'Documentos pessoais dos clientes passam a ficar na pasta “_Clientes (documentos pessoais)”.', 'Demanda administrativa: documentos do caso não aparecem mais repetidos.'] },
   { numero: '1.26.3', data: '18/11/2026', itens: ['Demanda administrativa: o quadro Documentos agora se divide em “Documentos pessoais” (do cadastro do cliente) e “Documentos do caso” (do atendimento), sempre atualizados — o que for juntado depois de abrir a demanda também aparece, com link para cada arquivo.'] },
   { numero: '1.26.2', data: '18/11/2026', itens: ['Requerimentos e petições: a IA recebe o endereço, o e-mail e o telefone do escritório cadastrados no sistema e os usa na qualificação e na assinatura; se ainda sobrar algum [COMPLETAR] desses dados, o app preenche sozinho.', 'Requerimento e petição inicial: mostra quando o texto foi redigido pela IA e a data da última edição, e destaca o texto novo ao terminar.'] },
   { numero: '1.26.1', data: '18/11/2026', itens: ['Relato e documentos: ao lado do botão aparece “Fatos organizados em [data e hora]”, e o quadro “Caso organizado pela IA” mostra a data e a hora da versão. Ao terminar, a tela desce até o resultado e o destaca.'] },
@@ -6363,7 +6364,7 @@ const Adm = {
     const item = x => `<li>${icon('file')} ${x.link ? `<a href="${esc(x.link)}" target="_blank" rel="noopener">${esc(x.tipo || x.nome)}</a>` : `<span>${esc(x.tipo || x.nome)}</span> <small class="t-warn">sem arquivo no Drive</small>`}${x.tipo ? ` <small class="muted">${esc(x.nome)}</small>` : ''}</li>`;
     const pess = clientes.flatMap(c => (c.documentos || []).map(x => ({ ...x, tipo: (clientes.length > 1 ? c.nome.split(' ')[0] + ' — ' : '') + (x.tipo || '') })));
     const caso = [], vistos = new Set();
-    [...((at && at.documentos) || []), ...(d.arquivos || [])].forEach(x => { const k = x.fileId || x.link || x.nome; if (!vistos.has(k)) { vistos.add(k); caso.push(x); } });
+    [...((at && at.documentos) || []), ...(d.arquivos || [])].forEach(x => { const k = String(x.link || x.fileId || x.nome).replace(/[?#].*$/, '').replace(/\/(view|edit).*$/, ''); if (!vistos.has(k)) { vistos.add(k); caso.push(x); } });
     const pasta = (at && at.pastaLink) ? ` <a class="link small" href="${esc(at.pastaLink)}" target="_blank" rel="noopener">${icon('link')} pasta</a>` : '';
     return `<section class="card"><header><h2>${icon('file')} Documentos</h2></header>
       <h4 class="sec">Documentos pessoais (${pess.length})${clientes[0]?.pastaDocs ? ` <a class="link small" href="${esc(clientes[0].pastaDocs)}" target="_blank" rel="noopener">${icon('link')} pasta</a>` : ''}</h4>
