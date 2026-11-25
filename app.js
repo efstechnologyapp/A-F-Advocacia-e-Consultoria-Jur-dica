@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.29.1';
+const APP_VERSAO = '1.29.3';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,8 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.29.3', data: '25/11/2026', itens: ['Auditoria consultiva em lote: a tela se atualiza sozinha a cada contrato concluído (cards do painel, contador de analisados, tomadores), sem precisar recarregar a página. Não atualiza enquanto houver janela aberta ou campo em edição.'] },
+  { numero: '1.29.2', data: '25/11/2026', itens: ['Contratos que só dizem o prazo (ex.: “12 meses a contar da assinatura”): o app calcula o término (início + prazo − 1 dia), e o contrato passa a contar como vigente e a entrar na carteira mensal.', 'A IA da auditoria agora lê também a data de assinatura e o prazo em meses; contratos analisados antes e ainda sem término voltam para a fila uma vez.'] },
   { numero: '1.29.1', data: '25/11/2026', itens: ['Juntar documentos: quando um PDF de contrato só “parece” com um contrato cadastrado (sem o mesmo número), ele vem marcado como ligação incerta e, por segurança, como contrato novo — a sugestão fica à vista para escolher só se tiver certeza.', 'Conferência automática ao terminar de juntar: verifica os vínculos e, se a pasta do Drive da empresa estiver informada, compara com ela; avisa na hora se algo ficou errado ou faltando.', 'Auditoria consultiva confere a consistência: se os PDFs forem de outro número ou de contratos diferentes, a ficha, o card do contrato, o relatório e a planilha mostram o alerta “documentos inconsistentes”.'] },
   { numero: '1.29.0', data: '25/11/2026', itens: ['As análises em lote (inclusive as da correção de vínculos) aparecem sempre no quadro “Auditoria consultiva (IA)” do painel, com barra de progresso e botão Parar.', 'Juntar documentos: o número do contrato escrito no PDF passa a mandar — um PDF do contrato nº X nunca mais é ligado, por semelhança de nome, a um contrato de nº Y; sem contrato com aquele número, a sugestão é criar um novo. Na revisão, aviso em destaque se você escolher um contrato de número diferente.', 'Conferência com a pasta: detecta PDFs de contrato ligados ao contrato errado e corrige em um clique — cria o contrato certo (ou usa o que já tem o número), leva junto postos, obrigações e aditivos que vieram do PDF, apaga as divergências indevidas e refaz a auditoria consultiva dos envolvidos.'] },
   { numero: '1.28.4', data: '25/11/2026', itens: ['Inventário documental: nova coluna “Juntado ao sistema em” (data e hora em que cada arquivo entrou no app), com os mais recentes no topo por padrão.', 'Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
@@ -2715,6 +2717,7 @@ const Consult = {
     $('#heroDocs', host)?.addEventListener('click', () => Docs.open(e));
     AuditCons.bindLote(host, e);
     Consult.bindConferencia(host, e);
+    if (!AuditCons._fins?.[e.id]) { (AuditCons._fins ||= {})[e.id] = 1; AuditCons.completarFins(e).then(n => { if (n) { UI.toast(`${n} contrato(s) com término calculado (início + prazo).`, 'ok'); App.render(); } }).catch(() => {}); }
     const verAch = f => { Achados.st = { risco: 'todos', status: 'abertos', emp: e.id, area: '', busca: '', ...f }; Achados._rolar = 1; location.hash = '#/achados'; };
     $$('[data-ach-r]', host).forEach(x => x.onclick = () => verAch({ risco: x.dataset.achR }));
     $$('[data-ach-a]', host).forEach(x => x.onclick = () => verAch({ area: x.dataset.achA }));
@@ -6702,6 +6705,30 @@ const AuditCons = {
   pillSN: v => { const k = AuditCons.sn(v); return `<span class="ac-sn ${k}">${k === 'sim' ? 'Sim' : k === 'nao' ? 'Não' : 'Não identificado'}</span>`; },
   t: x => x === null || x === undefined || x === '' ? AuditCons.NI : String(x),
   vig: c => { const a = c.auditoria || {}; return { ini: a.vigencia?.inicio || c.inicio, fim: (isISO(a.vigencia?.fim) ? a.vigencia.fim : '') || c.fim, prorr: a.vigencia?.prorrogavel, det: a.vigencia?.prorrogacoes, ref: a.vigencia?.ref }; },
+  /** término calculado quando o contrato só diz "X meses a contar de...": início (ou assinatura) + prazo − 1 dia */
+  fimCalc(c) {
+    const vg = c.auditoria?.vigencia || {}, txt = [vg.fim, vg.inicio, vg.limite, vg.ref, vg.prorrogacoes].filter(Boolean).join(' ');
+    const dt = s => { s = String(s || ''); if (isISO(s)) return s; const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
+    const ini = (isISO(c.inicio) && c.inicio) || dt(vg.inicio) || dt(vg.assinatura);
+    const EXT = { um: 1, dois: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, dezoito: 18, vinte: 20, trinta: 30, sessenta: 60 };
+    let m = num(vg.prazoMeses);
+    if (!m) { const t = norm(txt), a = t.match(/(\d{1,3})\s*(?:\([^)]*\)\s*)?meses/), b = t.match(/\b(um|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|dezoito|vinte|trinta|sessenta)\s+meses/), y = t.match(/(\d{1,2}|um|dois|tres|quatro|cinco)\s*(?:\([^)]*\)\s*)?anos?/);
+      m = a ? +a[1] : b ? EXT[b[1]] : y ? (EXT[y[1]] || +y[1]) * 12 : null; }
+    if (!ini || !m || m > 120) return null;
+    const d = new Date(ini + 'T12:00:00'); d.setMonth(d.getMonth() + m); d.setDate(d.getDate() - 1);
+    return { inicio: ini, fim: d.toISOString().slice(0, 10), meses: m };
+  },
+  /** completa o término dos contratos já analisados que ficaram sem data (sem chamar a IA) */
+  async completarFins(e) {
+    let n = 0;
+    for (const c of empRecs('contratos', e.id).filter(c => !isISO(c.fim) && c.auditoria && !c.auditoria.manual && !/encerrad|rescindid|extint/i.test(c.status || ''))) {
+      const f = AuditCons.fimCalc(c); if (!f) continue;
+      await DB.save('contratos', { ...c, inicio: isISO(c.inicio) ? c.inicio : f.inicio, fim: f.fim, prazo: c.prazo || `${f.meses} meses (término calculado: início + prazo)` }); n++;
+    }
+    return n;
+  },
+  /** analisado com a versão antiga da IA (sem prazo em meses) e ainda sem término: entra de novo na fila */
+  semFimAntigo: c => !isISO(c.fim) && c.auditoria && !c.auditoria.manual && !('prazoMeses' in (c.auditoria.vigencia || {})) && !/encerrad|rescindid|extint/i.test(c.status || ''),
   riscos: c => (c.auditoria?.riscos || []).reduce((o, r) => { const k = norm(r.nivel).startsWith('a') ? 'Alto' : norm(r.nivel).startsWith('m') ? 'Médio' : 'Baixo'; o[k]++; return o; }, { Alto: 0, Médio: 0, Baixo: 0 }),
 
   /* ---------- cards da ficha do contrato (na linha de indicadores) ---------- */
@@ -6769,7 +6796,9 @@ const AuditCons = {
     if (lido && cad && lido !== cad) alerta.push(`Os documentos analisados são do contrato nº ${lido}, mas o cadastro é o nº ${cad}.`);
     const cf = Vinculos.conflitos(e).find(x => x.c.codigo === cur.codigo);
     if (cf) alerta.push(`Há PDFs de contratos diferentes ligados a este contrato (${[cf.proprio, ...cf.outros.map(o => o.n)].filter((x, i, l) => l.indexOf(x) === i).join(', ')}) — corrija em Conferência com a pasta.`);
-    await DB.save('contratos', { ...cur, ...add, auditoria: { ...r, em: new Date().toISOString(), arquivos: arqs.map(a => a.nome), alerta: alerta.join(' ') } });
+    const novo = { ...cur, ...add, auditoria: { ...r, em: new Date().toISOString(), arquivos: arqs.map(a => a.nome), alerta: alerta.join(' ') } };
+    if (!isISO(novo.fim)) { const f = AuditCons.fimCalc(novo); if (f) { novo.fim = f.fim; if (!isISO(novo.inicio)) novo.inicio = f.inicio; if (!novo.prazo) novo.prazo = `${f.meses} meses (término calculado: início + prazo)`; } }
+    await DB.save('contratos', novo);
     return r;
   },
   /** correção manual: vigência e reajuste */
@@ -6842,21 +6871,27 @@ const AuditCons = {
     const grupos = [...new Set(cs.map(tomadorBase))].sort();
     return `<section class="card ac-lote"><header><h2>${icon('sparkle')} Auditoria consultiva (IA)</h2><span class="muted small">${feitos} de ${cs.length} contratos analisados</span></header>
       <p class="muted small">A IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual: dados com cláusula e página, riscos alto/médio/baixo, providências, oportunidades de repactuação e documentos que faltam. O resultado vai para o card de cada contrato e para o Relatório de auditoria.</p>
-      <div class="btn-row"><select class="input" id="acGr" style="max-width:340px"><option value="">Todos os tomadores</option>${grupos.map(g => `<option>${esc(g)}</option>`).join('')}</select>
+      <div class="btn-row"><select class="input" id="acGr" style="max-width:340px"><option value="">Todos os tomadores</option>${grupos.map(g => `<option${g === AuditCons._gr ? ' selected' : ''}>${esc(g)}</option>`).join('')}</select>
       <label class="switch small"><input type="checkbox" id="acRe"><span></span>Refazer os já analisados</label><button class="btn primary" id="acLote">${icon('sparkle')} Analisar</button></div>
       <div id="acProg"></div></section>`;
   },
   bindLote(host, e) {
     const b = $('#acLote', host); if (!b) return;
     b.onclick = async () => {
-      const g = $('#acGr', host).value, re = $('#acRe', host).checked;
-      const fila = empRecs('contratos', e.id).filter(c => (!g || tomadorBase(c) === g) && (re || !c.auditoria || c.auditoria.manual)).sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', { numeric: true }));
+      const g = (AuditCons._gr = $('#acGr', host).value), re = $('#acRe', host).checked;
+      const fila = empRecs('contratos', e.id).filter(c => (!g || tomadorBase(c) === g) && (re || !c.auditoria || c.auditoria.manual || AuditCons.semFimAntigo(c))).sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', { numeric: true }));
       if (!fila.length) return UI.toast('Nenhum contrato pendente nesse filtro.', 'ok');
       if (!await UI.confirm(`Analisar ${fila.length} contrato(s) com a IA? Leva cerca de 1 a 3 minutos por contrato. Pode continuar usando o app; se parar no meio, é só clicar de novo que ele continua dos que faltam.`, 'Analisar', false)) return;
       AuditCons.rodar(host, e, fila);
     };
   },
 
+  /** redesenha a tela aberta (cards, contadores, listas) a cada contrato concluído — exceto se houver janela aberta ou campo em edição */
+  atualizarTela() {
+    const a = document.activeElement;
+    if ($('#modal') || (a && a.matches && a.matches('input:not([type=checkbox]),textarea') && a.id !== 'acGr')) return;
+    try { App.render(true); } catch (_) {}
+  },
   /** roda a análise de uma fila de contratos mostrando o progresso no próprio quadro do painel */
   async rodar(host, e, fila, titulo = '') {
     if (AuditCons._rodando) return UI.toast('Já há uma análise em andamento — acompanhe no quadro.', 'warn');
@@ -6868,9 +6903,9 @@ const AuditCons = {
       if (AuditCons._parar) break;
       const P = Pq(); if (Bq()) Bq().disabled = true; if (P) P.innerHTML = `<div class="ac-prog">${titulo ? `<div class="small"><b>${esc(titulo)}</b></div>` : ''}<div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`;
       if (P) $('#acStop', P).onclick = () => { AuditCons._parar = true; UI.toast('Vai parar ao terminar o contrato atual.'); };
-      try { await AuditCons.analisar(e, c); ok++; } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
+      try { await AuditCons.analisar(e, c); ok++; AuditCons.atualizarTela(); } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
     }
-    if (Bq()) Bq().disabled = false; AuditCons._rodando = false;
+    AuditCons._rodando = false; AuditCons.atualizarTela(); if (Bq()) Bq().disabled = false;
     const n = empRecs('contratos', e.id), hd = $('.ac-lote header span'); if (hd) hd.textContent = `${n.filter(c => c.auditoria && !c.auditoria.manual).length} de ${n.length} contratos analisados`;
     const P = Pq(); if (P) P.innerHTML = `<div class="notice ${erro.length ? 'warn' : 'soft'}">${icon(erro.length ? 'alert' : 'check')}<div><b>${ok} contrato(s) analisados.</b>${erro.length ? `<br>Não analisados (${erro.length}):<ul>${erro.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div></div>`;
   },
