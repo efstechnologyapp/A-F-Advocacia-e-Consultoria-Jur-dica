@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.31.1';
+const APP_VERSAO = '1.31.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.31.2', data: '25/11/2026', itens: ['Correção: depois de “Analisar de novo” (ou outra gravação) numa janela aberta a partir de uma lista, ao fechar e reabrir aparecia a versão antiga do registro — os dados estavam salvos, mas a lista não tinha sido atualizada. Agora a lista se atualiza ao fechar a janela e sempre abre a versão mais recente.'] },
   { numero: '1.31.1', data: '25/11/2026', itens: ['Auditoria consultiva passa a ler o CNPJ do órgão contratante e preenche o CNPJ tomador quando estiver vazio.', 'Valor mensal: quando o contrato só traz o valor global, o app calcula o mensal (global ÷ meses da vigência).'] },
   { numero: '1.31.0', data: '25/11/2026', itens: ['Conferência do cadastro (Painel → quadro da pasta do Drive): aponta contrato com CNPJ tomador de outra cidade, número de contrato repetido no mesmo tomador e dados diferentes do que a IA leu nos PDFs (início, término, valor mensal); botão “Revisar” para corrigir marcando o que aplicar.', 'Agrupamento por tomador: a cidade escrita no tomador vale mais que o CNPJ, e a raiz do CNPJ fica com a cidade da maioria dos contratos — um CNPJ errado não leva mais o contrato para o grupo de outra cidade.', 'Conferir com a pasta: lista também os contratos do tomador que estão no sistema mas não estão na pasta.', 'Menu do portal do cliente: mesma correção do fechamento ao arrastar o mouse para fora.'] },
   { numero: '1.30.4', data: '25/11/2026', itens: ['Correção: selecionar o texto de um campo (ex.: CNPJ) arrastando o mouse e soltar fora da janela fechava a janela de edição. Agora a janela só fecha se o clique começar no fundo escuro.'] },
@@ -286,7 +287,9 @@ const Session = {
 /* ---------- Banco de dados local + sincronização ---------- */
 const COLLS = ['clientes', 'processos', 'movimentos', 'prazos', 'empresas', 'contratos', 'obrigacoes', 'maoDeObra', 'materiais', 'financeiro', 'medicoes', 'indicadores', 'achados', 'documentos', 'aditivos', 'config', 'atendimentos', 'supervenientes', 'remessas', 'demandas'];
 const DB = {
-  data: {}, outbox: [], syncing: false, lastSync: null,
+  data: {}, outbox: [], syncing: false, lastSync: null, rev: 0,
+  /** procura um registro pelo id em todas as coleções */
+  find(id) { for (const c of COLLS) { const r = this.data[c]?.get(id); if (r) return r; } return null; },
   key() { return 'db:' + (Session.mode || 'x') + ':' + (Session.user?.email || 'local'); },
   reset() { this.data = {}; COLLS.forEach(c => this.data[c] = new Map()); },
   all(c) { return [...(this.data[c] || new Map()).values()]; },
@@ -320,14 +323,14 @@ const DB = {
   async save(c, recs) {
     recs = (Array.isArray(recs) ? recs : [recs]).map(r => { if (!r.id) r.id = uid(c.slice(0, 2)); return this.stamp(r); });
     const op = { op: 'save', c, records: recs };
-    this._applyLocal(op);
+    this._applyLocal(op); this.rev++;
     if (Session.remote) { for (let i = 0; i < recs.length; i += 250) this.outbox.push({ op: 'save', c, records: recs.slice(i, i + 250) }); }
     await this.persist(); this.flush();
     return recs;
   },
   async remove(c, ids) {
     ids = Array.isArray(ids) ? ids : [ids];
-    const op = { op: 'remove', c, ids }; this._applyLocal(op);
+    const op = { op: 'remove', c, ids }; this._applyLocal(op); this.rev++;
     if (Session.remote) this.outbox.push(op);
     await this.persist(); this.flush();
   },
@@ -1089,6 +1092,7 @@ const UI = {
   },
   /* ---------- janela modal ---------- */
   modal({ title, sub = '', body, foot = '', wide = false, onOpen }) {
+    if (UI._rev0 === undefined) UI._rev0 = DB.rev;
     UI.closeModal();
     const m = document.createElement('div'); m.className = 'modal-bg'; m.id = 'modal';
     m.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><header><div><h3>${esc(title)}</h3>${sub ? `<p>${sub}</p>` : ''}</div><button class="icon-btn" data-close aria-label="Fechar">${icon('x')}</button></header><div class="modal-body">${body}</div>${foot ? `<footer>${foot}</footer>` : ''}</div>`;
@@ -1102,7 +1106,11 @@ const UI = {
   /** resolve quando o modal for fechado */
   /** resolve quando o modal for fechado; 'substituido' se outra janela tomou o lugar dele */
   aguardar(m) { return new Promise(r => { const t = setInterval(() => { if (!m.isConnected) { clearInterval(t); r($('#modal') ? 'substituido' : undefined); } }, 300); }); },
-  closeModal() { $('#modal')?.remove(); document.body.classList.remove('noscroll'); },
+  closeModal() {
+    $('#modal')?.remove(); document.body.classList.remove('noscroll');
+    // se algo foi gravado enquanto a janela estava aberta, redesenha a tela por trás ao fechar (listas e cards não ficam desatualizados)
+    setTimeout(() => { if (!$('#modal') && UI._rev0 !== undefined) { const mudou = DB.rev !== UI._rev0; UI._rev0 = undefined; if (mudou) try { App.render(true); } catch (_) {} } }, 0);
+  },
   confirm(msg, okLabel = 'Confirmar', danger = true) {
     return new Promise(res => {
       const m = UI.modal({ title: 'Confirmação', body: `<p class="confirm-msg">${msg}</p>`, foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cfOk">${esc(okLabel)}</button>` });
@@ -1262,7 +1270,8 @@ function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions
     $('.dt-body', host).innerHTML = slice.length ? `<div class="table-wrap"><table class="dt"><thead><tr>${fields.map(f => `<th data-sort="${f.k}" class="${f.type === 'money' || f.type === 'num' ? 'r' : ''}">${esc(f.label.replace(/ \(R\$\)/, ''))}${st.sort === f.k ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>${slice.map(r => `<tr data-id="${r.id}">${fields.map(f => `<td class="${f.type === 'money' || f.type === 'num' ? 'r' : ''} ${f.type === 'long' ? 'wrap' : ''}">${f.cel ? f.cel(r[f.k], r) : UI.cell(f, r[f.k])}</td>`).join('')}</tr>`).join('')}${st.page === pages - 1 ? totals : ''}</tbody></table></div>
       ${pages > 1 ? `<div class="pager"><button class="btn ghost sm" data-pg="-1" ${st.page ? '' : 'disabled'}>${icon('chevL')}</button><span>Página ${st.page + 1} de ${pages} · ${list.length} registros</span><button class="btn ghost sm" data-pg="1" ${st.page < pages - 1 ? '' : 'disabled'}>${icon('chevR')}</button></div>` : `<div class="pager"><span>${list.length} registro(s)</span></div>`}` : `<div class="empty">${icon('list')}<p>${rows.length ? 'Nenhum resultado para o filtro.' : emptyMsg}</p></div>`;
     $$('th[data-sort]', host).forEach(th => th.onclick = () => { st.dir = st.sort === th.dataset.sort ? -st.dir : 1; st.sort = th.dataset.sort; draw(); });
-    $$('tr[data-id]', host).forEach(tr => tr.onclick = () => onOpen && onOpen(rows.find(r => r.id === tr.dataset.id)));
+    // abre sempre a versão mais recente do registro (a lista pode ter sido montada antes de uma gravação)
+    $$('tr[data-id]', host).forEach(tr => tr.onclick = () => { if (!onOpen) return; const r = rows.find(x => x.id === tr.dataset.id); onOpen((coll && DB.get(coll, tr.dataset.id)) || (r && DB.find(r.id)) || r); });
     $$('[data-pg]', host).forEach(b => b.onclick = () => { st.page += +b.dataset.pg; draw(); });
   };
   host.innerHTML = `<div class="dt-tools"><div class="search">${icon('search')}<input type="search" placeholder="Buscar…" value="${esc(st.q)}"></div>${filters.map(fl => `<select data-filter="${fl.k}"><option value="">${esc(fl.label)}: todos</option>${fl.opts.map(o => `<option ${st.f[fl.k] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('')}${tools}<span class="sp"></span>${actions}</div><div class="dt-body"></div>`;
