@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.28.4';
+const APP_VERSAO = '1.29.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,7 +27,8 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.28.4', data: '25/11/2026', itens: ['Inventário documental: nova coluna “Juntado ao sistema em” (data e hora em que cada arquivo entrou no app).', 'Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
+  { numero: '1.29.0', data: '25/11/2026', itens: ['Juntar documentos: o número do contrato escrito no PDF passa a mandar — um PDF do contrato nº X nunca mais é ligado, por semelhança de nome, a um contrato de nº Y; sem contrato com aquele número, a sugestão é criar um novo. Na revisão, aviso em destaque se você escolher um contrato de número diferente.', 'Conferência com a pasta: detecta PDFs de contrato ligados ao contrato errado e corrige em um clique — cria o contrato certo (ou usa o que já tem o número), leva junto postos, obrigações e aditivos que vieram do PDF, apaga as divergências indevidas e refaz a auditoria consultiva dos envolvidos.'] },
+  { numero: '1.28.4', data: '25/11/2026', itens: ['Inventário documental: nova coluna “Juntado ao sistema em” (data e hora em que cada arquivo entrou no app), com os mais recentes no topo por padrão.', 'Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
   { numero: '1.28.3', data: '25/11/2026', itens: ['A auditoria consultiva também preenche o tomador quando ele está vazio no cadastro.', 'Agrupamento por município mais preciso: secretarias e fundos entram no município também pela raiz do CNPJ do tomador e pelo nome da cidade na unidade, mesmo quando o nome do contratante não cita a cidade.'] },
   { numero: '1.28.2', data: '25/11/2026', itens: ['Auditoria consultiva e “Ler de novo”: passam a abrir também os PDFs que estão em pastas do Drive fora do app (ligados ao contrato pelo link), pela conta do app.', 'Painel da empresa: “Conferência com a pasta do Drive” — cole o link da pasta e veja quantos contratos há nela, quantos estão no sistema e quais faltam.'] },
   { numero: '1.28.1', data: '25/11/2026', itens: ['Ficha do contrato: o card de Vigência (início, término, dias restantes e prorrogação) substitui o indicador antigo, na mesma linha de Valor mensal, Postos e Completude.', 'Reajuste, repactuação, revisão e reequilíbrio num card só: se o contrato prevê, se já houve e quando, e a data do próximo reajuste (12 meses do último ou do início), com alerta quando o prazo já está aberto.'] },
@@ -1223,8 +1224,8 @@ function pill(v) {
 
 /* ---------- Tabela de dados (busca, filtros, ordenação, paginação) ---------- */
 const TableState = {};
-function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', tools = '', sortDefault = null, emptyMsg = 'Nenhum registro.', cols }) {
-  const st = TableState[id] = TableState[id] || { q: '', sort: sortDefault, dir: 1, page: 0, f: {} };
+function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions = '', tools = '', sortDefault = null, sortDir = 1, emptyMsg = 'Nenhum registro.', cols }) {
+  const st = TableState[id] = TableState[id] || { q: '', sort: sortDefault, dir: sortDir, page: 0, f: {} };
   const fields = cols ? cols.map(k => schema.fields.find(f => f.k === k)) : schema.fields.filter(f => f.list);
   const draw = () => {
     let list = rows.slice();
@@ -2451,7 +2452,7 @@ const Consult = {
       ${gaps ? `<div class="notice warn">${icon('alert')}<div><b>${gaps} campo(s) “não identificado no contrato”</b> nesta aba — lacunas documentais que reduzem o índice de completude. Clique no registro para completar quando o documento for obtido.</div></div>` : ''}
       <section class="card flush" id="dt"></section>`;
     const open = r => coll === 'contratos' ? Consult.contrato360(e, r) : UI.editRecord(coll, r, { ctx });
-    dataTable($('#dt'), { id: coll + e.id, rows, schema: sc, filters, sortDefault: sc.key || (sc.fields.some(f => f.k === 'contrato') ? 'contrato' : null), onOpen: open, actions: `<button class="btn primary sm" id="dtNew">${icon('plus')} Novo</button>`, emptyMsg: `Nenhum registro em ${sc.titulo}. Use “Novo” ou importe a planilha.` });
+    dataTable($('#dt'), { id: coll + e.id, rows, schema: sc, filters, sortDefault: coll === 'documentos' ? 'createdAt' : sc.key || (sc.fields.some(f => f.k === 'contrato') ? 'contrato' : null), sortDir: coll === 'documentos' ? -1 : 1, onOpen: open, actions: `<button class="btn primary sm" id="dtNew">${icon('plus')} Novo</button>`, emptyMsg: `Nenhum registro em ${sc.titulo}. Use “Novo” ou importe a planilha.` });
     $('#dtNew').onclick = () => {
       const base = {}; if (coll === 'contratos' && e.sigla) { const n = rows.map(r => +(String(r.codigo).match(/(\d+)$/) || [0, 0])[1]).reduce((a, b) => Math.max(a, b), 0) + 1; base.codigo = `${e.sigla}-${String(n).padStart(3, '0')}`; }
       if (coll === 'achados') base.status = 'Pendente';
@@ -2512,10 +2513,11 @@ const Consult = {
     return `<section class="card" id="cfCard"><header><h2>${icon('list')} Conferência com a pasta do Drive</h2></header>
       <p class="muted small">Cole o link da pasta com os PDFs dos contratos (ex.: a pasta “VILA VELHA”): o app compara os números dos contratos dos arquivos com os cadastrados e mostra o que falta no sistema.</p>
       <div class="btn-row"><input class="input" id="cfPasta" placeholder="https://drive.google.com/drive/folders/…" value="${esc(e.pastaContratos || '')}" style="flex:1;min-width:240px"><button class="btn ghost" id="cfOk">${icon('search')} Conferir</button></div>
-      <div id="cfRes"></div>
+      <div id="cfRes"></div>${Vinculos.avisoHtml(e)}
       ${soltos.length ? `<h4 class="sec">${soltos.length} arquivo(s) juntados sem contrato no sistema</h4><ul class="plain files">${soltos.map(d => `<li>${icon('file')} <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.arquivo || d.tipo || 'documento')}</a>${d.contrato ? ` <small class="muted">ligado a “${esc(d.contrato)}”, que não existe no cadastro</small>` : ''}</li>`).join('')}</ul>` : ''}</section>`;
   },
   bindConferencia(host, e) {
+    $('#vnRep', host)?.addEventListener('click', () => Vinculos.abrir(e, () => App.render(true)));
     const b = $('#cfOk', host); if (!b) return;
     b.onclick = async () => {
       const link = $('#cfPasta', host).value.trim(); if (!link) return UI.toast('Cole o link da pasta.', 'warn');
@@ -3437,25 +3439,43 @@ const Docs = {
   },
   b64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = () => rej(r.error); r.readAsDataURL(file); }); },
 
+  aviso(e, r, cod) {
+    const n = Docs.numDoc(r.nome, r.ia), c = cod && empRecs('contratos', e.id).find(x => x.codigo === cod); if (!n || !c) return '';
+    const ns = [...Docs.numsDe(c)].filter(x => x !== n);
+    return Docs.numsDe(c).size && !Docs.numsDe(c).has(n) && !/aditivo|apostil/i.test(r.ia?.tipo || r.nome) ? `${icon('alert')} Atenção: este documento é do contrato nº ${esc(n)}, mas ${esc(cod)} é o contrato nº ${esc(ns.join(', '))}. Confira — o certo pode ser “Criar novo contrato”.` : '';
+  },
   /* ---------- casar arquivo ↔ contrato ---------- */
   tokens(s) {
     return norm(String(s || '').replace(/\.[a-z0-9]+$/i, '').replace(/\(\d+\)/g, ' ').replace(/[_\-–.,;/°º]+/g, ' ')).split(' ').filter(t => t && !Docs.STOP.has(t)).flatMap(t => (Docs.ABREV[t] || t).split(' '));
   },
+  /** números de contrato (forma "45/2026") já ligados a um contrato: cadastro, auditoria e PDFs do próprio contrato */
+  numsDe(c) {
+    const s = new Set(), add = t => { const n = Consult.numCt(t); n && s.add(n); };
+    add(c.numero); add(c.auditoria?.identificacao?.numeroContrato);
+    empRecs('documentos', c.empresaId).filter(d => d.contrato === c.codigo && /contrato/i.test(d.tipo || '') && !/aditivo|apostil|minuta|anu[eê]ncia|ata/i.test(d.tipo || '')).forEach(d => add(d.numero || d.arquivo));
+    return s;
+  },
+  /** número do contrato que o documento cita (lido pela IA ou no nome do arquivo) */
+  numDoc: (nome, ia) => Consult.numCt(ia?.numeroContrato) || Consult.numCt(nome),
   match(e, nome, ia) {
     const cs = empRecs('contratos', e.id); if (!cs.length) return null;
+    // 0) o número do contrato manda: se o documento cita um número, só pode ir para o contrato com esse número
+    const n = Docs.numDoc(nome, ia), conflita = c => n && Docs.numsDe(c).size && !Docs.numsDe(c).has(n);
+    if (n) { const c = cs.find(x => Docs.numsDe(x).has(n)); if (c) return { c, por: 'número do contrato (' + n + ')' }; }
     const base = norm(nome.replace(/\(\d+\)/g, '').replace(/\.[a-z0-9]+$/i, ''));
     // 1) nome do arquivo citado nas evidências/inventário
     for (const coll of ['documentos', 'aditivos', 'maoDeObra', 'obrigacoes']) {
       const hit = empRecs(coll, e.id).find(r => r.contrato && [r.arquivo, r.nome, r.evidencia, r.caminho].some(v => v && norm(String(v).replace(/\(\d+\)/g, '')).includes(base)));
-      if (hit) { const c = cs.find(x => x.codigo === hit.contrato); if (c) return { c, por: 'nome do arquivo citado na planilha' }; }
+      if (hit) { const c = cs.find(x => x.codigo === hit.contrato); if (c && !conflita(c)) return { c, por: 'nome do arquivo citado na planilha' }; }
     }
-    // 2) número do contrato (lido pela IA ou presente no nome: 633_2025)
+    // 2) número do contrato em outro formato (ex.: 633_2025)
     const nums = [ia?.numeroContrato, ...(nome.match(/\d{2,5}[_\/.-]\d{4}/g) || [])].filter(Boolean).map(v => onlyDigits(v));
-    for (const n of nums) { const c = cs.find(x => x.numero && onlyDigits(x.numero) === n); if (c) return { c, por: 'número do contrato' }; }
+    for (const d of nums) { const c = cs.find(x => x.numero && onlyDigits(x.numero) === d); if (c) return { c, por: 'número do contrato' }; }
     // 3) semelhança entre nome/unidade e o cadastro
     const ft = new Set([...Docs.tokens(nome), ...Docs.tokens(ia?.unidade)]);
     let best = null, bs = 0;
-    cs.forEach(c => {
+    // semelhança só vale para contrato ainda sem número; nunca junta um contrato de nº X a um contrato de nº Y
+    cs.filter(c => !conflita(c)).forEach(c => {
       const txt = [c.unidade, c.grupo, c.tomador].join(' '), ct = Docs.tokens(txt);
       const acr = norm(c.unidade || '').split(' ').filter(w => w.length > 2).map(w => w[0]).join('');
       let s = 0; ft.forEach(t => { if (t.length >= 2 && t === acr) s += 3; else if (ct.includes(t)) s += t.length > 3 ? 2 : 1; else if (t.length >= 3 && ct.some(w => w.startsWith(t))) s += 1.5; });
@@ -3558,6 +3578,7 @@ const Docs = {
       return `<section class="rev" data-i="${i}">
         <header>${icon(ehAditivo ? 'edit' : 'file')}<div><b>${esc(r.nome)}</b><small>${esc(ia.tipo || 'Documento')}${ia.numeroAditivo ? ' · ' + esc(ia.numeroAditivo) : ''}${ia.paginas ? ' · ' + ia.paginas + ' pág.' : ''}${r.link ? ` · <a href="${esc(r.link)}" target="_blank" rel="noopener">abrir no Drive</a>` : ''}</small></div>
           <select data-c="${i}"><option value="__novo">+ Criar novo contrato</option><option value="__nenhum" ${!r.contrato ? '' : ''}>Só registrar o documento (sem contrato)</option>${cs.map(x => `<option value="${esc(x.codigo)}" ${x.codigo === r.contrato ? 'selected' : ''}>${esc(x.codigo)} · ${esc((x.unidade || x.grupo || '').slice(0, 50))}</option>`).join('')}</select></header>
+        <p class="small t-warn" data-w="${i}">${Docs.aviso(e, r, r.contrato)}</p>
         <p class="muted small">${r.contrato ? `Ligado a <b>${esc(r.contrato)}</b> por ${esc(r.por)}.` : 'Não encontrei um contrato correspondente — escolha um ou crie um novo.'}${r.iaErro && r.fileId ? ` <button type="button" class="btn ghost xs" data-reler="${i}">${icon('sync')} Ler de novo com a IA</button>` : ''}${r.iaErro ? ` <span class="t-bad">A IA não conseguiu ler: ${esc(r.iaErro)}</span>` : ''}</p>
         ${linhas ? `<table class="mini revt"><thead><tr><th></th><th>Campo</th><th>No cadastro</th><th>No documento</th></tr></thead><tbody>${linhas}</tbody></table>` : (r.ia ? '<p class="muted small">Os dados do documento conferem com o cadastro.</p>' : '')}
         ${ia.alteracoes ? `<p class="small"><b>O que o documento altera:</b> ${esc(ia.alteracoes)}</p>` : ''}
@@ -3574,6 +3595,7 @@ const Docs = {
         <label class="switch"><input type="checkbox" id="rvAch" checked><span></span>Registrar as divergências não aplicadas como achados no plano de ação (risco médio)</label>`,
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="rvOk">${icon('check')} Aplicar</button>`
     });
+    $$('select[data-c]', m).forEach(sl => sl.addEventListener('change', () => { const i = +sl.dataset.c, w = $(`[data-w="${i}"]`, m); if (w) w.innerHTML = /^__/.test(sl.value) ? '' : Docs.aviso(e, res[i], sl.value); }));
     $$('[data-reler]', m).forEach(b => b.onclick = async () => {
       const r = res[+b.dataset.reler]; b.disabled = true; b.innerHTML = icon('sync', 'spin') + ' Lendo…';
       try { r.ia = await apiT('reler', { fileId: r.fileId, nome: r.nome, leitura: r.leitura || null }, 340000); delete r.iaErro; UI.toast('Documento lido pela IA.'); }
@@ -3623,6 +3645,77 @@ const Docs = {
       UI.closeModal();
       UI.toast(`Aplicado: ${saves.contratos.length} contrato(s), ${saves.documentos.length} documento(s), ${saves.maoDeObra.length} posto(s), ${saves.obrigacoes.length} obrigação(ões), ${saves.achados.length} achado(s).`, 'ok', 7000);
       App.render();
+    };
+  }
+};
+
+/* =====================================================================
+   REPARO DE VÍNCULOS: PDFs de contrato ligados a um contrato de outro número
+   (ex.: o 154/2026 juntado ao GT-037, que é o 047/2026). Cria o contrato certo
+   (ou usa o que já tem o número), move o PDF e o que veio dele (postos,
+   obrigações, aditivos) e refaz a auditoria dos envolvidos.
+   ===================================================================== */
+const Vinculos = {
+  ehContrato: d => /contrato/i.test(d.tipo || '') && !/aditivo|apostil|minuta|anu[eê]ncia|\bata\b|distrato|rescis/i.test(d.tipo || ''),
+  conflitos(e) {
+    const out = [];
+    empRecs('contratos', e.id).forEach(c => {
+      const ds = empRecs('documentos', e.id).filter(d => d.contrato === c.codigo && Vinculos.ehContrato(d)).map(d => ({ d, n: Consult.numCt(d.numero) || Consult.numCt(d.arquivo) })).filter(x => x.n)
+        .sort((a, b) => String(a.d.createdAt || '').localeCompare(String(b.d.createdAt || '')));
+      const cad = Consult.numCt(c.numero), nums = [...new Set([...ds.map(x => x.n), ...(cad ? [cad] : [])])]; if (nums.length < 2 || !ds.length) return;
+      // o número próprio: o do cadastro (se nenhum PDF o tem, ou se o PDF dele não chegou junto com os de outro número); senão, o do PDF mais antigo
+      const comCad = ds.filter(x => x.n === cad);
+      const proprio = cad && (!comCad.length || comCad.some(x => !ds.some(y => y.n !== cad && String(y.d.createdAt).slice(0, 16) === String(x.d.createdAt).slice(0, 16)))) ? cad : ds[0].n;
+      out.push({ c, proprio, outros: ds.filter(x => x.n !== proprio) });
+    });
+    return out;
+  },
+  avisoHtml(e) {
+    const k = Vinculos.conflitos(e); if (!k.length) return '';
+    const n = k.reduce((s, x) => s + x.outros.length, 0);
+    return `<div class="notice warn">${icon('alert')}<div><b>${n} PDF(s) de contrato ligados ao contrato errado</b> (${k.map(x => esc(x.c.codigo)).join(', ')}): o número do PDF é diferente do número do contrato. <button type="button" class="btn primary sm" id="vnRep">${icon('check')} Revisar e corrigir</button></div></div>`;
+  },
+  abrir(e, volta) {
+    const k = Vinculos.conflitos(e), cs = empRecs('contratos', e.id);
+    if (!k.length) return UI.toast('Nenhum PDF de contrato ligado ao contrato errado.', 'ok');
+    const linhas = []; k.forEach(x => x.outros.forEach(o => linhas.push({ ...o, c: x.c, proprio: x.proprio })));
+    const m = UI.modal({ title: 'Corrigir PDFs ligados ao contrato errado', sub: 'O número do contrato escrito no PDF manda', wide: true, body: `
+      <p class="muted small">Cada linha é um PDF de contrato cujo número não é o do contrato a que foi ligado. Ao aplicar, o PDF vai para o contrato certo (novo ou existente) junto com os postos, obrigações e aditivos que vieram dele; as divergências que ele gerou no contrato errado são apagadas e a auditoria consultiva dos envolvidos é refeita.</p>
+      <table class="mini"><thead><tr><th>PDF</th><th>Nº no PDF</th><th>Ligado a</th><th>Fazer</th></tr></thead><tbody>${linhas.map((l, i) => { const alvo = cs.find(c => c.codigo !== l.c.codigo && Docs.numsDe(c).has(l.n));
+        return `<tr><td>${l.d.link ? `<a href="${esc(l.d.link)}" target="_blank" rel="noopener">${esc(l.d.arquivo || 'PDF')}</a>` : esc(l.d.arquivo || 'PDF')}<br><small class="muted">juntado ${esc(fmtDateTime(l.d.createdAt))}</small></td><td><b>${esc(l.n)}</b></td><td>${esc(l.c.codigo)}<br><small class="muted">que é o nº ${esc(l.proprio)}</small></td>
+          <td><select data-vn="${i}">${alvo ? `<option value="${esc(alvo.codigo)}" selected>Mover para ${esc(alvo.codigo)} (nº ${esc(l.n)})</option>` : ''}<option value="__novo" ${alvo ? '' : 'selected'}>Criar contrato novo nº ${esc(l.n)}</option><option value="__manter">Manter onde está</option></select></td></tr>`; }).join('')}</tbody></table>
+      <label class="switch"><input type="checkbox" id="vnAud" checked><span></span>Depois, rodar a auditoria consultiva (IA) nos contratos novos e nos corrigidos</label>`,
+      foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="vnOk">${icon('check')} Aplicar</button>` });
+    $('#vnOk', m).onclick = async () => {
+      const b = $('#vnOk', m); b.disabled = true; b.innerHTML = icon('sync', 'spin') + ' Corrigindo…';
+      const sig = e.sigla || 'CT'; let seq = Math.max(0, ...empRecs('contratos', e.id).map(c => +(String(c.codigo).match(/(\d+)$/) || [0, 0])[1]));
+      const novos = {}, tocados = new Set(), saves = { contratos: {}, documentos: [], maoDeObra: [], obrigacoes: [], aditivos: [] }, apagar = [];
+      const getC = cod => saves.contratos[cod] || (saves.contratos[cod] = clone(empRecs('contratos', e.id).find(c => c.codigo === cod)));
+      linhas.forEach((l, i) => {
+        const v = $(`[data-vn="${i}"]`, m).value; if (v === '__manter') return;
+        let alvo;
+        if (v === '__novo') { alvo = novos[l.n]; if (!alvo) { seq++; alvo = novos[l.n] = { id: uid('co'), empresaId: e.id, codigo: `${sig}-${String(seq).padStart(3, '0')}`, numero: l.n, status: 'Cadastrado a partir de documento', documentos: 'Sim – documento(s) anexado(s) no app' }; saves.contratos[alvo.codigo] = alvo; } }
+        else alvo = getC(v);
+        const old = getC(l.c.codigo), arq = norm(l.d.arquivo || '').slice(0, 60);
+        saves.documentos.push({ ...l.d, contrato: alvo.codigo, tomador: alvo.tomador || '' });
+        const doArq = t => arq && norm(t || '').includes(arq);
+        empRecs('maoDeObra', e.id).filter(x => x.contrato === old.codigo && doArq(x.evidencia)).forEach(x => saves.maoDeObra.push({ ...x, contrato: alvo.codigo }));
+        empRecs('obrigacoes', e.id).filter(x => x.contrato === old.codigo && doArq(x.evidencia)).forEach(x => saves.obrigacoes.push({ ...x, contrato: alvo.codigo }));
+        empRecs('aditivos', e.id).filter(x => x.contrato === old.codigo && doArq(x.nome)).forEach(x => saves.aditivos.push({ ...x, contrato: alvo.codigo }));
+        empRecs('achados', e.id).filter(x => x.contrato === old.codigo && /^DOC-/.test(x.codigo || '') && doArq(x.achado)).forEach(x => apagar.push(['achados', x.id]));
+        if (Consult.numCt(old.numero) === l.n || !old.numero) old.numero = l.proprio;
+        delete old.auditoria; tocados.add(old.codigo); tocados.add(alvo.codigo);
+      });
+      for (const [coll, l] of Object.entries(saves)) { const arr = coll === 'contratos' ? Object.values(l) : l; if (arr.length) await DB.save(coll, arr); }
+      for (const [coll, id] of apagar) await DB.remove(coll, id);
+      UI.closeModal();
+      UI.toast(`Corrigido: ${Object.keys(novos).length} contrato(s) novo(s), ${saves.documentos.length} PDF(s) religados${apagar.length ? `, ${apagar.length} divergência(s) indevida(s) apagadas` : ''}.`, 'ok', 8000);
+      if ($('#vnAud', m).checked) {
+        const fila = [...tocados].map(cod => empRecs('contratos', e.id).find(c => c.codigo === cod)).filter(Boolean);
+        let ok = 0; for (const [i, c] of fila.entries()) { UI.toast(`Auditoria consultiva ${i + 1} de ${fila.length}: ${c.codigo}…`, '', 180000); try { await AuditCons.analisar(e, c); ok++; } catch (er) { UI.toast(`${c.codigo}: ${er.message}`, 'warn', 8000); } }
+        UI.toast(`Auditoria consultiva refeita em ${ok} de ${fila.length} contrato(s).`, 'ok', 8000);
+      }
+      volta && volta();
     };
   }
 };
