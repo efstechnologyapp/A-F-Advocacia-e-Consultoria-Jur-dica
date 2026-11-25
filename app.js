@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.28.3';
+const APP_VERSAO = '1.28.4';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.28.4', data: '25/11/2026', itens: ['Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
   { numero: '1.28.3', data: '25/11/2026', itens: ['A auditoria consultiva também preenche o tomador quando ele está vazio no cadastro.', 'Agrupamento por município mais preciso: secretarias e fundos entram no município também pela raiz do CNPJ do tomador e pelo nome da cidade na unidade, mesmo quando o nome do contratante não cita a cidade.'] },
   { numero: '1.28.2', data: '25/11/2026', itens: ['Auditoria consultiva e “Ler de novo”: passam a abrir também os PDFs que estão em pastas do Drive fora do app (ligados ao contrato pelo link), pela conta do app.', 'Painel da empresa: “Conferência com a pasta do Drive” — cole o link da pasta e veja quantos contratos há nela, quantos estão no sistema e quais faltam.'] },
   { numero: '1.28.1', data: '25/11/2026', itens: ['Ficha do contrato: o card de Vigência (início, término, dias restantes e prorrogação) substitui o indicador antigo, na mesma linha de Valor mensal, Postos e Completude.', 'Reajuste, repactuação, revisão e reequilíbrio num card só: se o contrato prevê, se já houve e quando, e a data do próximo reajuste (12 meses do último ou do início), com alerta quando o prazo já está aberto.'] },
