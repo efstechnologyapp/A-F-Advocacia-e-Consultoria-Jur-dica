@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.29.4';
+const APP_VERSAO = '1.29.5';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.29.5', data: '25/11/2026', itens: ['Relatório de auditoria: clicar em Analisar já inicia a análise, sem confirmação.'] },
   { numero: '1.29.4', data: '25/11/2026', itens: ['Botão “Relatório” da empresa renomeado para “Relatório de auditoria”.', 'A Auditoria consultiva (IA) saiu do Painel e foi para dentro do Relatório de auditoria, acima do parecer: usa o seletor “Contratos da auditoria consultiva” da própria janela — escolha um grupo ou todos e clique em Analisar. O progresso aparece ali e volta a aparecer ao reabrir a janela.'] },
   { numero: '1.29.3', data: '25/11/2026', itens: ['Auditoria consultiva em lote: a tela se atualiza sozinha a cada contrato concluído (cards do painel, contador de analisados, tomadores), sem precisar recarregar a página. Não atualiza enquanto houver janela aberta ou campo em edição.'] },
   { numero: '1.29.2', data: '25/11/2026', itens: ['Contratos que só dizem o prazo (ex.: “12 meses a contar da assinatura”): o app calcula o término (início + prazo − 1 dia), e o contrato passa a contar como vigente e a entrar na carteira mensal.', 'A IA da auditoria agora lê também a data de assinatura e o prazo em meses; contratos analisados antes e ainda sem término voltam para a fila uma vez.'] },
@@ -6871,7 +6872,7 @@ const AuditCons = {
   /** bloco da janela do relatório: usa o seletor "Contratos da auditoria consultiva" da própria janela */
   loteHtml(e) {
     return `<div class="fld full ac-lote"><label>Auditoria consultiva (IA) <span class="muted small" id="acCont"></span></label>
-      <p class="muted small" style="margin:0 0 8px">A IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual que entra na seção “Auditoria consultiva” do relatório. Analisa os contratos escolhidos acima que ainda não foram lidos.</p>
+      <p class="muted small" style="margin:0 0 8px">A IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual que entra na seção “Auditoria consultiva” do relatório. Analisa os contratos escolhidos acima que ainda não foram lidos (1 a 3 minutos cada). Pode fechar a janela: a análise continua e o progresso volta ao reabrir.</p>
       <div class="btn-row"><label class="switch small"><input type="checkbox" id="acRe"><span></span>Refazer os já analisados</label><button type="button" class="btn primary" id="acLote">${icon('sparkle')} Analisar</button></div>
       <div id="acProg">${AuditCons._rodando ? AuditCons._prog || '' : ''}</div></div>`;
   },
@@ -6889,11 +6890,7 @@ const AuditCons = {
     b.onclick = async () => {
       const g = sel?.value || '', re = $('#acRe', m).checked, fila = AuditCons.fila(e, g, re);
       if (!fila.length) return UI.toast('Nenhum contrato pendente nessa seleção.', 'ok');
-      // confirmação dentro da própria janela (uma confirmação em outra janela fecharia o relatório)
-      const P = $('#acProg', m);
-      P.innerHTML = `<div class="notice soft">${icon('sparkle')}<div>Analisar <b>${fila.length} contrato(s)</b> com a IA? Leva cerca de 1 a 3 minutos por contrato. Pode fechar esta janela e continuar usando o app: ao reabrir o Relatório de auditoria, o progresso aparece de novo. Se parar no meio, é só clicar em Analisar de novo que ele continua dos que faltam.<div class="btn-row" style="margin-top:8px"><button type="button" class="btn ghost sm" id="acNao">Cancelar</button><button type="button" class="btn primary sm" id="acSim">${icon('sparkle')} Analisar</button></div></div></div>`;
-      $('#acNao', P).onclick = () => { P.innerHTML = ''; };
-      $('#acSim', P).onclick = () => AuditCons.rodar(m, e, fila);
+      AuditCons.rodar(m, e, fila);
     };
   },
 
