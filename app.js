@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.30.2';
+const APP_VERSAO = '1.30.3';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.30.3', data: '25/11/2026', itens: ['Documento pendente da vigência também identificado pelo cadastro (status e prazo, ex.: “data de publicação a confirmar”), mesmo em contratos ainda não analisados pela IA.'] },
   { numero: '1.30.2', data: '25/11/2026', itens: ['Lista de contratos: a coluna “Data fim/vigência” mostra quando o prazo depende de documento pendente de juntada e qual é (ex.: Ordem de Serviço, termo aditivo de prorrogação).'] },
   { numero: '1.30.1', data: '25/11/2026', itens: ['Relatório de auditoria: nova seção “Documentos pendentes de juntada”, com a lista por documento (ex.: Ordem de Serviço — contratos tais) e a tabela por contrato, incluindo os demais documentos apontados pela auditoria.'] },
   { numero: '1.30.0', data: '25/11/2026', itens: ['Vigência que depende de documento fora do sistema (ex.: “12 meses a contar da Ordem de Serviço”, contrato vencido sem aditivo de prorrogação): o card de Vigência, a ficha, a leitura do período, o relatório e a planilha dizem que o prazo depende de documento pendente de juntada e qual é o documento.', 'Corrigir vigência: ao informar só o início, o término é preenchido sozinho com o prazo do contrato (início + prazo − 1 dia).', 'Contrato sem término e com status “Vigente” passa a contar como vigente (e entra na carteira mensal), com o aviso “término a confirmar”.'] },
@@ -6731,15 +6732,15 @@ const AuditCons = {
   /** vigência que depende de documento que não está no sistema: { doc, motivo, juntado } ou null */
   docPend(c) {
     if (/encerrad|rescindid|extint/i.test((c.status || '') + (c.grupo || ''))) return null;
-    const vg = c.auditoria?.vigencia || {}, V = AuditCons.vig(c), t = norm([vg.inicio, vg.fim, vg.ref, vg.limite, vg.prorrogacoes, c.prazo, c.auditoria?.resumo].filter(Boolean).join(' '));
+    const vg = c.auditoria?.vigencia || {}, V = AuditCons.vig(c), t = norm([vg.inicio, vg.fim, vg.ref, vg.limite, vg.prorrogacoes, c.prazo, c.status, c.auditoria?.resumo].filter(Boolean).join(' '));
     const docs = DB.where('documentos', d => d.empresaId === c.empresaId && d.contrato === c.codigo).map(d => norm((d.tipo || '') + ' ' + (d.arquivo || ''))).join(' | ');
     const R = (doc, motivo, re) => ({ doc, motivo, juntado: !!(re && re.test(docs)) });
     if (!isISO(V.fim)) {
-      if (!c.auditoria) return null;
       if (/ordem de servi/.test(t)) return R('Ordem de Serviço', 'A vigência conta da Ordem de Serviço, que não está no sistema.', /ordem de servi/);
       if (/ordem de inicio|inicio (dos|da execucao dos) servicos/.test(t)) return R('Ordem de início dos serviços', 'A vigência conta da ordem de início dos serviços, que não está no sistema.', /ordem de inicio/);
       if (/publica/.test(t)) return R('Extrato de publicação do contrato', 'A vigência conta da publicação do extrato do contrato, que não está no sistema.', /extrato|publica/);
       if (/assinatura/.test(t)) return R('Contrato com a data de assinatura', 'A vigência conta da assinatura, mas a data não consta nos arquivos (contrato sem data ou assinatura digital sem carimbo).', null);
+      if (!c.auditoria) return null; // sem análise e sem pista no cadastro: não dá para saber qual documento falta
       return R('Documento com a data de início da vigência (Ordem de Serviço ou extrato de publicação)', 'Os arquivos do contrato não informam a data de início nem a de término.', null);
     }
     if (daysUntil(V.fim) < 0 && AuditCons.sn(V.prorr) !== 'nao') return R('Termo aditivo de prorrogação de prazo (ou termo de encerramento)', `O prazo terminou em ${fmtDate(V.fim)} e não há aditivo de prorrogação no sistema.`, /aditivo|prorroga|encerramento/);
