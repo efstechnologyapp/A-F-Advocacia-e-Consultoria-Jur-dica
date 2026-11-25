@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.31.0';
+const APP_VERSAO = '1.31.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.31.1', data: '25/11/2026', itens: ['Auditoria consultiva passa a ler o CNPJ do órgão contratante e preenche o CNPJ tomador quando estiver vazio.', 'Valor mensal: quando o contrato só traz o valor global, o app calcula o mensal (global ÷ meses da vigência).'] },
   { numero: '1.31.0', data: '25/11/2026', itens: ['Conferência do cadastro (Painel → quadro da pasta do Drive): aponta contrato com CNPJ tomador de outra cidade, número de contrato repetido no mesmo tomador e dados diferentes do que a IA leu nos PDFs (início, término, valor mensal); botão “Revisar” para corrigir marcando o que aplicar.', 'Agrupamento por tomador: a cidade escrita no tomador vale mais que o CNPJ, e a raiz do CNPJ fica com a cidade da maioria dos contratos — um CNPJ errado não leva mais o contrato para o grupo de outra cidade.', 'Conferir com a pasta: lista também os contratos do tomador que estão no sistema mas não estão na pasta.', 'Menu do portal do cliente: mesma correção do fechamento ao arrastar o mouse para fora.'] },
   { numero: '1.30.4', data: '25/11/2026', itens: ['Correção: selecionar o texto de um campo (ex.: CNPJ) arrastando o mouse e soltar fora da janela fechava a janela de edição. Agora a janela só fecha se o clique começar no fundo escuro.'] },
   { numero: '1.30.3', data: '25/11/2026', itens: ['Documento pendente da vigência também identificado pelo cadastro (status e prazo, ex.: “data de publicação a confirmar”), mesmo em contratos ainda não analisados pela IA.'] },
@@ -6864,7 +6865,10 @@ const AuditCons = {
     if (vazio('inicio') && isISO(vg.inicio)) add.inicio = vg.inicio;
     if ((vazio('fim') || (isISO(vg.fim) && isISO(cur.fim) && vg.fim > cur.fim)) && isISO(vg.fim)) add.fim = vg.fim;
     if (vazio('prazo') && ok(vg.prorrogavel)) add.prazo = 'Prorrogável: ' + vg.prorrogavel + (ok(vg.prorrogacoes) ? ' · ' + vg.prorrogacoes : '');
+    if (vazio('cnpjTomador') && onlyDigits(id.cnpjOrgao).length === 14) add.cnpjTomador = onlyDigits(id.cnpjOrgao);
     if (vazio('valorMensal') && num(vl.mensal) !== null) add.valorMensal = num(vl.mensal);
+    // só o valor global no contrato: mensal = global ÷ meses da vigência
+    else if (vazio('valorMensal') && num(vl.global) !== null) { const mm = num(vg.prazoMeses) || AuditCons.fimCalc({ ...cur, inicio: '2000-01-01', auditoria: r })?.meses; if (mm) add.valorMensal = Math.round(num(vl.global) / mm * 100) / 100; }
     if (vazio('valorAnual') && num(vl.global) !== null) add.valorAnual = num(vl.global);
     if (vazio('reajuste') && r.reajuste && (ok(r.reajuste.indice) || ok(r.reajuste.dataBase))) add.reajuste = [r.reajuste.indice, r.reajuste.dataBase].filter(ok).join(' · ');
     // confere se os documentos são mesmo deste contrato (número lido × cadastro; PDFs de números diferentes)
