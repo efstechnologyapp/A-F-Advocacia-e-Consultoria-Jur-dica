@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.30.3';
+const APP_VERSAO = '1.31.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,8 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.31.0', data: '25/11/2026', itens: ['Conferência do cadastro (Painel → quadro da pasta do Drive): aponta contrato com CNPJ tomador de outra cidade, número de contrato repetido no mesmo tomador e dados diferentes do que a IA leu nos PDFs (início, término, valor mensal); botão “Revisar” para corrigir marcando o que aplicar.', 'Agrupamento por tomador: a cidade escrita no tomador vale mais que o CNPJ, e a raiz do CNPJ fica com a cidade da maioria dos contratos — um CNPJ errado não leva mais o contrato para o grupo de outra cidade.', 'Conferir com a pasta: lista também os contratos do tomador que estão no sistema mas não estão na pasta.', 'Menu do portal do cliente: mesma correção do fechamento ao arrastar o mouse para fora.'] },
+  { numero: '1.30.4', data: '25/11/2026', itens: ['Correção: selecionar o texto de um campo (ex.: CNPJ) arrastando o mouse e soltar fora da janela fechava a janela de edição. Agora a janela só fecha se o clique começar no fundo escuro.'] },
   { numero: '1.30.3', data: '25/11/2026', itens: ['Documento pendente da vigência também identificado pelo cadastro (status e prazo, ex.: “data de publicação a confirmar”), mesmo em contratos ainda não analisados pela IA.'] },
   { numero: '1.30.2', data: '25/11/2026', itens: ['Lista de contratos: a coluna “Data fim/vigência” mostra quando o prazo depende de documento pendente de juntada e qual é (ex.: Ordem de Serviço, termo aditivo de prorrogação).'] },
   { numero: '1.30.1', data: '25/11/2026', itens: ['Relatório de auditoria: nova seção “Documentos pendentes de juntada”, com a lista por documento (ex.: Ordem de Serviço — contratos tais) e a tabela por contrato, incluindo os demais documentos apontados pela auditoria.'] },
@@ -1090,7 +1092,9 @@ const UI = {
     const m = document.createElement('div'); m.className = 'modal-bg'; m.id = 'modal';
     m.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><header><div><h3>${esc(title)}</h3>${sub ? `<p>${sub}</p>` : ''}</div><button class="icon-btn" data-close aria-label="Fechar">${icon('x')}</button></header><div class="modal-body">${body}</div>${foot ? `<footer>${foot}</footer>` : ''}</div>`;
     document.body.appendChild(m); document.body.classList.add('noscroll');
-    m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) UI.closeModal(); });
+    // fecha ao clicar no fundo só se o clique COMEÇOU no fundo: selecionar o texto de um campo e soltar o mouse fora da janela não a fecha mais
+    let noFundo = false; m.addEventListener('mousedown', e => { noFundo = e.target === m; });
+    m.addEventListener('click', e => { if ((e.target === m && noFundo) || e.target.closest('[data-close]')) UI.closeModal(); });
     setTimeout(() => { const f = $('input:not([type=hidden]):not([type=checkbox]),select,textarea', m); f && f.focus(); }, 30);
     onOpen && onOpen(m); return m;
   },
@@ -1102,7 +1106,8 @@ const UI = {
     return new Promise(res => {
       const m = UI.modal({ title: 'Confirmação', body: `<p class="confirm-msg">${msg}</p>`, foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cfOk">${esc(okLabel)}</button>` });
       $('#cfOk', m).onclick = () => { UI.closeModal(); res(true); };
-      m.addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target === m) res(false); });
+      m.addEventListener('click', e => { if (e.target.closest('[data-close]') || (e.target === m && !m.isConnected)) res(false); });
+      new MutationObserver((_, o) => { if (!m.isConnected) { o.disconnect(); res(false); } }).observe(document.body, { childList: true });
     });
   },
   /* ---------- formulário a partir do esquema ---------- */
@@ -2305,13 +2310,18 @@ const raizCnpj = c => onlyDigits(c.cnpjTomador).padStart(8, '0').slice(0, 8);
 /* Municípios que aparecem como tomadores ("Município de X", "Prefeitura Municipal de X"): a
  * prefeitura, as secretarias e os fundos da mesma cidade contam como um só tomador — pelo nome
  * da cidade no texto ou pela raiz do CNPJ (as secretarias usam o CNPJ do município). */
+const cidadeDe = c => { const m = String(c.tomador || '').match(RE_CIDADE); return m && m[1].trim().length > 2 ? m[1].trim().replace(/\s+/g, ' ') : ''; };
 const cidadesTomador = () => {
   const cid = new Set(), porRaiz = {};
-  DB.all('contratos').forEach(c => { const m = String(c.tomador || '').match(RE_CIDADE); if (m && m[1].trim().length > 2) { const x = m[1].trim().replace(/\s+/g, ' '); cid.add(x); if (onlyDigits(c.cnpjTomador).length >= 8) porRaiz[raizCnpj(c)] = x; } });
+  const cont = {};
+  DB.all('contratos').forEach(c => { const x = cidadeDe(c); if (x) { cid.add(x); if (onlyDigits(c.cnpjTomador).length >= 8) { const r = raizCnpj(c); (cont[r] = cont[r] || {})[x] = (cont[r][x] || 0) + 1; } } });
+  // a raiz do CNPJ fica com a cidade da maioria dos contratos (um CNPJ errado num contrato não muda o grupo dos outros)
+  Object.entries(cont).forEach(([r, o]) => { porRaiz[r] = Object.entries(o).sort((a, b) => b[1] - a[1])[0][0]; });
   return { lista: [...cid], porRaiz };
 };
 const tomadorBase = c => {
   const C = cidadesTomador(), txt = norm([c.tomador, c.unidade, c.grupo, c.objeto].filter(Boolean).join(' '));
+  const propria = cidadeDe(c); if (propria) return 'Município de ' + propria; // a cidade escrita no tomador vale mais que o CNPJ
   if (onlyDigits(c.cnpjTomador).length >= 8 && C.porRaiz[raizCnpj(c)]) return 'Município de ' + C.porRaiz[raizCnpj(c)];
   const cid = C.lista.find(x => new RegExp('\\b' + norm(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(txt));
   if (cid && /munic|prefeit|secretaria|fundo|camara|autarquia|sem[a-z]{1,5}\b|\bpm[a-z]{1,3}\b/.test(txt)) return 'Município de ' + cid;
@@ -2523,12 +2533,48 @@ const Consult = {
     return `<section class="card" id="cfCard"><header><h2>${icon('list')} Conferência com a pasta do Drive</h2></header>
       <p class="muted small">Cole o link da pasta com os PDFs dos contratos (ex.: a pasta “VILA VELHA”): o app compara os números dos contratos dos arquivos com os cadastrados e mostra o que falta no sistema.</p>
       <div class="btn-row"><input class="input" id="cfPasta" placeholder="https://drive.google.com/drive/folders/…" value="${esc(e.pastaContratos || '')}" style="flex:1;min-width:240px"><button class="btn ghost" id="cfOk">${icon('search')} Conferir</button></div>
-      <div id="cfRes"></div>${Vinculos.avisoHtml(e)}
+      <div id="cfRes"></div>${Vinculos.avisoHtml(e)}${Consult.inconsHtml(e)}
       ${soltos.length ? `<h4 class="sec">${soltos.length} arquivo(s) juntados sem contrato no sistema</h4><ul class="plain files">${soltos.map(d => `<li>${icon('file')} <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.arquivo || d.tipo || 'documento')}</a>${d.contrato ? ` <small class="muted">ligado a “${esc(d.contrato)}”, que não existe no cadastro</small>` : ''}</li>`).join('')}</ul>` : ''}</section>`;
   },
   bindConferencia(host, e) {
     $('#vnRep', host)?.addEventListener('click', () => Vinculos.abrir(e, () => App.render(true)));
+    $('#icRev', host)?.addEventListener('click', () => Consult.inconsAbrir(e));
     const b = $('#cfOk', host); if (b) b.onclick = () => Consult.conferir(e);
+  },
+  /** cadastro x documentos: CNPJ de outra cidade, contratos com o mesmo número, dados diferentes do que a IA leu nos PDFs */
+  inconsistencias(e) {
+    const cs = empRecs('contratos', e.id), C = cidadesTomador(), out = [], ativo = c => !/encerrad|rescindid|extint/i.test(c.status || '');
+    cs.forEach(c => {
+      const pr = cidadeDe(c), rc = onlyDigits(c.cnpjTomador).length >= 8 ? C.porRaiz[raizCnpj(c)] : '';
+      if (pr && rc && norm(pr) !== norm(rc)) out.push({ c, k: 'cnpj', txt: `O tomador é de <b>${esc(pr)}</b>, mas o CNPJ tomador (${esc(fmtDoc(c.cnpjTomador))}) é o de <b>${esc(rc)}</b> — por isso ele aparecia no grupo de ${esc(rc)}.`, acao: 'Apagar o CNPJ tomador (preencha o correto depois)', fix: { cnpjTomador: '' }, marcado: true });
+      const a = c.auditoria; if (!a || a.manual || a.alerta) return;
+      const vg = a.vigencia || {}, vl = a.valores || {};
+      if (isISO(vg.fim) && isISO(c.fim) && vg.fim !== c.fim) out.push({ c, k: 'fim', txt: `Término no cadastro <b>${fmtDate(c.fim)}</b>, nos documentos <b>${fmtDate(vg.fim)}</b>.`, acao: `Usar o dos documentos (${fmtDate(vg.fim)})`, fix: { fim: vg.fim } });
+      if (isISO(vg.inicio) && isISO(c.inicio) && vg.inicio !== c.inicio) out.push({ c, k: 'ini', txt: `Início no cadastro <b>${fmtDate(c.inicio)}</b>, nos documentos <b>${fmtDate(vg.inicio)}</b>.`, acao: `Usar o dos documentos (${fmtDate(vg.inicio)})`, fix: { inicio: vg.inicio } });
+      const m1 = num(c.valorMensal), m2 = num(vl.mensal);
+      if (m1 && m2 && Math.abs(m1 - m2) / Math.max(m1, m2) > 0.01) out.push({ c, k: 'val', txt: `Valor mensal no cadastro <b>${fmtMoney(m1)}</b>, nos documentos <b>${fmtMoney(m2)}</b> (valor inicial; aditivos e reajustes podem explicar a diferença).`, acao: `Usar o dos documentos (${fmtMoney(m2)})`, fix: { valorMensal: m2 } });
+    });
+    const porNum = {}; cs.filter(ativo).forEach(c => { const n = Consult.numCt(c.numero); if (n) { const k = n + '|' + tomadorBase(c); (porNum[k] = porNum[k] || []).push(c); } }); // mesmo número no mesmo tomador
+    Object.entries(porNum).filter(([, l]) => l.length > 1).forEach(([k, l]) => { const n = k.split('|')[0]; out.push({ c: l[0], k: 'dup', txt: `O número <b>${esc(n)}</b> está em ${l.length} contratos: ${l.map(x => esc(x.codigo) + (x.tomador ? ' (' + esc(tomadorBase(x)) + ')' : '')).join(', ')}. Se forem o mesmo contrato, exclua o repetido; se forem de órgãos diferentes, ignore.`, acao: '' }); });
+    return out;
+  },
+  inconsHtml(e) {
+    const l = Consult.inconsistencias(e); if (!l.length) return '';
+    const n = k => l.filter(x => x.k === k).length;
+    return `<div class="notice warn">${icon('alert')}<div><b>Cadastro a revisar (${l.length}):</b> ${[n('cnpj') && `${n('cnpj')} com CNPJ de outra cidade`, n('dup') && `${n('dup')} número(s) repetido(s)`, (n('fim') + n('ini') + n('val')) && `${n('fim') + n('ini') + n('val')} dado(s) diferentes do que está nos PDFs`].filter(Boolean).join(' · ')}. <button type="button" class="btn ghost sm" id="icRev">${icon('edit')} Revisar</button></div></div>`;
+  },
+  inconsAbrir(e) {
+    const l = Consult.inconsistencias(e); if (!l.length) return UI.toast('Nenhuma inconsistência no cadastro.', 'ok');
+    const m = UI.modal({ title: 'Cadastro a revisar', sub: esc(e.fantasia || e.razao), wide: true, body: `<p class="muted small">Comparação do cadastro com a cidade do tomador, com os outros contratos e com o que a IA leu nos PDFs. Marque o que deve ser corrigido; o que não for marcado fica como está.</p>
+      <div class="table-wrap"><table class="dt"><thead><tr><th>Contrato</th><th>O que foi encontrado</th><th>Corrigir</th></tr></thead><tbody>${l.map((x, i) => `<tr><td><button type="button" class="link" data-ab="${esc(x.c.id)}">${esc(x.c.codigo)}</button><br><small class="muted">${esc(x.c.numero || '')}</small></td><td class="wrap">${x.txt}</td><td>${x.fix ? `<label class="switch small"><input type="checkbox" data-i="${i}"${x.marcado ? ' checked' : ''}><span></span>${esc(x.acao)}</label>` : '<small class="muted">conferir à mão</small>'}</td></tr>`).join('')}</tbody></table></div>`,
+      foot: `<button class="btn ghost" data-close>Fechar</button><button class="btn primary" id="icOk">${icon('check')} Aplicar as marcadas</button>` });
+    $$('[data-ab]', m).forEach(b => b.onclick = () => { UI.closeModal(); Consult.contrato360(e, DB.get('contratos', b.dataset.ab)); });
+    $('#icOk', m).onclick = async () => {
+      const sel = $$('input[data-i]:checked', m).map(i => l[+i.dataset.i]); if (!sel.length) return UI.toast('Nada marcado.', 'warn');
+      const por = {}; sel.forEach(x => por[x.c.id] = { ...(por[x.c.id] || DB.get('contratos', x.c.id)), ...x.fix });
+      for (const r of Object.values(por)) await DB.save('contratos', r);
+      UI.closeModal(); UI.toast(`${sel.length} correção(ões) aplicadas em ${Object.keys(por).length} contrato(s).`, 'ok'); App.render(true);
+    };
   },
   /** compara a pasta do Drive com os contratos cadastrados e mostra o resultado no quadro */
   async conferir(e, silencioso) {
@@ -2544,6 +2590,7 @@ const Consult = {
       const nums = Object.keys(porNum), tem = nums.filter(n => noSis.has(n)); falta = nums.filter(n => !noSis.has(n));
       if (out) out.innerHTML = `<div class="notice ${falta.length ? 'warn' : 'soft'}">${icon(falta.length ? 'alert' : 'check')}<div>Pasta <b>${esc(r.pasta)}</b>: ${r.arquivos.length} PDF(s), <b>${nums.length} contrato(s)</b> diferentes. No sistema: <b>${tem.length}</b>. ${falta.length ? `Faltam <b>${falta.length}</b>:` : 'Nenhum faltando.'}
         ${falta.length ? `<ul class="plain files">${falta.sort().map(n => `<li>${icon('file')} <b>${esc(n)}</b> — ${porNum[n].map(a => `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>`).join(', ')}</li>`).join('')}</ul><p class="small">Para incluir: baixe esses PDFs e arraste em <b>Juntar documentos</b> — o app lê e cria os contratos.</p>` : ''}
+        ${(() => { const g = {}; cs.filter(c => Docs.numsDe(c).some(n => porNum[n])).forEach(c => { const t = tomadorBase(c); g[t] = (g[t] || 0) + 1; }); const grp = Object.entries(g).sort((a, b) => b[1] - a[1])[0]?.[0]; if (!grp) return ''; const fora = cs.filter(c => tomadorBase(c) === grp && !Docs.numsDe(c).some(n => porNum[n]) && !/encerrad|rescindid|extint/i.test(c.status || '')); return fora.length ? `<p class="small"><b>${fora.length} contrato(s) de ${esc(grp)} no sistema que não estão na pasta:</b> ${fora.map(c => `${esc(c.codigo)}${c.numero ? ' (' + esc(c.numero) + ')' : ''}`).join(', ')} — confira se são deste tomador ou se falta o PDF na pasta.</p>` : ''; })()}
         ${nums.length < r.arquivos.length ? `<p class="small muted">${r.arquivos.length - nums.length} arquivo(s) repetem o número de outro (ex.: o mesmo contrato salvo duas vezes).</p>` : ''}</div></div>`;
     } catch (er) { if (!silencioso) UI.toast(er.message, 'bad', 9000); }
     if (b) { b.disabled = false; b.innerHTML = `${icon('search')} Conferir`; }
@@ -3277,7 +3324,8 @@ const Portal = {
     (o.preview ? root.closest('.portal-preview') || document.body : document.body).appendChild(ov);
     requestAnimationFrame(() => ov.classList.add('on'));
     const fechar = () => { ov.classList.remove('on'); setTimeout(() => ov.remove(), 250); };
-    ov.onclick = ev => { if (ev.target === ov || ev.target.closest('[data-x]')) fechar(); };
+    let noFundo = false; ov.onmousedown = ev => { noFundo = ev.target === ov; };
+    ov.onclick = ev => { if ((ev.target === ov && noFundo) || ev.target.closest('[data-x]')) fechar(); };
     $$('[data-go]', ov).forEach(b => b.onclick = () => { st.tab = b.dataset.go; st.proc = null; fechar(); o.redraw(); scrollTo(0, 0); });
     $('[data-relat]', ov)?.addEventListener('click', () => { fechar(); Report.open(o.emps[0], { titulo: 'Relatório de Auditoria Contratual', secs: new Set(Report.SECOES.map(s => s[0])), resp: o.esc0.advogado, oab: o.esc0.oab, conf: true }); });
     $('[data-sair]', ov)?.addEventListener('click', () => { ov.remove(); App.logout(); });
