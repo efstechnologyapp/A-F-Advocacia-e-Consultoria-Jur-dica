@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.31.3';
+const APP_VERSAO = '1.31.4';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.31.4', data: '25/11/2026', itens: ['Relatório de auditoria: quadro comparativo cabe na página (os quatro temas de reajuste numa só coluna).', 'Explicação de “Contratos críticos” e legenda dos níveis de risco (alto, médio, baixo) abaixo de cada tabela com classificação de risco e no rodapé das páginas.', 'Todas as tabelas que citam contrato trazem também o nº real e o órgão/unidade (providências, oportunidades, obrigações, mão de obra, achados).', 'A IA da auditoria usa os mesmos critérios de nível de risco da legenda.', 'Leitura do período (painel, portal e relatório): abaixo de cada alerta, em letra menor, a lista dos contratos pendentes com o nº e o órgão/unidade.', 'Rodapé do relatório impresso não sobrepõe mais o texto e traz “Página X de Y”.'] },
   { numero: '1.31.3', data: '25/11/2026', itens: ['Correção: o Relatório de auditoria filtrado por tomador (ex.: Município de Vila Velha) só aplicava o filtro à seção da auditoria consultiva; sumário, carteira, obrigações, mão de obra, achados e cobertura documental traziam contratos de todos os tomadores. Agora todas as seções usam só os contratos escolhidos, e a capa indica o tomador.'] },
   { numero: '1.31.2', data: '25/11/2026', itens: ['Correção: depois de “Analisar de novo” (ou outra gravação) numa janela aberta a partir de uma lista, ao fechar e reabrir aparecia a versão antiga do registro — os dados estavam salvos, mas a lista não tinha sido atualizada. Agora a lista se atualiza ao fechar a janela e sempre abre a versão mais recente.'] },
   { numero: '1.31.1', data: '25/11/2026', itens: ['Auditoria consultiva passa a ler o CNPJ do órgão contratante e preenche o CNPJ tomador quando estiver vazio.', 'Valor mensal: quando o contrato só traz o valor global, o app calcula o mensal (global ÷ meses da vigência).'] },
@@ -2737,14 +2738,20 @@ const Consult = {
     const adm = I.reduce((s, i) => s + (num(i.admissoes) || 0), 0), des = I.reduce((s, i) => s + (num(i.desligamentos) || 0), 0);
     const hc = I.filter(i => num(i.headcount) !== null); const hcm = hc.length ? hc.reduce((s, i) => s + num(i.headcount), 0) / hc.length : 0;
     if (adm || des) out.push(`Foram ${fmtNum(adm)} admissões e ${fmtNum(des)} desligamentos${hcm ? `; rotatividade média de ${fmtPct(((adm + des) / 2) / hcm / Math.max(1, I.length))} ao mês` : ''}.`);
-    if (S.expir.length) out.push(`${S.expir.length} contrato(s) com vigência expirada sem registro de prorrogação ou encerramento.`);
-    { const pd = S.cs.map(c => AuditCons.docPend(c)).filter(p => p && !p.juntado), g = {}; pd.forEach(p => g[p.doc] = (g[p.doc] || 0) + 1);
-      if (pd.length) out.push(`${pd.length} contrato(s) com vigência dependente de documento pendente de juntada: ${Object.entries(g).map(([d, n]) => `${d} (${n})`).join('; ')}.`); }
+    // cada alerta leva a lista dos contratos (nº e órgão) que precisam de solução
+    const item = c => { const a = c.auditoria?.identificacao || {}, org = a.orgao || tomadorBase(c), un = a.unidade || c.unidade || ''; return `${c.codigo}${c.numero ? ' (' + (a.numeroContrato || c.numero) + ')' : ''} — ${org}${un && un !== org ? ' · ' + un : ''}`; };
+    const comLista = (t, l) => Object.assign(new String(t), { lista: l });
+    if (S.expir.length) out.push(comLista(`${S.expir.length} contrato(s) com vigência expirada sem registro de prorrogação ou encerramento.`, S.expir.map(c => item(c) + ` · venceu em ${fmtDate(c.fim)}`)));
+    { const pd = S.cs.map(c => ({ c, p: AuditCons.docPend(c) })).filter(x => x.p && !x.p.juntado), g = {}; pd.forEach(x => (g[x.p.doc] = g[x.p.doc] || []).push(x.c));
+      if (pd.length) out.push(comLista(`${pd.length} contrato(s) com vigência dependente de documento pendente de juntada: ${Object.entries(g).map(([d, l]) => `${d} (${l.length})`).join('; ')}.`, Object.entries(g).flatMap(([d, l]) => l.map(c => item(c) + ' · falta: ' + d)))); }
     if (S.compl !== null && S.compl < .7) out.push(`O cadastro contratual tem completude de ${fmtPct(S.compl)}: há lacunas documentais (valores, CCT, fiscal, reajuste) que limitam a auditoria.`);
     const alto = S.achAbertos.filter(a => /alto|cr[ií]tico/i.test(a.risco || '')).length;
-    if (alto) out.push(`${alto} achado(s) de risco alto/crítico aguardam providência.`);
+    if (alto) { const ls = S.achAbertos.filter(a => /alto|cr[ií]tico/i.test(a.risco || '')), pc = {}; S.cs.forEach(c => pc[c.codigo] = c);
+      out.push(comLista(`${alto} achado(s) de risco alto/crítico aguardam providência.`, ls.map(a => (pc[a.contrato] ? item(pc[a.contrato]) : (a.contrato || 'sem contrato')) + ' · ' + String(a.achado || '').slice(0, 110)))); }
     return out;
   },
+  /** um item da leitura do período + a lista de contratos pendentes logo abaixo, em letra menor */
+  insHtml: i => esc(String(i)) + (i.lista?.length ? `<ul class="ins-l">${i.lista.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''),
   painel(host, e) {
     const st = Consult._per = Consult._per || { p: '12' };
     const allInd = empRecs('indicadores', e.id).map(i => i.competencia).filter(c => /^\d{4}-\d{2}$/.test(c || '')).sort();
@@ -2765,7 +2772,7 @@ const Consult = {
       ${kpi('Achados em aberto', S.achAbertos.length, `${achRisco[2].value + achRisco[3].value} de risco alto/crítico`, achRisco[2].value + achRisco[3].value ? 'bad' : '', `#/empresa/${e.id}/achados`)}
       ${kpi('Postos contratados', fmtNum(S.postos), S.custoPrev ? 'custo previsto ' + fmtMoneyShort(S.custoPrev) + '/mês' : '', '', `#/empresa/${e.id}/maoDeObra`)}
     </div>
-    ${ins.length ? `<section class="card insight"><header><h2>${icon('sparkle')} Leitura do período</h2><span class="muted small">gerada automaticamente a partir dos dados</span></header><ul>${ins.map(i => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}
+    ${ins.length ? `<section class="card insight"><header><h2>${icon('sparkle')} Leitura do período</h2><span class="muted small">gerada automaticamente a partir dos dados</span></header><ul>${ins.map(i => `<li>${Consult.insHtml(i)}</li>`).join('')}</ul></section>` : ''}
     ${Consult.conferenciaHtml(e)}
     <div class="seg-tabs"><span class="muted small">Indicadores econômico-financeiros:</span>${[['6', '6 meses'], ['12', '12 meses'], ['24', '24 meses'], ['all', 'Tudo']].map(([k, l]) => `<button class="${st.p === k ? 'on' : ''}" data-per="${k}">${l}</button>`).join('')}<span class="sp"></span><a class="link small" href="#/empresa/${e.id}/indicadores">${icon('edit')} Lançar indicadores</a></div>
     <div class="grid2">
@@ -3027,6 +3034,8 @@ const Report = {
   },
   build(e, o) {
     const S = Consult.stats(e, o.de, o.ate, o.grupo), I = S.ind, esc0 = escritorio(), cods = new Set(S.cs.map(c => c.codigo));
+    const porCod = {}; empRecs('contratos', e.id).forEach(c => porCod[c.codigo] = c);
+    const ct = cod => porCod[cod] ? AuditCons.ctCols(porCod[cod]) : [v(cod), '—'];
     const L = I.map(i => fmtCompShort(i.competencia)), g = k => I.map(i => num(i[k]));
     const chart = (title, spec) => `<figure class="r-fig"><figcaption>${esc(title)}</figcaption>${spec.series.some(s => s.values.some(v => num(v) !== null)) ? legendHtml(spec.series) + svgChart(spec, 680, 220).svg : '<p class="r-muted">Sem dados no período.</p>'}</figure>`;
     const tbl = (heads, rows, cls = '') => `<table class="r-t ${cls}"><thead><tr>${heads.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -3038,7 +3047,7 @@ const Report = {
       const ins = Consult.insights(S);
       sec.push(`<section>${H('Sumário executivo')}
       <div class="r-kpis"><div><b>${S.at.length}/${S.cs.length}</b><span>contratos vigentes</span></div><div><b>${S.carteira ? fmtMoneyShort(S.carteira) : '—'}</b><span>carteira mensal conhecida</span></div><div><b>${fmtPct(S.compl)}</b><span>completude documental</span></div><div><b>${fmtPct(S.conf)}</b><span>conformidade das obrigações</span></div><div><b>${S.achAbertos.length}</b><span>achados em aberto</span></div><div><b>${S.venc.length}</b><span>contratos vencendo em 90 dias</span></div></div>
-      ${ins.length ? `<h3>Leitura do período</h3><ul>${ins.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}</section>`);
+      ${ins.length ? `<h3>Leitura do período</h3><ul>${ins.map(i => `<li>${Consult.insHtml(i)}</li>`).join('')}</ul>` : ''}</section>`);
     }
     if (o.secs.has('carteira')) sec.push(`<section>${H('Carteira de contratos')}<p>${S.cs.length} contrato(s) cadastrados; ${S.at.length} vigentes; ${S.cs.filter(semVigencia).length} sem data de término identificada; ${S.expir.length} com vigência expirada sem registro de prorrogação.</p>
       ${tbl(['ID', 'Tomador / unidade', 'Nº', 'Início', 'Término', 'Valor mensal', 'Status'], S.cs.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true })).map(c => [esc(c.codigo), `${v(tomadorBase(c))}<br><small>${v(c.unidade || c.grupo)}</small>`, v(c.numero), v(fmtDate(c.inicio)), v(fmtDate(c.fim)), num(c.valorMensal) !== null ? esc(fmtMoney(c.valorMensal)) : v(c.valorMensal), v(c.status)]), 'small')}</section>`);
@@ -3051,17 +3060,17 @@ const Report = {
       ${I.length ? tbl(['Competência', 'Receita', 'Custo', 'Margem', 'Folha', 'Tributos/encargos', 'Carga s/ receita', 'Func.', 'Adm.', 'Desl.'], I.map((i, k) => [fmtComp(i.competencia), esc(fmtMoney(i.receita)), esc(fmtMoney(i.custo)), num(i.receita) ? fmtPct((num(i.receita) - (num(i.custo) || 0)) / num(i.receita)) : '—', esc(fmtMoney(i.folha)), esc(fmtMoney(T[k])), num(i.receita) ? fmtPct(T[k] / num(i.receita)) : '—', v(fmtNum(i.headcount)), v(fmtNum(i.admissoes)), v(fmtNum(i.desligamentos))]), 'small num') : ''}</section>`);
     }
     if (o.secs.has('obrigacoes')) sec.push(`<section>${H('Conformidade das obrigações contratuais')}<p>${S.ob.length} obrigações mapeadas. ${S.obDist.filter(x => x.value).map(x => `${x.label}: ${x.value}`).join(' · ')}.</p>
-      ${S.ob.length ? tbl(['Contrato', 'Cláusula', 'Grupo', 'Obrigação', 'Status', 'Verificação'], S.ob.slice(0, 120).map(r => [esc(r.contrato), v(r.clausula), v(r.grupo), v(String(r.obrigacao || '').slice(0, 160)), v(r.status || 'sem status'), v(r.verificado)]), 'small') : ''}</section>`);
+      ${S.ob.length ? tbl(['Contrato', 'Órgão / unidade', 'Cláusula', 'Grupo', 'Obrigação', 'Status', 'Verificação'], S.ob.slice(0, 120).map(r => [...ct(r.contrato), v(r.clausula), v(r.grupo), v(String(r.obrigacao || '').slice(0, 160)), v(r.status || 'sem status'), v(r.verificado)]), 'small') : ''}</section>`);
     if (o.secs.has('maodeobra')) {
       const byC = {}; S.mo.forEach(r => { const k = r.contrato; byC[k] = byC[k] || { p: 0, a: 0, prev: 0, ap: 0, div: new Set() }; byC[k].p += num(r.qtdContratada) || 0; byC[k].a += num(r.qtdAlocada) || 0; byC[k].prev += num(r.custoPrevisto) || 0; byC[k].ap += num(r.custoApurado) || 0; if (r.divergencia) byC[k].div.add(r.divergencia); });
       sec.push(`<section>${H('Mão de obra')}<p>${fmtNum(S.postos)} postos contratados; ${fmtNum(S.alocados)} com alocação comprovada. Custo previsto mensal: ${esc(fmtMoney(S.custoPrev))}${S.custoAp ? `; custo apurado: ${esc(fmtMoney(S.custoAp))}` : ''}.</p>
-      ${Object.keys(byC).length ? tbl(['Contrato', 'Postos', 'Alocados', 'Custo previsto', 'Custo apurado', 'Divergências'], Object.entries(byC).sort().map(([k, x]) => [esc(k), fmtNum(x.p), fmtNum(x.a), esc(fmtMoney(x.prev)), x.ap ? esc(fmtMoney(x.ap)) : '—', esc([...x.div].join('; '))]), 'small') : ''}</section>`);
+      ${Object.keys(byC).length ? tbl(['Contrato', 'Órgão / unidade', 'Postos', 'Alocados', 'Custo previsto', 'Custo apurado', 'Divergências'], Object.entries(byC).sort().map(([k, x]) => [...ct(k), fmtNum(x.p), fmtNum(x.a), esc(fmtMoney(x.prev)), x.ap ? esc(fmtMoney(x.ap)) : '—', esc([...x.div].join('; '))]), 'small') : ''}</section>`);
     }
     if (o.secs.has('achados')) {
       const ord = a => ({ 'critico': 0, 'alto': 1, 'medio': 2, 'baixo': 3 })[norm(a.risco)] ?? 4;
       const list = S.ach.slice().sort((a, b) => ord(a) - ord(b));
       sec.push(`<section>${H('Achados e plano de ação')}<p>${S.ach.length} achado(s) registrados, ${S.achAbertos.length} em aberto.</p>
-      ${list.length ? tbl(['ID', 'Contrato', 'Área', 'Achado', 'Risco', 'Recomendação', 'Prazo', 'Status'], list.slice(0, 150).map(a => [v(a.codigo), v(a.contrato), v(a.area), v(a.achado), `<span class="r-risk ${norm(a.risco).replace(/\W/g, '')}">${v(a.risco)}</span>`, v(a.recomendacao), v(fmtDate(a.prazo)), v(a.status)]), 'small') : ''}</section>`);
+      ${list.length ? tbl(['ID', 'Contrato', 'Órgão / unidade', 'Área', 'Achado', 'Risco', 'Recomendação', 'Prazo', 'Status'], list.slice(0, 150).map(a => [v(a.codigo), ...ct(a.contrato), v(a.area), v(a.achado), `<span class="r-risk ${norm(a.risco).replace(/\W/g, '')}">${v(a.risco)}</span>`, v(a.recomendacao), v(fmtDate(a.prazo)), v(a.status)]), 'small') + AuditCons.legHtml() : ''}</section>`);
     }
     if (o.secs.has('documentos')) {
       const docs = empRecs('documentos', e.id).filter(d => !o.grupo || cods.has(d.contrato)), ads = empRecs('aditivos', e.id).filter(d => !o.grupo || cods.has(d.contrato));
@@ -3071,11 +3080,11 @@ const Report = {
     }
     if (o.secs.has('consultiva')) sec.push(AuditCons.relatorio(e, S.cs.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true })), H, tbl, o.grupo));
     if (o.parecer) sec.push(`<section>${H('Parecer do consultor')}<div class="r-parecer">${esc(o.parecer).replace(/\n/g, '<br>')}</div></section>`);
-    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(o.titulo)} — ${esc(e.razao)}</title><style>${Report.CSS}</style></head><body>
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(o.titulo)} — ${esc(e.razao)}</title><style>${Report.CSS}${(() => { const q = t => '"' + String(t).replace(/["\\]/g, '') + '"'; const leg = (o.secs.has('consultiva') || o.secs.has('achados')) ? q(AuditCons.RISCO_LEG) + ' "\\A" ' : ''; return `@page{@bottom-left{content:${leg}${q(nomeMarca() + ' · ' + BRAND.caption + (o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''))};white-space:pre-wrap;font:6.5pt Arial,sans-serif;color:#7a7e88;vertical-align:top;padding-top:3mm}@bottom-right{content:"Página " counter(page) " de " counter(pages);font:7pt Arial,sans-serif;color:#8a8e98;vertical-align:top;padding-top:3mm;width:22mm}}@media print{footer{display:none}}`; })()}</style></head><body>
     <div class="cover"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="cap">${BRAND.caption}</div><div class="rule"></div><h1>${esc(o.titulo)}</h1><p class="emp">${esc(e.razao)}${e.cnpj ? '<br>CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${o.grupo ? `<br><b>Contratos com ${esc(o.grupo)}</b>` : ''}</p><p class="meta">Período dos indicadores: ${esc(per)}<br>Emitido em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
     <main>${sec.join('')}
     <div class="sign"><div class="line"></div><b>${esc(o.resp || '')}</b><span>${esc(o.oab || '')}</span><span>${esc(nomeMarca())} — ${BRAND.caption}</span></div></main>
-    <footer>${esc(nomeMarca())} · ${BRAND.caption}${o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''}</footer></body></html>`;
+    <footer>${(o.secs.has('consultiva') || o.secs.has('achados')) ? `<div class="f-leg">${esc(AuditCons.RISCO_LEG)}</div>` : ''}${esc(nomeMarca())} · ${BRAND.caption}${o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''}</footer></body></html>`;
   },
   /** editor do relatório (tipo Word): texto livre, gráficos e tabelas protegidos; salva no Drive da empresa */
   editar(e, html, reg) {
@@ -3225,9 +3234,9 @@ const Report = {
   @media print{footer{display:none!important}}
   footer{display:flex;justify-content:space-between;font-size:7pt;color:#8a8e98;border-top:.5pt solid #e7e0d2;padding-top:1.4mm}
   @media screen{body{background:#e9e6df;padding:8mm 0}.folha{background:#fff;max-width:210mm;margin:0 auto;padding:13mm 12mm 6mm;box-shadow:0 2px 16px rgba(0,0,0,.09)}footer{position:static;margin-top:5mm}}`,
-  CSS: `.r-ficha{page-break-before:always}.r-ficha h3{margin-top:0}.ac-ficha h4{margin:4mm 0 1.5mm;font-size:10.5pt;text-transform:uppercase;letter-spacing:.3pt}.ac-ficha table th{width:26%;text-align:left;vertical-align:top}.ac-res{background:#f7f3ea;padding:3mm;border-left:1mm solid #b08a3e}@page{size:A4;margin:18mm 16mm 20mm}*{box-sizing:border-box}body{font-family:Georgia,'Times New Roman',serif;color:#1d2433;font-size:10.5pt;line-height:1.5;margin:0;
+  CSS: `.r-ficha{page-break-before:always}.r-ficha h3{margin-top:0}.ac-ficha h4{margin:4mm 0 1.5mm;font-size:10.5pt;text-transform:uppercase;letter-spacing:.3pt}.ac-ficha table th{width:26%;text-align:left;vertical-align:top}.ac-res{background:#f7f3ea;padding:3mm;border-left:1mm solid #b08a3e}@page{size:A4;margin:18mm 16mm 26mm}*{box-sizing:border-box}body{font-family:Georgia,'Times New Roman',serif;color:#1d2433;font-size:10.5pt;line-height:1.5;margin:0;
   --s1:#2f6bb3;--s2:#c98a1e;--s3:#1d9a7c;--s4:#7056c9;--s5:#c4485e;--chart-bg:#fff}
-  .cover{height:257mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}
+  .cover{height:240mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}
   .cover img{width:62mm}.cap{font:600 9pt 'Helvetica Neue',Arial,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:#9a7741;margin-top:4mm}
   .rule{width:40mm;height:1px;background:#b08a4e;margin:14mm 0 10mm}.cover h1{font-weight:400;font-size:24pt;margin:0 0 6mm;color:#14203a}.emp{font-size:13pt;margin:0 0 10mm}.meta{font:9.5pt Arial,sans-serif;color:#6b6f7b}
   main{font-family:'Helvetica Neue',Arial,sans-serif;font-size:9.5pt}h2{font-family:Georgia,serif;font-weight:400;color:#14203a;font-size:15pt;border-bottom:1px solid #d9c49a;padding-bottom:2mm;margin:9mm 0 4mm;page-break-after:avoid}
@@ -3239,7 +3248,8 @@ const Report = {
   .legend{display:flex;gap:4mm;flex-wrap:wrap;font-size:8pt;color:#4a4f5c;margin-bottom:1mm}.legend i{display:inline-block;width:3mm;height:3mm;border-radius:1mm;margin-right:1.2mm;vertical-align:-.3mm}
   .r-parecer{border-left:3px solid #b08a4e;padding:2mm 5mm;background:#faf7f0}
   .sign{margin:18mm auto 0;width:80mm;text-align:center;display:flex;flex-direction:column;gap:.6mm;page-break-inside:avoid}.sign .line{border-top:1px solid #1d2433;margin-bottom:2mm}.sign span{color:#6b6f7b;font-size:8.5pt}
-  footer{position:fixed;bottom:-12mm;left:0;right:0;text-align:center;font:7.5pt Arial,sans-serif;color:#8a8e98}
+  footer{position:fixed;bottom:-16mm;left:0;right:0;text-align:center;font:7.5pt Arial,sans-serif;color:#8a8e98}footer .f-leg{font-size:6.6pt;line-height:1.3;color:#6b6f7b;border-top:1px solid #e7e0d2;padding-top:1mm;margin-bottom:.8mm;text-align:left}
+  .r-leg{font:7pt Arial,sans-serif;color:#6b6f7b;margin:-2mm 0 4mm;line-height:1.35}.ins-l{font-size:8pt;color:#4a4f5c;margin:.6mm 0 1.6mm;padding-left:5mm;list-style:circle}.ins-l li{margin:.2mm 0}.r-t th,.r-t td{overflow-wrap:break-word;word-break:normal}.r-t.cmp{table-layout:fixed}.r-t.cmp th:nth-child(1){width:10%}.r-t.cmp th:nth-child(2){width:16%}.r-t.cmp th:nth-child(3){width:14%}.r-t.cmp th:nth-child(4){width:13%}.r-t.cmp th:nth-child(5){width:14%}.r-t.cmp th:nth-child(6){width:6%}.r-t.cmp th:nth-child(7){width:18%}.r-t.cmp th:nth-child(8){width:9%}.r-t.cmp th{font-size:7pt}.r-t.cmp td,.r-t.cmp th{padding:1.4mm 1.2mm}.nw{white-space:nowrap}
   @media screen{body{background:#e9e6df}.cover,main{background:#fff;max-width:210mm;margin:8mm auto;padding:16mm;box-shadow:0 2px 14px rgba(0,0,0,.08)}.cover{height:auto;min-height:250mm}footer{position:static;padding:4mm 0 10mm}}`
 };
 /* =====================================================================
@@ -3416,7 +3426,7 @@ const Portal = {
     } else if (st.tab === 'consultoria') {
       body = emps.map(e => { const S = Consult.stats(e), ins = Consult.insights(S); return `<section class="card"><header><h2>${icon('building')} ${esc(e.fantasia || e.razao)}</h2></header>
         <div class="kpis sm">${kpi('Contratos vigentes', `${S.at.length}/${S.cs.length}`)}${kpi('Completude documental', fmtPct(S.compl))}${kpi('Conformidade', fmtPct(S.conf))}${kpi('Ações em aberto', S.achAbertos.length)}</div>
-        ${ins.length ? `<ul class="ins">${ins.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}
+        ${ins.length ? `<ul class="ins">${ins.map(i => `<li>${Consult.insHtml(i)}</li>`).join('')}</ul>` : ''}
         <h4 class="sec">Plano de ação em aberto</h4>${S.achAbertos.length ? `<div data-mxw><div class="table-wrap"><table class="mini"><thead><tr><th>Contrato</th><th>Achado</th><th>Risco</th><th>Recomendação</th><th>Prazo</th><th>Status</th></tr></thead><tbody>${mxItens(S.achAbertos.map(a => `<tr><td>${esc(a.contrato || '')}</td><td>${esc(a.achado || '')}</td><td>${pill(a.risco || '—')}</td><td>${esc(a.recomendacao || '')}</td><td>${esc(fmtDate(a.prazo))}</td><td>${pill(a.status || '')}</td></tr>`), 15)}</tbody></table></div>${mxBtn(S.achAbertos.length, 15, 'ação(ões)')}</div>` : '<p class="muted small">Nenhuma ação pendente.</p>'}
         <div class="right"><button class="btn primary" data-rep="${e.id}">${icon('printer')} Relatório completo</button></div></section>`; }).join('');
     } else {
@@ -7033,19 +7043,28 @@ const AuditCons = {
     UI.toast('Planilha comparativa gerada.');
   },
   /** seções do Relatório de auditoria */
+  /** colunas "Contrato" (código + nº) e "Órgão / unidade" usadas em todas as tabelas do relatório */
+  ctCols(c) {
+    if (!c) return ['—', '—'];
+    const a = c.auditoria || {}, org = a.identificacao?.orgao || tomadorBase(c), un = a.identificacao?.unidade || c.unidade || '', n = a.identificacao?.numeroContrato || c.numero || '';
+    return [esc(c.codigo) + (n ? '<br><small>' + esc(n) + '</small>' : ''), esc(org) + (un && un !== org ? '<br><small>' + esc(un) + '</small>' : '')];
+  },
+  /** legenda dos níveis de risco (texto curto para tabelas e rodapé) */
+  RISCO_LEG: 'Níveis de risco — Alto: pode causar prejuízo financeiro relevante, glosa, sanção, rescisão ou responsabilização trabalhista/previdenciária; providência imediata. · Médio: pode gerar perda, glosa parcial ou descumprimento se não tratado; providência a curto prazo. · Baixo: falha formal ou ponto de melhoria, sem impacto financeiro imediato; acompanhar.',
+  legHtml: () => `<p class="r-leg">${esc(AuditCons.RISCO_LEG)}</p>`,
   relatorio(e, cs, H, tbl, grupo) {
     const L = cs.map(AuditCons.linha), feitos = L.filter(l => l.c.auditoria), soma = k => L.reduce((s, l) => s + (l[k] || 0), 0);
     const crit = L.filter(l => l.a.alerta || l.n.Alto || (isISO(l.V.fim) && daysUntil(l.V.fim) <= 90));
-    const prov = []; L.forEach(l => (l.a.riscos || []).filter(r => /^alto/i.test(r.nivel || '')).forEach(r => prov.push([esc(l.c.codigo), esc(r.descricao || ''), esc(r.providencia || ''), esc(r.setor || '')])));
-    const ops = []; L.forEach(l => (l.a.oportunidades || []).forEach(o => ops.push([esc(l.c.codigo), esc(o.descricao || ''), esc(o.fundamento || '')])));
+    const prov = []; L.forEach(l => (l.a.riscos || []).filter(r => /^alto/i.test(r.nivel || '')).forEach(r => prov.push([...AuditCons.ctCols(l.c), esc(r.descricao || ''), esc(r.providencia || ''), esc(r.setor || '')])));
+    const ops = []; L.forEach(l => (l.a.oportunidades || []).forEach(o => ops.push([...AuditCons.ctCols(l.c), esc(o.descricao || ''), esc(o.fundamento || '')])));
     const venc = L.filter(l => isISO(l.V.fim) && daysUntil(l.V.fim) < 0).length, v90 = L.filter(l => isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90).length;
     const out = [];
     out.push(`<section>${H('Auditoria consultiva — relatório geral' + (grupo ? ' (' + grupo + ')' : ''))}
       <p>${cs.length} contrato(s) no escopo${grupo ? ` com ${esc(grupo)}` : ''}; ${feitos.length} com ficha de auditoria consultiva.${feitos.length < cs.length ? ` <i class="r-gap">${cs.length - feitos.length} ainda sem análise.</i>` : ''}</p>
       <div class="r-kpis"><div><b>${soma('mensal') ? fmtMoneyShort(soma('mensal')) : '—'}</b><span>valor mensal somado</span></div><div><b>${soma('global') ? fmtMoneyShort(soma('global')) : '—'}</b><span>valor global somado</span></div><div><b>${soma('postos') ? fmtNum(soma('postos')) : '—'}</b><span>postos de trabalho</span></div><div><b>${venc} / ${v90}</b><span>vencidos / vencem em 90 dias</span></div></div>
-      <h3>Contratos críticos</h3>${crit.length ? tbl(['Contrato', 'Órgão / unidade', 'Término', 'Riscos altos', 'Motivo'], crit.map(l => [esc(l.c.codigo), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), l.V.fim ? esc(fmtDate(l.V.fim)) : '—', String(l.n.Alto), esc([l.a.alerta && 'documentos inconsistentes', l.n.Alto && 'risco alto', isISO(l.V.fim) && daysUntil(l.V.fim) < 0 && 'vigência vencida', isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90 && 'vence em até 90 dias'].filter(Boolean).join(', '))]), 'small') : '<p>Nenhum contrato crítico identificado.</p>'}
-      <h3>Providências prioritárias (riscos altos)</h3>${prov.length ? tbl(['Contrato', 'Risco', 'Providência', 'Setor'], prov, 'small') : '<p>Nenhum risco alto apontado.</p>'}
-      <h3>Oportunidades de atualização financeira</h3>${ops.length ? tbl(['Contrato', 'Oportunidade', 'Fundamento'], ops, 'small') : '<p>Nenhuma identificada com os documentos disponíveis.</p>'}
+      <h3>Contratos críticos</h3><p class="small">Contratos que pedem atenção imediata por pelo menos um destes motivos: <b>documentos inconsistentes</b> (PDFs de outro número ou de contratos diferentes), <b>risco alto</b> apontado pela auditoria, <b>vigência vencida</b> sem registro de prorrogação, ou <b>vencimento em até 90 dias</b>.</p>${crit.length ? tbl(['Contrato', 'Órgão / unidade', 'Término', 'Riscos altos', 'Motivo'], crit.map(l => [...AuditCons.ctCols(l.c), l.V.fim ? esc(fmtDate(l.V.fim)) : '—', String(l.n.Alto), esc([l.a.alerta && 'documentos inconsistentes', l.n.Alto && 'risco alto', isISO(l.V.fim) && daysUntil(l.V.fim) < 0 && 'vigência vencida', isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90 && 'vence em até 90 dias'].filter(Boolean).join(', '))]), 'small') + AuditCons.legHtml() : '<p>Nenhum contrato crítico identificado.</p>'}
+      <h3>Providências prioritárias (riscos altos)</h3>${prov.length ? tbl(['Contrato', 'Órgão / unidade', 'Risco', 'Providência', 'Setor'], prov, 'small') + AuditCons.legHtml() : '<p>Nenhum risco alto apontado.</p>'}
+      <h3>Oportunidades de atualização financeira</h3>${ops.length ? tbl(['Contrato', 'Órgão / unidade', 'Oportunidade', 'Fundamento'], ops, 'small') : '<p>Nenhuma identificada com os documentos disponíveis.</p>'}
       <p class="r-muted">Fatos contratuais e conclusões da auditoria estão separados em cada ficha. Informações ausentes dos documentos aparecem como “não identificado”; não se presume lucro, prejuízo ou crédito sem dados suficientes.</p></section>`);
     // documentos pendentes de juntada (lista pronta para pedir à empresa)
     const pend = L.map(l => ({ l, P: l.P && !l.P.juntado ? l.P : null, outros: (l.a.documentosFaltantes || []).filter(Boolean) })).filter(x => x.P || x.outros.length);
@@ -7053,9 +7072,9 @@ const AuditCons = {
     if (pend.length) out.push(`<section>${H('Documentos pendentes de juntada')}
       <p>Documentos que não estão no sistema e são necessários para concluir a auditoria — em especial, para fixar o início e o término da vigência. Recomenda-se solicitá-los à empresa.</p>
       ${Object.keys(porDoc).length ? `<h3>Para fixar a vigência</h3><ul>${Object.entries(porDoc).map(([d, cs]) => `<li><b>${esc(d)}</b> — ${cs.length} contrato(s): ${esc(cs.join(', '))}</li>`).join('')}</ul>` : ''}
-      ${tbl(['Contrato', 'Órgão / unidade', 'Vigência — documento pendente', 'Outros documentos apontados pela auditoria'], pend.map(x => [esc(x.l.c.codigo) + (x.l.numero ? '<br><small>' + esc(x.l.numero) + '</small>' : ''), esc(x.l.orgao) + (x.l.unidade ? '<br><small>' + esc(x.l.unidade) + '</small>' : ''), x.P ? `<b>${esc(x.P.doc)}</b><br><small>${esc(x.P.motivo)}</small>` : '—', x.outros.length ? x.outros.map(esc).join('<br>') : '—']), 'small')}</section>`);
-    out.push(`<section>${H('Quadro comparativo dos contratos')}${tbl(['Contrato', 'Órgão / unidade', 'Vigência', 'Mensal', 'Global', 'Postos', 'Reajuste', 'Repactuação', 'Revisão', 'Reequilíbrio', 'Riscos A/M/B'], L.map(l => [esc(l.c.codigo) + (l.numero ? '<br><small>' + esc(l.numero) + '</small>' : ''), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), `${l.V.ini ? esc(fmtDate(l.V.ini)) : '—'}<br>${l.V.fim ? esc(fmtDate(l.V.fim)) : '—'}${l.P ? `<br><small class="r-gap">pendente: ${esc(l.P.doc)}</small>` : ''}`, l.mensal !== null ? esc(fmtMoney(l.mensal)) : '—', l.global !== null ? esc(fmtMoney(l.global)) : '—', l.postos ? fmtNum(l.postos) : '—', esc(l.sn('reajuste')), esc(l.sn('repactuacao')), esc(l.sn('revisao')), esc(l.sn('reequilibrio')), l.c.auditoria ? `${l.n.Alto}/${l.n.Médio}/${l.n.Baixo}${l.a.alerta ? '<br><b class="r-gap">⚠ docs inconsistentes</b>' : ''}` : '<i class="r-gap">sem análise</i>']), 'small')}<p class="r-muted">Reajuste, repactuação, revisão e reequilíbrio: “prevê / houve”.</p></section>`);
-    out.push(`<section>${H('Fichas individuais dos contratos')}${feitos.length ? feitos.map(l => `<div class="r-ficha"><h3>${esc(l.c.codigo)} — ${esc(l.orgao)}${l.unidade ? ' · ' + esc(l.unidade) : ''}</h3>${AuditCons.fichaHtml(l.c, true)}</div>`).join('') : '<p>Nenhum contrato analisado ainda. Use “Auditoria consultiva (IA)” no painel da empresa.</p>'}</section>`);
+      ${tbl(['Contrato', 'Órgão / unidade', 'Vigência — documento pendente', 'Outros documentos apontados pela auditoria'], pend.map(x => [...AuditCons.ctCols(x.l.c), x.P ? `<b>${esc(x.P.doc)}</b><br><small>${esc(x.P.motivo)}</small>` : '—', x.outros.length ? x.outros.map(esc).join('<br>') : '—']), 'small')}</section>`);
+    out.push(`<section>${H('Quadro comparativo dos contratos')}${tbl(['Contrato', 'Órgão / unidade', 'Vigência', 'Mensal', 'Global', 'Postos', 'Reajuste · repactuação · revisão · reequilíbrio (prevê / houve)', 'Riscos A/M/B'], L.map(l => [...AuditCons.ctCols(l.c), `${l.V.ini ? esc(fmtDate(l.V.ini)) : '—'}<br>${l.V.fim ? esc(fmtDate(l.V.fim)) : '—'}${l.P ? `<br><small class="r-gap">pendente: ${esc(l.P.doc)}</small>` : ''}`, l.mensal !== null ? `<span class="nw">${esc(fmtMoney(l.mensal))}</span>` : '—', l.global !== null ? `<span class="nw">${esc(fmtMoney(l.global))}</span>` : '—', l.postos ? fmtNum(l.postos) : '—', `<small>Reajuste: ${esc(l.sn('reajuste'))}<br>Repactuação: ${esc(l.sn('repactuacao'))}<br>Revisão: ${esc(l.sn('revisao'))}<br>Reequilíbrio: ${esc(l.sn('reequilibrio'))}</small>`, l.c.auditoria ? `${l.n.Alto}/${l.n.Médio}/${l.n.Baixo}${l.a.alerta ? '<br><b class="r-gap">⚠ docs inconsistentes</b>' : ''}` : '<i class="r-gap">sem análise</i>']), 'small cmp')}<p class="r-muted">Reajuste, repactuação, revisão e reequilíbrio: “prevê / houve”. Riscos A/M/B: quantidade de riscos alto / médio / baixo apontados na ficha.</p>${AuditCons.legHtml()}</section>`);
+    out.push(`<section>${H('Fichas individuais dos contratos')}${feitos.length ? AuditCons.legHtml() +  feitos.map(l => `<div class="r-ficha"><h3>${esc(l.c.codigo)} — ${esc(l.orgao)}${l.unidade ? ' · ' + esc(l.unidade) : ''}</h3>${AuditCons.fichaHtml(l.c, true)}</div>`).join('') : '<p>Nenhum contrato analisado ainda. Use “Auditoria consultiva (IA)” no painel da empresa.</p>'}</section>`);
     return out.join('');
   }
 };
