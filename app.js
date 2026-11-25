@@ -27,7 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.28.4', data: '25/11/2026', itens: ['Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
+  { numero: '1.28.4', data: '25/11/2026', itens: ['Inventário documental: nova coluna “Juntado ao sistema em” (data e hora em que cada arquivo entrou no app).', 'Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
   { numero: '1.28.3', data: '25/11/2026', itens: ['A auditoria consultiva também preenche o tomador quando ele está vazio no cadastro.', 'Agrupamento por município mais preciso: secretarias e fundos entram no município também pela raiz do CNPJ do tomador e pelo nome da cidade na unidade, mesmo quando o nome do contratante não cita a cidade.'] },
   { numero: '1.28.2', data: '25/11/2026', itens: ['Auditoria consultiva e “Ler de novo”: passam a abrir também os PDFs que estão em pastas do Drive fora do app (ligados ao contrato pelo link), pela conta do app.', 'Painel da empresa: “Conferência com a pasta do Drive” — cole o link da pasta e veja quantos contratos há nela, quantos estão no sistema e quais faltam.'] },
   { numero: '1.28.1', data: '25/11/2026', itens: ['Ficha do contrato: o card de Vigência (início, término, dias restantes e prorrogação) substitui o indicador antigo, na mesma linha de Valor mensal, Postos e Completude.', 'Reajuste, repactuação, revisão e reequilíbrio num card só: se o contrato prevê, se já houve e quando, e a data do próximo reajuste (12 meses do último ou do início), com alerta quando o prazo já está aberto.'] },
@@ -661,6 +661,7 @@ const SCHEMAS = {
       F('numero', 'Número identificado', 'text', { list: 1 }),
       F('arquivo', 'Arquivo', 'text', { list: 1, w: 'full' }),
       F('link', 'Link do arquivo (Drive)', 'link', { list: 1, w: 'full' }),
+      F('createdAt', 'Juntado ao sistema em', 'stamp', { list: 1 }),
       F('origem', 'RAR de origem', 'text'),
       F('caminho', 'Caminho interno', 'text', { w: 'full' }),
       F('paginas', 'Páginas', 'num', { list: 1 }),
@@ -1101,6 +1102,7 @@ const UI = {
     const hint = f.hint ? `<small>${esc(f.hint)}</small>` : '';
     const gap = isGap(v) ? ' gap' : '';
     let inp = '';
+    if (f.type === 'stamp') return `<div class="fld"><label>${esc(f.label)}</label><div class="muted" style="padding:8px 0">${v ? esc(fmtDateTime(v)) : 'ao salvar'}${ctx.rec?.createdBy ? '' : ''}</div></div>`;
     switch (f.type) {
       case 'long': inp = `<textarea id="${id}" name="${f.k}" rows="3"${req}>${esc(v)}</textarea>`; break;
       case 'select': {
@@ -1197,6 +1199,7 @@ const UI = {
       case 'money': return num(v) === null ? esc(v) : `<span class="mono ${f.k === 'diferenca' && num(v) < 0 ? 'neg' : f.k === 'diferenca' && num(v) > 0 ? 'pos' : ''}">${esc(fmtMoney(v))}</span>`;
       case 'num': return `<span class="mono">${esc(fmtNum(v))}</span>`;
       case 'date': return esc(fmtDate(v));
+      case 'stamp': return `<span class="nowrap">${esc(fmtDateTime(v))}</span>`;
       case 'comp': return esc(fmtComp(v));
       case 'doc': return esc(fmtDoc(v));
       case 'cnj': return `<span class="mono">${esc(fmtCNJ(v))}</span>`;
