@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.30.1';
+const APP_VERSAO = '1.30.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.30.2', data: '25/11/2026', itens: ['Lista de contratos: a coluna “Data fim/vigência” mostra quando o prazo depende de documento pendente de juntada e qual é (ex.: Ordem de Serviço, termo aditivo de prorrogação).'] },
   { numero: '1.30.1', data: '25/11/2026', itens: ['Relatório de auditoria: nova seção “Documentos pendentes de juntada”, com a lista por documento (ex.: Ordem de Serviço — contratos tais) e a tabela por contrato, incluindo os demais documentos apontados pela auditoria.'] },
   { numero: '1.30.0', data: '25/11/2026', itens: ['Vigência que depende de documento fora do sistema (ex.: “12 meses a contar da Ordem de Serviço”, contrato vencido sem aditivo de prorrogação): o card de Vigência, a ficha, a leitura do período, o relatório e a planilha dizem que o prazo depende de documento pendente de juntada e qual é o documento.', 'Corrigir vigência: ao informar só o início, o término é preenchido sozinho com o prazo do contrato (início + prazo − 1 dia).', 'Contrato sem término e com status “Vigente” passa a contar como vigente (e entra na carteira mensal), com o aviso “término a confirmar”.'] },
   { numero: '1.29.5', data: '25/11/2026', itens: ['Relatório de auditoria: clicar em Analisar já inicia a análise, sem confirmação.'] },
@@ -487,7 +488,7 @@ const SCHEMAS = {
       F('objeto', 'Objeto/escopo resumido', 'long'),
       F('numero', 'Nº contrato/processo', 'text', { list: 1 }),
       F('inicio', 'Data início', 'date'),
-      F('fim', 'Data fim/vigência', 'date', { list: 1 }),
+      F('fim', 'Data fim/vigência', 'date', { list: 1, cel: (v, r) => { const P = AuditCons.docPend(r); return UI.cell({ type: 'date' }, v) + (P ? `<small class="ac-pend" style="margin-top:4px">${icon('alert')}<span>${P.juntado ? `${esc(P.doc)} já juntado — analisar de novo` : `Pendente de juntada: <b>${esc(P.doc)}</b>`}</span></small>` : ''); } }),
       F('prazo', 'Prazo/prorrogação', 'text'),
       F('valorMensal', 'Valor mensal contratado (R$)', 'money', { list: 1 }),
       F('valorAnual', 'Valor anual estimado (R$)', 'money'),
@@ -1251,7 +1252,7 @@ function dataTable(host, { id, coll, rows, schema, onOpen, filters = [], actions
     const slice = list.slice(st.page * per, st.page * per + per);
     const moneyF = fields.filter(f => f.type === 'money');
     const totals = moneyF.length ? `<tr class="totals"><td colspan="1">Total (${list.length})</td>${fields.slice(1).map(f => f.type === 'money' ? `<td class="r mono">${esc(fmtMoney(list.reduce((s, r) => s + (num(r[f.k]) || 0), 0)))}</td>` : '<td></td>').join('')}</tr>` : '';
-    $('.dt-body', host).innerHTML = slice.length ? `<div class="table-wrap"><table class="dt"><thead><tr>${fields.map(f => `<th data-sort="${f.k}" class="${f.type === 'money' || f.type === 'num' ? 'r' : ''}">${esc(f.label.replace(/ \(R\$\)/, ''))}${st.sort === f.k ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>${slice.map(r => `<tr data-id="${r.id}">${fields.map(f => `<td class="${f.type === 'money' || f.type === 'num' ? 'r' : ''} ${f.type === 'long' ? 'wrap' : ''}">${UI.cell(f, r[f.k])}</td>`).join('')}</tr>`).join('')}${st.page === pages - 1 ? totals : ''}</tbody></table></div>
+    $('.dt-body', host).innerHTML = slice.length ? `<div class="table-wrap"><table class="dt"><thead><tr>${fields.map(f => `<th data-sort="${f.k}" class="${f.type === 'money' || f.type === 'num' ? 'r' : ''}">${esc(f.label.replace(/ \(R\$\)/, ''))}${st.sort === f.k ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>${slice.map(r => `<tr data-id="${r.id}">${fields.map(f => `<td class="${f.type === 'money' || f.type === 'num' ? 'r' : ''} ${f.type === 'long' ? 'wrap' : ''}">${f.cel ? f.cel(r[f.k], r) : UI.cell(f, r[f.k])}</td>`).join('')}</tr>`).join('')}${st.page === pages - 1 ? totals : ''}</tbody></table></div>
       ${pages > 1 ? `<div class="pager"><button class="btn ghost sm" data-pg="-1" ${st.page ? '' : 'disabled'}>${icon('chevL')}</button><span>Página ${st.page + 1} de ${pages} · ${list.length} registros</span><button class="btn ghost sm" data-pg="1" ${st.page < pages - 1 ? '' : 'disabled'}>${icon('chevR')}</button></div>` : `<div class="pager"><span>${list.length} registro(s)</span></div>`}` : `<div class="empty">${icon('list')}<p>${rows.length ? 'Nenhum resultado para o filtro.' : emptyMsg}</p></div>`;
     $$('th[data-sort]', host).forEach(th => th.onclick = () => { st.dir = st.sort === th.dataset.sort ? -st.dir : 1; st.sort = th.dataset.sort; draw(); });
     $$('tr[data-id]', host).forEach(tr => tr.onclick = () => onOpen && onOpen(rows.find(r => r.id === tr.dataset.id)));
