@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.27.0';
+const APP_VERSAO = '1.28.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.28.0', data: '25/11/2026', itens: ['Auditoria consultiva (IA): a IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual — dados com cláusula e página, custos, faturamento, garantias, penalidades, rescisão, riscos alto/médio/baixo com providência e setor, oportunidades de repactuação e documentos que faltam. Em lote no painel da empresa ou um a um na ficha do contrato.', 'Ficha do contrato: card no topo com vigência (início, término, dias restantes, prorrogação) e se o contrato prevê e se houve reajuste, repactuação/apostilamento, revisão e reequilíbrio econômico-financeiro — com alerta quando passa de 12 meses sem reajuste. Pode ser corrigido à mão.', 'Relatório de auditoria: novas seções de auditoria consultiva (relatório geral, quadro comparativo e fichas individuais), com filtro por tomador; e planilha comparativa em Excel.', 'Contratos por tomador: prefeitura, secretarias e fundos do mesmo município passam a contar juntos (ex.: “Município de Vila Velha”).', 'Painel da empresa: “Conferência com a pasta” mostra PDFs juntados que não ficaram ligados a nenhum contrato.'] },
   { numero: '1.27.0', data: '25/11/2026', itens: ['Atendimento com mais de um cliente (ex.: casal, coproprietários, vários autores): em “Cliente e caso”, inclua outros clientes ou cadastre um novo na hora.', 'Contrato de honorários com todos os contratantes qualificados, responsabilidade solidária e uma assinatura para cada um.', 'Procuração: com mais de um cliente, escolha entre uma procuração conjunta (todos os outorgantes) ou uma procuração para cada cliente, em páginas separadas.', 'A IA qualifica todos os clientes como requerentes ou autores no requerimento e na petição; as demandas e o processo já nascem com todos os clientes.'] },
   { numero: '1.26.4', data: '18/11/2026', itens: ['Pastas do escritório no Drive compartilhadas automaticamente com cada membro da equipe (administrador ou equipe): os links dos documentos abrem com a própria conta Google de cada um, sem pedir acesso. Clientes não recebem acesso às pastas.', 'Documentos pessoais dos clientes passam a ficar na pasta “_Clientes (documentos pessoais)”.', 'Demanda administrativa: documentos do caso não aparecem mais repetidos.'] },
   { numero: '1.26.3', data: '18/11/2026', itens: ['Demanda administrativa: o quadro Documentos agora se divide em “Documentos pessoais” (do cadastro do cliente) e “Documentos do caso” (do atendimento), sempre atualizados — o que for juntado depois de abrir a demanda também aparece, com link para cada arquivo.'] },
@@ -2278,7 +2279,16 @@ const TABS = [
   ['achados', 'Achados e plano de ação', 'alert'], ['supervenientes', 'Custos supervenientes', 'briefcase'], ['documentos', 'Documentos', 'file'], ['aditivos', 'Aditivos', 'edit'], ['remessas', 'Remessas mensais', 'upload'], ['portal', 'Portal da empresa', 'key'], ['relatorios', 'Relatórios', 'printer']
 ];
 const empRecs = (c, eid) => DB.where(c, r => r.empresaId === eid);
-const tomadorBase = c => String(c.tomador || '').split(/ [–-] /)[0].replace(/\(ver unidade\)/i, '').trim() || 'Não informado';
+const tomadorBase0 = c => String(c.tomador || '').split(/ [–-] /)[0].replace(/\(ver unidade\)/i, '').trim() || 'Não informado';
+/* Municípios que aparecem como tomadores ("Município de X", "Prefeitura Municipal de X"): a
+ * prefeitura, as secretarias e os fundos municipais da mesma cidade contam como um só tomador. */
+const cidadesTomador = () => { const s = new Set(); DB.all('contratos').forEach(c => { const m = String(c.tomador || '').match(/(?:munic[ií]pio|prefeitura(?:\s+municipal)?)\s+d[eoa]s?\s+([A-ZÀ-Ú][A-Za-zÀ-ú' ]+?)(?:\s*(?:[\/(,–-]|\bE[SP]\b|$))/i); if (m && m[1].trim().length > 2) s.add(m[1].trim().replace(/\s+/g, ' ')); }); return [...s]; };
+const tomadorBase = c => {
+  const txt = norm([c.tomador, c.unidade, c.grupo, c.objeto].filter(Boolean).join(' '));
+  const cid = cidadesTomador().find(x => new RegExp('\\b' + norm(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(txt));
+  if (cid && /munic|prefeit|secretaria|fundo|camara|autarquia|sem[a-z]{1,5}\b/.test(txt)) return 'Município de ' + cid;
+  return tomadorBase0(c);
+};
 
 const Consult = {
   list(v) {
@@ -2476,6 +2486,15 @@ const Consult = {
     return `<p class="arq-leg">${icon(ctOk && !semLink.length ? 'check' : 'alert')}<span>${msgs.join(' ')}</span></p>`;
   },
   /** arquivos do contrato no Drive do escritório (contrato, aditivos, termos…) */
+  /** PDFs juntados à empresa que não ficaram ligados a nenhum contrato cadastrado */
+  conferenciaHtml(e) {
+    const cods = new Set(empRecs('contratos', e.id).map(c => c.codigo));
+    const soltos = empRecs('documentos', e.id).filter(d => d.link && (!d.contrato || !cods.has(d.contrato)));
+    if (!soltos.length) return '';
+    return `<section class="card"><header><h2>${icon('alert')} Conferência com a pasta</h2><span class="muted small">${soltos.length} arquivo(s) sem contrato no sistema</span></header>
+      <p class="muted small">Estes PDFs foram juntados, mas não estão ligados a nenhum contrato cadastrado — por isso não entram nas contagens. Abra o arquivo e cadastre o contrato (ou ligue-o ao contrato certo em Inventário documental).</p>
+      <ul class="plain files">${soltos.map(d => `<li>${icon('file')} <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.arquivo || d.tipo || 'documento')}</a>${d.contrato ? ` <small class="muted">ligado a “${esc(d.contrato)}”, que não existe no cadastro</small>` : ''}</li>`).join('')}</ul></section>`;
+  },
   arquivosHtml(e, c, dc) {
     const ord = d => /aditivo/i.test(d.tipo || d.arquivo || '') ? 1 : /contrato/i.test(d.tipo || '') ? 0 : 2;
     const l = dc.slice().sort((a, b) => ord(a) - ord(b) || String(a.arquivo || '').localeCompare(String(b.arquivo || ''), 'pt-BR', { numeric: true }));
@@ -2508,14 +2527,14 @@ const Consult = {
     const volta = () => Consult.contrato360(e, DB.get('contratos', c.id) || c);
     const rel = coll => DB.where(coll, r => r.empresaId === e.id && r.contrato === c.codigo);
     const ob = rel('obrigacoes'), mo = rel('maoDeObra'), fi = rel('financeiro'), ac = rel('achados'), dc = rel('documentos'), ad = rel('aditivos'), me = rel('medicoes'), ma = rel('materiais');
-    const d = isISO(c.fim) ? daysUntil(c.fim) : null;
+    const fimV = AuditCons.vig(c).fim, d = isISO(fimV) ? daysUntil(fimV) : null;
     const postos = mo.reduce((s, r) => s + (num(r.qtdContratada) || 0), 0), custoPrev = mo.reduce((s, r) => s + (num(r.custoPrevisto) || 0), 0);
     const filled = SCHEMAS.contratos.fields.filter(f => c[f.k] !== null && c[f.k] !== undefined && c[f.k] !== '' && !isGap(c[f.k])).length;
     const compl = filled / SCHEMAS.contratos.fields.length;
     const mini = (titulo, coll, list, cols) => `<h4 class="sec">${titulo} <span class="count">${list.length}</span></h4>${list.length ? `<div data-mxw><div class="table-wrap"><table class="mini"><thead><tr>${cols.map(k => `<th>${esc(SCHEMAS[coll].fields.find(f => f.k === k).label.replace(/ \(R\$\)/, ''))}</th>`).join('')}</tr></thead><tbody>${mxItens(list.map(r => `<tr data-rel="${coll}:${r.id}">${cols.map(k => `<td>${UI.cell(SCHEMAS[coll].fields.find(f => f.k === k), r[k])}</td>`).join('')}</tr>`), 30)}</tbody></table></div>${mxBtn(list.length, 30, 'registro(s)')}</div>` : '<p class="muted small">Nenhum registro.</p>'}`;
     const m = UI.modal({
       title: `${c.codigo} · ${c.unidade || c.grupo || ''}`, sub: esc(c.tomador || ''), wide: true,
-      body: `<div class="kpis xs">${kpi('Vigência', c.fim ? fmtDate(c.fim) : '—', d === null ? '' : d < 0 ? `expirada há ${-d} dias` : `${d} dias restantes`, d !== null && d < 0 ? 'bad' : d !== null && d <= 90 ? 'warn' : '')}${kpi('Valor mensal', num(c.valorMensal) !== null ? fmtMoneyShort(c.valorMensal) : '—', num(c.valorMensal) === null ? 'não identificado' : '')}${kpi('Postos contratados', postos || '—', custoPrev ? 'custo previsto ' + fmtMoneyShort(custoPrev) : '')}${kpi('Completude do cadastro', fmtPct(compl), filled + ' de ' + SCHEMAS.contratos.fields.length + ' campos', compl < .6 ? 'warn' : '')}</div>
+      body: `${AuditCons.cardHtml(e, c)}<div class="kpis xs">${kpi('Vigência', fimV ? fmtDate(fimV) : '—', d === null ? '' : d < 0 ? `expirada há ${-d} dias` : `${d} dias restantes`, d !== null && d < 0 ? 'bad' : d !== null && d <= 90 ? 'warn' : '')}${kpi('Valor mensal', num(c.valorMensal) !== null ? fmtMoneyShort(c.valorMensal) : '—', num(c.valorMensal) === null ? 'não identificado' : '')}${kpi('Postos contratados', postos || '—', custoPrev ? 'custo previsto ' + fmtMoneyShort(custoPrev) : '')}${kpi('Completude do cadastro', fmtPct(compl), filled + ' de ' + SCHEMAS.contratos.fields.length + ' campos', compl < .6 ? 'warn' : '')}</div>
       ${Consult.arquivosHtml(e, c, dc)}
       <div class="detail-grid">${SCHEMAS.contratos.fields.filter(f => !['codigo'].includes(f.k)).map(f => `<div class="${f.type === 'long' ? 'full' : ''}"><span class="lbl">${esc(f.label)}</span>${f.type === 'long' && c[f.k] && !isGap(c[f.k]) ? esc(c[f.k]) : UI.cell(f, c[f.k])}</div>`).join('')}</div>
       ${mini('Achados e plano de ação', 'achados', ac, ['codigo', 'area', 'achado', 'risco', 'status'])}
@@ -2530,6 +2549,7 @@ const Consult = {
       ${ad.length ? mini('Aditivos', 'aditivos', ad, ['nome', 'datas', 'valor']) : ''}`,
       foot: `<button class="btn ghost danger-text" id="cDel">${icon('trash')} Excluir</button><span class="sp"></span><button class="btn ghost" id="svRel">${icon('printer')} Relatório do contrato</button><button class="btn ghost" id="cAch">${icon('alert')} Registrar achado</button><button class="btn primary" id="cEd">${icon('edit')} Editar contrato</button>`
     });
+    AuditCons.bindCard(m, e, c, volta);
     $('#cEd', m).onclick = () => UI.editRecord('contratos', c, { ctx: { empresaId: e.id }, voltar: volta });
     $('#cJunt', m)?.addEventListener('click', () => { UI.closeModal(); Docs.open(e); });
     $$('[data-dcont]', m).forEach(b => b.onclick = () => Consult.conteudoDoc(e, c, DB.get('documentos', b.dataset.dcont)));
@@ -2624,6 +2644,7 @@ const Consult = {
       ${kpi('Postos contratados', fmtNum(S.postos), S.custoPrev ? 'custo previsto ' + fmtMoneyShort(S.custoPrev) + '/mês' : '', '', `#/empresa/${e.id}/maoDeObra`)}
     </div>
     ${ins.length ? `<section class="card insight"><header><h2>${icon('sparkle')} Leitura do período</h2><span class="muted small">gerada automaticamente a partir dos dados</span></header><ul>${ins.map(i => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}
+    ${AuditCons.loteHtml(e)}${Consult.conferenciaHtml(e)}
     <div class="seg-tabs"><span class="muted small">Indicadores econômico-financeiros:</span>${[['6', '6 meses'], ['12', '12 meses'], ['24', '24 meses'], ['all', 'Tudo']].map(([k, l]) => `<button class="${st.p === k ? 'on' : ''}" data-per="${k}">${l}</button>`).join('')}<span class="sp"></span><a class="link small" href="#/empresa/${e.id}/indicadores">${icon('edit')} Lançar indicadores</a></div>
     <div class="grid2">
       <section class="card"><header><h2>Receitas × custos</h2></header><div data-chart="rc"></div></section>
@@ -2640,6 +2661,7 @@ const Consult = {
       <section class="card"><header><h2>Situação das obrigações</h2></header>${segBar(S.obDist)}<h4 class="sec">Alertas</h4>${Views.alertasConsultoria(e.id)}</section>
     </div>`;
     $('#heroDocs', host)?.addEventListener('click', () => Docs.open(e));
+    AuditCons.bindLote(host, e);
     const verAch = f => { Achados.st = { risco: 'todos', status: 'abertos', emp: e.id, area: '', busca: '', ...f }; Achados._rolar = 1; location.hash = '#/achados'; };
     $$('[data-ach-r]', host).forEach(x => x.onclick = () => verAch({ risco: x.dataset.achR }));
     $$('[data-ach-a]', host).forEach(x => x.onclick = () => verAch({ area: x.dataset.achA }));
@@ -2838,14 +2860,15 @@ const Achados = {
    RELATÓRIO DE AUDITORIA — pronto para imprimir ou salvar em PDF
    ===================================================================== */
 const Report = {
-  SECOES: [['sumario', 'Sumário executivo e leitura do período'], ['carteira', 'Carteira de contratos'], ['indicadores', 'Indicadores econômico-financeiros (gráficos)'], ['obrigacoes', 'Conformidade das obrigações'], ['maodeobra', 'Mão de obra'], ['achados', 'Achados e plano de ação'], ['documentos', 'Cobertura documental e limitações']],
+  SECOES: [['sumario', 'Sumário executivo e leitura do período'], ['carteira', 'Carteira de contratos'], ['indicadores', 'Indicadores econômico-financeiros (gráficos)'], ['obrigacoes', 'Conformidade das obrigações'], ['maodeobra', 'Mão de obra'], ['achados', 'Achados e plano de ação'], ['documentos', 'Cobertura documental e limitações'], ['consultiva', 'Auditoria consultiva (IA): relatório geral, quadro comparativo e fichas individuais']],
   tab(host, e) {
     const hist = (DB.get('config', 'rel:' + e.id)?.itens || []).slice().reverse();
     host.innerHTML = `<section class="card"><header><h2>${icon('printer')} Relatório de auditoria contratual</h2></header>
       <p class="muted">Gera um relatório completo com o brasão do escritório — sumário executivo, carteira de contratos, gráficos de receitas, custos, tributos e pessoal, conformidade, achados e plano de ação — pronto para imprimir ou salvar em PDF e entregar ao cliente.</p>
-      <button class="btn primary" id="rGen">${icon('printer')} Gerar relatório</button></section>
+      <div class="btn-row"><button class="btn primary" id="rGen">${icon('printer')} Gerar relatório</button><select class="input" id="rGr" style="max-width:320px"><option value="">Todos os tomadores</option>${[...new Set(empRecs('contratos', e.id).map(tomadorBase))].sort().map(g => `<option>${esc(g)}</option>`).join('')}</select><button class="btn ghost" id="rXls">${icon('download')} Planilha comparativa (Excel)</button></div></section>
       <section class="card"><header><h2>${icon('history')} Relatórios emitidos</h2></header>${hist.length ? `<ul class="plain rel-hist">${hist.map(h => `<li>${icon('file')} <span><b>${esc(h.titulo)}</b> <span class="muted small">— ${esc(fmtDateTime(h.atualizado || h.em))} por ${esc(h.por)}${h.periodo ? ' · período ' + esc(h.periodo) : ''}</span></span><span class="rel-act">${h.url ? `<a class="link small" href="${esc(h.url)}" target="_blank" rel="noopener">${icon('external')} Drive</a>` : ''}${h.driveId || h.html ? `<button class="link small" data-reled="${esc(h.id || '')}">${icon('edit')} Abrir e continuar editando</button>` : ''}</span></li>`).join('')}</ul>` : '<p class="muted small">Nenhum relatório emitido ainda.</p>'}</section>`;
     $('#rGen').onclick = () => Report.dialog(e);
+    $('#rXls').onclick = () => { const g = $('#rGr').value; AuditCons.planilha(e, empRecs('contratos', e.id).filter(c => !g || tomadorBase(c) === g).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }))); };
     $$('[data-reled]', host).forEach(b => b.onclick = async () => {
       const h = hist.find(x => x.id === b.dataset.reled); if (!h) return;
       if (h.html) return Report.editar(e, h.html, h);
@@ -2865,13 +2888,14 @@ const Report = {
       <div class="fld"><label>até</label><input name="ate" placeholder="MM/AAAA" value="${esc(comps.length ? fmtComp(comps[comps.length - 1]) : '')}"></div>
       <div class="fld"><label>Responsável técnico</label><input name="resp" value="${esc(esc0.advogado || Session.user.nome || '')}"></div>
       <div class="fld"><label>OAB</label><input name="oab" value="${esc(esc0.oab || '')}"></div>
+      <div class="fld full"><label>Contratos da auditoria consultiva</label><select name="grupo"><option value="">Todos os contratos da empresa</option>${[...new Set(empRecs('contratos', e.id).map(tomadorBase))].sort().map(g => `<option>${esc(g)}</option>`).join('')}</select></div>
       <div class="fld full"><label>Seções</label><div class="chips-select">${Report.SECOES.map(([k, l]) => `<label class="chip-opt"><input type="checkbox" name="sec" value="${k}" checked><span>${l}</span></label>`).join('')}</div></div>
       <div class="fld full"><label>Parecer / considerações do consultor</label><textarea name="parecer" rows="5" placeholder="Conclusões, recomendações prioritárias e próximos passos…"></textarea></div>
       <div class="fld check full"><label class="switch"><input type="checkbox" name="conf" checked><span></span>Marcar como confidencial (rodapé)</label></div></form>`,
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="rOk">${icon('printer')} Gerar</button>`
     });
     $('#rOk', m).onclick = async () => {
-      const f = $('#rf'); const o = { titulo: f.titulo.value, de: parseComp(f.de.value), ate: parseComp(f.ate.value), resp: f.resp.value, oab: f.oab.value, parecer: f.parecer.value, conf: f.conf.checked, secs: new Set($$('input[name=sec]:checked', f).map(i => i.value)) };
+      const f = $('#rf'); const o = { titulo: f.titulo.value, de: parseComp(f.de.value), ate: parseComp(f.ate.value), resp: f.resp.value, oab: f.oab.value, parecer: f.parecer.value, conf: f.conf.checked, grupo: f.grupo.value, secs: new Set($$('input[name=sec]:checked', f).map(i => i.value)) };
       UI.closeModal();
       Report.editar(e, Report.build(e, o), { titulo: o.titulo, periodo: o.de ? fmtComp(o.de) + ' a ' + fmtComp(o.ate) : '' });
     };
@@ -2920,6 +2944,7 @@ const Report = {
       sec.push(`<section>${H('Cobertura documental e limitações')}<p>${docs.length} documento(s) inventariados e ${ads.length} aditivo(s) identificados. ${Object.entries(leg).map(([k, x]) => `${k}: ${x}`).join(' · ')}.</p>
       <p>Os campos marcados como <i class="r-gap">não identificado</i> correspondem a informações não localizadas nos documentos analisados e devem ser confirmadas junto ao tomador ou à área responsável. As conclusões deste relatório limitam-se aos documentos e dados disponibilizados até a data de emissão.</p></section>`);
     }
+    if (o.secs.has('consultiva')) sec.push(AuditCons.relatorio(e, S.cs.filter(c => !o.grupo || tomadorBase(c) === o.grupo).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true })), H, tbl, o.grupo));
     if (o.parecer) sec.push(`<section>${H('Parecer do consultor')}<div class="r-parecer">${esc(o.parecer).replace(/\n/g, '<br>')}</div></section>`);
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(o.titulo)} — ${esc(e.razao)}</title><style>${Report.CSS}</style></head><body>
     <div class="cover"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="cap">${BRAND.caption}</div><div class="rule"></div><h1>${esc(o.titulo)}</h1><p class="emp">${esc(e.razao)}${e.cnpj ? '<br>CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}</p><p class="meta">Período dos indicadores: ${esc(per)}<br>Emitido em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
@@ -3075,7 +3100,7 @@ const Report = {
   @media print{footer{display:none!important}}
   footer{display:flex;justify-content:space-between;font-size:7pt;color:#8a8e98;border-top:.5pt solid #e7e0d2;padding-top:1.4mm}
   @media screen{body{background:#e9e6df;padding:8mm 0}.folha{background:#fff;max-width:210mm;margin:0 auto;padding:13mm 12mm 6mm;box-shadow:0 2px 16px rgba(0,0,0,.09)}footer{position:static;margin-top:5mm}}`,
-  CSS: `@page{size:A4;margin:18mm 16mm 20mm}*{box-sizing:border-box}body{font-family:Georgia,'Times New Roman',serif;color:#1d2433;font-size:10.5pt;line-height:1.5;margin:0;
+  CSS: `.r-ficha{page-break-before:always}.r-ficha h3{margin-top:0}.ac-ficha h4{margin:4mm 0 1.5mm;font-size:10.5pt;text-transform:uppercase;letter-spacing:.3pt}.ac-ficha table th{width:26%;text-align:left;vertical-align:top}.ac-res{background:#f7f3ea;padding:3mm;border-left:1mm solid #b08a3e}@page{size:A4;margin:18mm 16mm 20mm}*{box-sizing:border-box}body{font-family:Georgia,'Times New Roman',serif;color:#1d2433;font-size:10.5pt;line-height:1.5;margin:0;
   --s1:#2f6bb3;--s2:#c98a1e;--s3:#1d9a7c;--s4:#7056c9;--s5:#c4485e;--chart-bg:#fff}
   .cover{height:257mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}
   .cover img{width:62mm}.cap{font:600 9pt 'Helvetica Neue',Arial,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:#9a7741;margin-top:4mm}
@@ -5132,7 +5157,7 @@ const Timbre = {
       .tb{text-align:center}.tb img{width:15mm}.tb .n{font:600 15pt/1 'Cormorant Garamond',Georgia,serif;letter-spacing:.24em;color:#121c33;margin-top:1.4mm}.tb .l{font:600 6.2pt Manrope,Arial,sans-serif;letter-spacing:.36em;text-transform:uppercase;color:#a07c43;margin-top:1.2mm}.tb .r{width:28mm;height:0;border-top:.6pt solid #b08a4e;margin:3mm auto 0}
       .doc h1{font-size:12.5pt;text-align:center;font-weight:bold;margin:6mm 0 6mm;text-transform:uppercase}.doc h2{font-size:12pt;font-weight:bold;margin:6mm 0 2mm;text-transform:uppercase}.doc h3{font-size:12pt;font-weight:bold;font-style:italic;margin:4mm 0 2mm}
       .doc p{margin:0 0 3mm;text-align:justify}${peticao ? '.doc p{text-indent:25mm}.doc h1+p,.doc p:first-child{text-indent:0}' : ''}.doc li{text-align:justify;margin-bottom:1.5mm}.doc mark{background:#fff3c4}
-      .doc .local{text-align:right;margin-top:8mm}.assin{display:flex;flex-wrap:wrap;gap:14mm 14mm;margin-top:16mm;page-break-inside:avoid}.assin div{min-width:60mm}hr.quebra{page-break-before:always;border:0;margin:0;height:0}.assin div{flex:1;text-align:center;font-size:10.5pt;line-height:1.35}.assin span{display:block;border-top:.8pt solid #111;margin-bottom:1.5mm}.assin b{display:block}.assin.test{margin-top:14mm;text-align:left}.assin.test div{text-align:left}
+      .doc .local{text-align:right;margin-top:8mm}.assin{display:flex;flex-wrap:wrap;gap:14mm 14mm;margin-top:16mm;page-break-inside:avoid}.assin div{min-width:60mm}table{border-collapse:collapse;width:100%;margin:2mm 0 4mm;font-size:9.5pt}th,td{border:.3mm solid #c9c2b2;padding:1.2mm 2mm;text-align:left;vertical-align:top}th{background:#f4efe4;width:28%}.ac-ficha h4{margin:5mm 0 2mm;font-size:11pt;text-transform:uppercase;letter-spacing:.3pt}.ac-ficha ul{margin:0 0 3mm 5mm}.r-risk.alto{color:#b4233c;font-weight:700}.r-risk.medio{color:#a86a12;font-weight:600}.r-muted{color:#666}.ac-res{background:#f7f3ea;padding:3mm;border-left:1mm solid #b08a3e}hr.quebra{page-break-before:always;border:0;margin:0;height:0}.assin div{flex:1;text-align:center;font-size:10.5pt;line-height:1.35}.assin span{display:block;border-top:.8pt solid #111;margin-bottom:1.5mm}.assin b{display:block}.assin.test{margin-top:14mm;text-align:left}.assin.test div{text-align:left}
       @media print{.doc mark{background:none}}@media screen{body{background:#e9e6df;padding:8mm 0}table.pg{background:#fff;max-width:210mm;margin:0 auto;box-shadow:0 2px 16px rgba(0,0,0,.09)}table.pg td{padding-left:30mm;padding-right:20mm}table.pg>thead td{padding-top:12mm}table.pg>tbody td{padding-bottom:20mm}}</style></head><body>
       <table class="pg"><thead><tr><td><div class="tb"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="n">${esc(nomeMarca().toUpperCase())}</div><div class="l">${esc(BRAND.caption)}</div><div class="r"></div></div></td></tr></thead>
       <tbody><tr><td><div class="doc">${corpo}</div></td></tr></tbody></table></body></html>`;
@@ -6506,5 +6531,196 @@ const CliDocs = {
   html(c) {
     const l = c.documentos || [];
     return `<h4 class="sec">Documentos pessoais (${l.length})${c.pastaDocs ? ` <a class="link small" href="${esc(c.pastaDocs)}" target="_blank" rel="noopener">${icon('link')} pasta no Drive</a>` : ''}</h4>${l.length ? `<ul class="plain">${l.map(d => `<li>${icon('file')} ${d.link ? `<a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.tipo || d.nome)}</a>` : esc(d.tipo || d.nome)}${d.tipo ? ` <span class="muted small">${esc(d.nome)}</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted small">Nenhum documento. Junte RG, CPF e comprovante de residência em “Editar”.</p>'}`;
+  }
+};
+/* =====================================================================
+   AUDITORIA CONSULTIVA (IA) DOS CONTRATOS
+   Ficha individual por contrato (lida dos PDFs: contrato, aditivos,
+   apostilamentos, TR, planilhas), card de vigência e reajustes na ficha
+   do contrato, análise em lote, quadro comparativo e planilha.
+   ===================================================================== */
+const AuditCons = {
+  ITENS: [['reajuste', 'Reajuste'], ['repactuacao', 'Repactuação / apostilamento'], ['revisao', 'Revisão'], ['reequilibrio', 'Reequilíbrio econômico-financeiro']],
+  NI: 'Não identificado',
+  /** arquivos do contrato no Drive (inventário documental ligado ao contrato) */
+  arquivos(e, c) {
+    const vistos = new Set();
+    return DB.where('documentos', d => d.empresaId === e.id && d.contrato === c.codigo).map(d => ({ fileId: d.fileId || (String(d.link || '').match(/\/d\/([\w-]{20,})/) || [])[1], nome: d.arquivo || d.tipo || 'documento' }))
+      .filter(a => a.fileId && !vistos.has(a.fileId) && vistos.add(a.fileId));
+  },
+  sn: v => { const t = String(v || '').trim(); return /^sim/i.test(t) ? 'sim' : /^n[ãa]o\b(?! ident)/i.test(t) && !/identific/i.test(t) ? 'nao' : 'ni'; },
+  pillSN: v => { const k = AuditCons.sn(v); return `<span class="ac-sn ${k}">${k === 'sim' ? 'Sim' : k === 'nao' ? 'Não' : 'Não identificado'}</span>`; },
+  t: x => x === null || x === undefined || x === '' ? AuditCons.NI : String(x),
+  vig: c => { const a = c.auditoria || {}; return { ini: a.vigencia?.inicio || c.inicio, fim: (isISO(a.vigencia?.fim) ? a.vigencia.fim : '') || c.fim, prorr: a.vigencia?.prorrogavel, det: a.vigencia?.prorrogacoes, ref: a.vigencia?.ref }; },
+  riscos: c => (c.auditoria?.riscos || []).reduce((o, r) => { const k = norm(r.nivel).startsWith('a') ? 'Alto' : norm(r.nivel).startsWith('m') ? 'Médio' : 'Baixo'; o[k]++; return o; }, { Alto: 0, Médio: 0, Baixo: 0 }),
+
+  /* ---------- card no topo da ficha do contrato ---------- */
+  cardHtml(e, c) {
+    const a = c.auditoria, V = AuditCons.vig(c), d = isISO(V.fim) ? daysUntil(V.fim) : null;
+    const tom = d === null ? '' : d < 0 ? 'bad' : d <= 90 ? 'warn' : 'ok';
+    const item = ([k, l]) => { const x = (a && a[k]) || {}; const venc = k === 'reajuste' && AuditCons.sn(x.preve) === 'sim' && AuditCons.sn(x.houve) !== 'sim' && isISO(V.ini) && daysUntil(V.ini) <= -365;
+      return `<div class="ac-it ${venc ? 'warn' : ''}"><b>${l}</b><div class="ac-row"><span>prevê</span>${AuditCons.pillSN(x.preve)}<span>houve</span>${AuditCons.pillSN(x.houve)}</div>
+        ${k === 'reajuste' && (x.indice || x.dataBase) ? `<small>${esc([x.indice, x.dataBase && 'data-base ' + x.dataBase].filter(Boolean).join(' · '))}</small>` : ''}${x.detalhe && !/^n[ãa]o identificado$/i.test(x.detalhe) ? `<small>${esc(String(x.detalhe).slice(0, 180))}</small>` : ''}${venc ? '<small class="t-warn"><b>Mais de 12 meses sem reajuste registrado — verificar.</b></small>' : ''}${x.ref ? `<small class="muted">${esc(x.ref)}</small>` : ''}</div>`; };
+    return `<section class="ac-card">
+      <div class="ac-vig ${tom}"><span class="lbl">${icon('calendar')} Vigência</span><div class="ac-datas"><div><small>Início</small><b>${V.ini ? fmtDate(V.ini) : '—'}</b></div><div><small>Término</small><b>${V.fim ? fmtDate(V.fim) : '—'}</b></div></div>
+        <span class="ac-dias">${d === null ? 'término não identificado' : d < 0 ? `vencido há ${-d} dias` : `${d} dias restantes`}</span>${V.prorr ? `<small>Prorrogável: <b>${esc(V.prorr)}</b>${V.det && !/^n[ãa]o identificado$/i.test(V.det) ? ' · ' + esc(String(V.det).slice(0, 120)) : ''}</small>` : ''}</div>
+      <div class="ac-itens">${AuditCons.ITENS.map(item).join('')}</div>
+      <div class="ac-foot">${a ? `<span class="muted small">${icon('sparkle')} Auditoria consultiva de ${esc(fmtDateTime(a.em))} · ${(n => `${n.Alto} risco(s) alto, ${n.Médio} médio, ${n.Baixo} baixo`)(AuditCons.riscos(c))}</span><button type="button" class="btn ghost sm" id="acFicha">${icon('file')} Ver ficha completa</button><button type="button" class="btn ghost sm" id="acEdit">${icon('edit')} Corrigir</button>` : `<span class="muted small">Ainda sem auditoria consultiva: a IA lê o contrato, os aditivos e os apostilamentos e preenche este quadro.</span>`}<button type="button" class="btn ${a ? 'ghost' : 'primary'} sm" id="acRun">${icon('sparkle')} ${a ? 'Analisar de novo' : 'Auditoria consultiva (IA)'}</button></div>
+    </section>`;
+  },
+  bindCard(m, e, c, volta) {
+    $('#acRun', m)?.addEventListener('click', async ev => { const b = ev.currentTarget; b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está analisando os documentos… (até 5 min)`; try { await AuditCons.analisar(e, c); UI.toast('Auditoria consultiva concluída.'); volta(); } catch (er) { UI.toast('IA: ' + er.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Tentar de novo`; } });
+    $('#acFicha', m)?.addEventListener('click', () => AuditCons.ficha(e, DB.get('contratos', c.id) || c, volta));
+    $('#acEdit', m)?.addEventListener('click', () => AuditCons.corrigir(e, DB.get('contratos', c.id) || c, volta));
+  },
+  async analisar(e, c) {
+    const arqs = AuditCons.arquivos(e, c);
+    if (!arqs.length) throw new Error('este contrato não tem PDF no Drive — junte o contrato primeiro');
+    const ctx = { codigo: c.codigo, tomador: c.tomador, unidade: c.unidade, numero: c.numero, inicio: c.inicio, fim: c.fim, valorMensal: c.valorMensal, reajuste: c.reajuste, aditivos: c.aditivos };
+    const r = await apiT('auditarContrato', { contexto: ctx, arquivos: arqs }, 340000);
+    const cur = DB.get('contratos', c.id) || c;
+    // completa só os campos vazios do cadastro com o que a IA leu (nada é sobrescrito)
+    const vazio = k => cur[k] === null || cur[k] === undefined || cur[k] === '' || isGap(cur[k]), id = r.identificacao || {}, vg = r.vigencia || {}, vl = r.valores || {}, ok = x => x && !/^n[ãa]o identificado$/i.test(String(x));
+    const add = {};
+    if (vazio('numero') && ok(id.numeroContrato)) add.numero = id.numeroContrato + (ok(id.processo) ? ' · proc. ' + id.processo : '');
+    if (vazio('unidade') && ok(id.unidade)) add.unidade = id.unidade;
+    if (vazio('objeto') && ok(id.objeto)) add.objeto = id.objeto;
+    if (vazio('inicio') && isISO(vg.inicio)) add.inicio = vg.inicio;
+    if ((vazio('fim') || (isISO(vg.fim) && isISO(cur.fim) && vg.fim > cur.fim)) && isISO(vg.fim)) add.fim = vg.fim;
+    if (vazio('prazo') && ok(vg.prorrogavel)) add.prazo = 'Prorrogável: ' + vg.prorrogavel + (ok(vg.prorrogacoes) ? ' · ' + vg.prorrogacoes : '');
+    if (vazio('valorMensal') && num(vl.mensal) !== null) add.valorMensal = num(vl.mensal);
+    if (vazio('valorAnual') && num(vl.global) !== null) add.valorAnual = num(vl.global);
+    if (vazio('reajuste') && r.reajuste && (ok(r.reajuste.indice) || ok(r.reajuste.dataBase))) add.reajuste = [r.reajuste.indice, r.reajuste.dataBase].filter(ok).join(' · ');
+    await DB.save('contratos', { ...cur, ...add, auditoria: { ...r, em: new Date().toISOString(), arquivos: arqs.map(a => a.nome) } });
+    return r;
+  },
+  /** correção manual do quadro (vigência e os 4 itens) */
+  corrigir(e, c, volta) {
+    const a = c.auditoria || {}, V = AuditCons.vig(c), op = v => ['Sim', 'Não', 'Não identificado'].map(o => `<option ${AuditCons.sn(v) === AuditCons.sn(o) ? 'selected' : ''}>${o}</option>`).join('');
+    const m = UI.modal({ title: 'Corrigir vigência e reajustes', sub: esc(c.codigo + ' · ' + (c.tomador || '')), wide: true, body: `<form class="grid-form" id="acF">
+      <div class="fld"><label>Início</label><input type="date" name="ini" value="${esc(isISO(V.ini) ? V.ini : '')}"></div><div class="fld"><label>Término (vigência atual)</label><input type="date" name="fim" value="${esc(isISO(V.fim) ? V.fim : '')}"></div>
+      <div class="fld"><label>Prorrogável</label><select name="prorr">${op(V.prorr)}</select></div><div class="fld"><label>Prorrogações feitas</label><input name="det" value="${esc(a.vigencia?.prorrogacoes || '')}"></div>
+      ${AuditCons.ITENS.map(([k, l]) => `<div class="fld full ac-ed"><label>${l}</label><div class="ac-ed-r"><span>prevê</span><select name="${k}_p">${op(a[k]?.preve)}</select><span>houve</span><select name="${k}_h">${op(a[k]?.houve)}</select><input name="${k}_d" placeholder="detalhe (aditivo/apostilamento, data, índice)" value="${esc(a[k]?.detalhe || '')}"></div></div>`).join('')}
+    </form>`, foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="acOk">${icon('check')} Salvar</button>` });
+    $('#acOk', m).onclick = async () => {
+      const f = $('#acF', m), cur = DB.get('contratos', c.id) || c, au = { ...(cur.auditoria || { em: new Date().toISOString(), manual: true }) };
+      au.vigencia = { ...(au.vigencia || {}), inicio: f.ini.value || null, fim: f.fim.value || null, prorrogavel: f.prorr.value, prorrogacoes: f.det.value.trim() };
+      AuditCons.ITENS.forEach(([k]) => au[k] = { ...(au[k] || {}), preve: f[k + '_p'].value, houve: f[k + '_h'].value, detalhe: f[k + '_d'].value.trim() });
+      await DB.save('contratos', { ...cur, auditoria: au, inicio: cur.inicio || f.ini.value || cur.inicio, fim: f.fim.value || cur.fim });
+      UI.toast('Quadro atualizado.'); volta();
+    };
+  },
+
+  /* ---------- ficha individual ---------- */
+  fichaHtml(c, rel) {
+    const a = c.auditoria || {}, t = AuditCons.t, ref = x => x && x.ref ? ` <small class="${rel ? 'r-muted' : 'muted'}">(${esc(x.ref)})</small>` : '';
+    const lin = (l, x) => `<tr><th>${l}</th><td>${x}</td></tr>`;
+    const bloco = (l, x) => x && (x.texto || x.condicoes) ? lin(l, esc(t(x.texto || [x.condicoes, x.prazoPagamento && 'prazo: ' + x.prazoPagamento].filter(Boolean).join(' · '))) + ref(x)) : lin(l, `<i>${AuditCons.NI}</i>`);
+    const lista = l => (l || []).length ? `<ul>${l.map(x => `<li>${esc(typeof x === 'string' ? x : x.texto || x.descricao || '')}${typeof x === 'object' ? ref(x) : ''}</li>`).join('')}</ul>` : `<p><i>${AuditCons.NI}</i></p>`;
+    const id = a.identificacao || {}, V = AuditCons.vig(c), val = a.valores || {}, cu = a.custos || {};
+    const nv = n => ({ Alto: 'alto', Médio: 'medio', Baixo: 'baixo' })[n] || 'baixo';
+    const rs = (a.riscos || []).slice().sort((x, y) => ['Alto', 'Médio', 'Baixo'].indexOf(x.nivel) - ['Alto', 'Médio', 'Baixo'].indexOf(y.nivel));
+    return `<div class="ac-ficha">
+      ${a.resumo ? `<p class="ac-res"><b>Conclusão da auditoria:</b> ${esc(a.resumo)}</p>` : ''}
+      <h4>Fatos contratuais</h4>
+      <table class="${rel ? 'r-t small' : 'ac-t'}"><tbody>
+      ${lin('Contrato / processo', esc([id.numeroContrato || c.numero || c.codigo, id.processo && 'processo ' + id.processo].filter(Boolean).join(' · ')) + ref(id))}
+      ${lin('Órgão contratante', esc(t(id.orgao || c.tomador)) + (id.unidade ? ' — ' + esc(id.unidade) : ''))}
+      ${lin('Objeto', esc(t(id.objeto || c.objeto)))}
+      ${id.modalidade ? lin('Modalidade', esc(id.modalidade)) : ''}
+      ${lin('Vigência', `${V.ini ? fmtDate(V.ini) : AuditCons.NI} a ${V.fim ? fmtDate(V.fim) : AuditCons.NI}${V.prorr ? ' · prorrogável: ' + esc(V.prorr) : ''}${V.det ? ' · ' + esc(V.det) : ''}` + ref(a.vigencia))}
+      ${lin('Valor mensal / global', `${num(val.mensal) !== null ? esc(fmtMoney(val.mensal)) : AuditCons.NI} / ${num(val.global) !== null ? esc(fmtMoney(val.global)) : AuditCons.NI}${val.historico ? '<br><small>' + esc(val.historico) + '</small>' : ''}` + ref(val))}
+      ${lin('Postos de trabalho', (a.postos || []).length ? `<table class="${rel ? 'r-t small' : 'mini'}"><thead><tr><th>Função</th><th>Qtd.</th><th>Jornada</th><th>Local</th><th>Salário</th></tr></thead><tbody>${a.postos.map(p => `<tr><td>${esc(t(p.funcao))}</td><td>${esc(p.quantidade ?? '—')}</td><td>${esc(p.jornada || '—')}</td><td>${esc(p.local || '—')}</td><td>${num(p.salario) !== null ? esc(fmtMoney(p.salario)) : '—'}</td></tr>`).join('')}</tbody></table>` : `<i>${AuditCons.NI}</i>`)}
+      ${lin('Custos', ['trabalhistas', 'previdenciarios', 'tributarios', 'administrativos'].map(k => `<b>${{ trabalhistas: 'Trabalhistas', previdenciarios: 'Previdenciários', tributarios: 'Tributários', administrativos: 'Administrativos' }[k]}:</b> ${esc(t(cu[k]))}`).join('<br>') + ref(cu))}
+      ${bloco('Faturamento e pagamento', a.faturamento)}${bloco('Retenções e glosas', a.retencoesGlosas)}${bloco('Garantia', a.garantia)}${bloco('Penalidades', a.penalidades)}${bloco('Fiscalização', a.fiscalizacao)}${bloco('Rescisão', a.rescisao)}
+      ${AuditCons.ITENS.map(([k, l]) => { const x = a[k] || {}; return lin(l, `prevê: <b>${esc(t(x.preve))}</b> · houve: <b>${esc(t(x.houve))}</b>${x.indice ? ' · índice ' + esc(x.indice) : ''}${x.dataBase ? ' · data-base ' + esc(x.dataBase) : ''}${x.detalhe ? '<br><small>' + esc(x.detalhe) + '</small>' : ''}` + ref(x)); }).join('')}
+      </tbody></table>
+      <h4>Obrigações operacionais</h4>${lista(a.obrigacoesOperacionais)}
+      <h4>Exigências documentais</h4>${lista(a.exigenciasDocumentais)}
+      <h4>Conclusões da auditoria</h4>
+      <p><b>Viabilidade econômico-financeira:</b> ${esc(t(a.viabilidade))}</p>
+      ${rs.length ? `<table class="${rel ? 'r-t small' : 'mini ac-rs'}"><thead><tr><th>Risco</th><th>Nível</th><th>Consequência</th><th>Providência</th><th>Setor</th></tr></thead><tbody>${rs.map(x => `<tr><td><b>${esc(x.tipo || '')}</b> ${esc(x.descricao || '')}${ref(x)}</td><td><span class="${rel ? 'r-risk' : 'ac-nv'} ${nv(x.nivel)}">${esc(x.nivel || '')}</span></td><td>${esc(x.consequencia || '')}</td><td>${esc(x.providencia || '')}</td><td>${esc(x.setor || '')}</td></tr>`).join('')}</tbody></table>` : `<p><i>Nenhum risco apontado.</i></p>`}
+      <h4>Oportunidades de repactuação ou recuperação de valores</h4>${(a.oportunidades || []).length ? `<ul>${a.oportunidades.map(o => `<li>${esc(o.descricao || '')}${o.fundamento ? ' — ' + esc(o.fundamento) : ''}${ref(o)}</li>`).join('')}</ul>` : '<p><i>Nenhuma identificada com os documentos disponíveis.</i></p>'}
+      <h4>Acompanhamento preventivo</h4>${lista(a.acompanhamento)}
+      <h4>Documentos analisados</h4>${lista(a.documentosAnalisados || a.arquivos)}
+      <h4>Documentos adicionais necessários</h4>${lista(a.documentosFaltantes)}
+    </div>`;
+  },
+  ficha(e, c, volta) {
+    const m = UI.modal({ title: 'Ficha de auditoria consultiva', sub: esc(`${c.codigo} · ${c.tomador || ''}${c.auditoria?.em ? ' · ' + fmtDateTime(c.auditoria.em) : ''}`), wide: true, body: AuditCons.fichaHtml(c),
+      foot: `<button class="btn ghost" id="acVolta">${icon('chevL')} Voltar ao contrato</button><span class="sp"></span><button class="btn primary" id="acPrint">${icon('printer')} Imprimir / PDF</button>` });
+    $('#acVolta', m).onclick = () => volta();
+    $('#acPrint', m).onclick = () => Timbre.imprimir(`<h1>FICHA DE AUDITORIA CONSULTIVA</h1><p style="text-align:center"><b>${esc(c.codigo)} — ${esc(c.tomador || '')}</b><br>${esc(e.razao || '')}</p>` + AuditCons.fichaHtml(c, true), 'Ficha de auditoria — ' + c.codigo);
+  },
+
+  /* ---------- em lote (painel da empresa) ---------- */
+  loteHtml(e) {
+    const cs = empRecs('contratos', e.id), feitos = cs.filter(c => c.auditoria && !c.auditoria.manual).length;
+    const grupos = [...new Set(cs.map(tomadorBase))].sort();
+    return `<section class="card ac-lote"><header><h2>${icon('sparkle')} Auditoria consultiva (IA)</h2><span class="muted small">${feitos} de ${cs.length} contratos analisados</span></header>
+      <p class="muted small">A IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual: dados com cláusula e página, riscos alto/médio/baixo, providências, oportunidades de repactuação e documentos que faltam. O resultado vai para o card de cada contrato e para o Relatório de auditoria.</p>
+      <div class="btn-row"><select class="input" id="acGr" style="max-width:340px"><option value="">Todos os tomadores</option>${grupos.map(g => `<option>${esc(g)}</option>`).join('')}</select>
+      <label class="switch small"><input type="checkbox" id="acRe"><span></span>Refazer os já analisados</label><button class="btn primary" id="acLote">${icon('sparkle')} Analisar</button></div>
+      <div id="acProg"></div></section>`;
+  },
+  bindLote(host, e) {
+    const b = $('#acLote', host); if (!b) return;
+    b.onclick = async () => {
+      const g = $('#acGr', host).value, re = $('#acRe', host).checked;
+      const fila = empRecs('contratos', e.id).filter(c => (!g || tomadorBase(c) === g) && (re || !c.auditoria || c.auditoria.manual)).sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', { numeric: true }));
+      if (!fila.length) return UI.toast('Nenhum contrato pendente nesse filtro.', 'ok');
+      if (!await UI.confirm(`Analisar ${fila.length} contrato(s) com a IA? Leva cerca de 1 a 3 minutos por contrato. Pode continuar usando o app; se parar no meio, é só clicar de novo que ele continua dos que faltam.`, 'Analisar', false)) return;
+      const P = $('#acProg', host); let ok = 0, erro = []; AuditCons._parar = false; b.disabled = true;
+      for (const [i, c] of fila.entries()) {
+        if (AuditCons._parar) break;
+        P.innerHTML = `<div class="ac-prog"><div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`;
+        $('#acStop', P).onclick = () => { AuditCons._parar = true; UI.toast('Vai parar ao terminar o contrato atual.'); };
+        try { await AuditCons.analisar(e, c); ok++; } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
+      }
+      b.disabled = false;
+      P.innerHTML = `<div class="notice ${erro.length ? 'warn' : 'soft'}">${icon(erro.length ? 'alert' : 'check')}<div><b>${ok} contrato(s) analisados.</b>${erro.length ? `<br>Não analisados (${erro.length}):<ul>${erro.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div></div>`;
+    };
+  },
+
+  /* ---------- quadro comparativo e relatório geral ---------- */
+  linha(c) {
+    const a = c.auditoria || {}, V = AuditCons.vig(c), val = a.valores || {}, n = AuditCons.riscos(c);
+    const postos = (a.postos || []).reduce((s, p) => s + (num(p.quantidade) || 0), 0);
+    const sn = k => `${AuditCons.t(a[k]?.preve)} / ${AuditCons.t(a[k]?.houve)}`;
+    return { c, a, V, mensal: num(val.mensal) ?? num(c.valorMensal), global: num(val.global) ?? num(c.valorAnual), postos: postos || null, n, sn,
+      orgao: a.identificacao?.orgao || tomadorBase(c), unidade: a.identificacao?.unidade || c.unidade || '', numero: a.identificacao?.numeroContrato || c.numero || '' };
+  },
+  planilha(e, cs) {
+    const L = cs.map(AuditCons.linha), sub = `${e.razao} — quadro comparativo da auditoria consultiva em ${fmtDateTime(new Date())} · Amorim Firmo Advocacia e Consultoria Jurídica`;
+    const riscos = []; L.forEach(l => (l.a.riscos || []).forEach(r => riscos.push([l.c.codigo, l.numero, r.tipo || '', r.nivel || '', r.descricao || '', r.consequencia || '', r.providencia || '', r.setor || '', r.ref || ''])));
+    const ops = []; L.forEach(l => (l.a.oportunidades || []).forEach(o => ops.push([l.c.codigo, l.numero, o.descricao || '', o.fundamento || '', o.ref || ''])));
+    download(XLSX.write([
+      { name: 'Comparativo', title: 'AUDITORIA CONSULTIVA — QUADRO COMPARATIVO', subtitle: sub,
+        headers: ['Contrato', 'Nº contrato', 'Órgão', 'Unidade', 'Início', 'Término', 'Dias p/ vencer', 'Prorrogável', 'Valor mensal (R$)', 'Valor global (R$)', 'Postos', 'Reajuste (prevê/houve)', 'Repactuação (prevê/houve)', 'Revisão (prevê/houve)', 'Reequilíbrio (prevê/houve)', 'Riscos altos', 'Riscos médios', 'Riscos baixos', 'Oportunidades', 'Documentos faltantes', 'Analisado em'],
+        types: ['text', 'text', 'text', 'text', 'text', 'text', 'num', 'text', 'money', 'money', 'num', 'text', 'text', 'text', 'text', 'num', 'num', 'num', 'num', 'text', 'text'],
+        rows: L.map(l => [l.c.codigo, l.numero, l.orgao, l.unidade, fmtDate(l.V.ini), fmtDate(l.V.fim), isISO(l.V.fim) ? daysUntil(l.V.fim) : '', AuditCons.t(l.V.prorr), l.mensal ?? '', l.global ?? '', l.postos ?? '', l.sn('reajuste'), l.sn('repactuacao'), l.sn('revisao'), l.sn('reequilibrio'), l.n.Alto, l.n.Médio, l.n.Baixo, (l.a.oportunidades || []).length, (l.a.documentosFaltantes || []).join('; '), l.a.em ? fmtDateTime(l.a.em) : 'não analisado']) },
+      { name: 'Riscos', title: 'RISCOS POR CONTRATO', subtitle: sub, headers: ['Contrato', 'Nº', 'Tipo', 'Nível', 'Risco', 'Consequência', 'Providência', 'Setor', 'Referência'], types: Array(9).fill('text'), rows: riscos },
+      { name: 'Oportunidades', title: 'OPORTUNIDADES DE ATUALIZAÇÃO FINANCEIRA', subtitle: sub, headers: ['Contrato', 'Nº', 'Oportunidade', 'Fundamento', 'Referência'], types: Array(5).fill('text'), rows: ops }
+    ]), `Auditoria_consultiva_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.xlsx`);
+    UI.toast('Planilha comparativa gerada.');
+  },
+  /** seções do Relatório de auditoria */
+  relatorio(e, cs, H, tbl, grupo) {
+    const L = cs.map(AuditCons.linha), feitos = L.filter(l => l.c.auditoria), soma = k => L.reduce((s, l) => s + (l[k] || 0), 0);
+    const crit = L.filter(l => l.n.Alto || (isISO(l.V.fim) && daysUntil(l.V.fim) <= 90));
+    const prov = []; L.forEach(l => (l.a.riscos || []).filter(r => /^alto/i.test(r.nivel || '')).forEach(r => prov.push([esc(l.c.codigo), esc(r.descricao || ''), esc(r.providencia || ''), esc(r.setor || '')])));
+    const ops = []; L.forEach(l => (l.a.oportunidades || []).forEach(o => ops.push([esc(l.c.codigo), esc(o.descricao || ''), esc(o.fundamento || '')])));
+    const venc = L.filter(l => isISO(l.V.fim) && daysUntil(l.V.fim) < 0).length, v90 = L.filter(l => isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90).length;
+    const out = [];
+    out.push(`<section>${H('Auditoria consultiva — relatório geral' + (grupo ? ' (' + grupo + ')' : ''))}
+      <p>${cs.length} contrato(s) no escopo${grupo ? ` com ${esc(grupo)}` : ''}; ${feitos.length} com ficha de auditoria consultiva.${feitos.length < cs.length ? ` <i class="r-gap">${cs.length - feitos.length} ainda sem análise.</i>` : ''}</p>
+      <div class="r-kpis"><div><b>${soma('mensal') ? fmtMoneyShort(soma('mensal')) : '—'}</b><span>valor mensal somado</span></div><div><b>${soma('global') ? fmtMoneyShort(soma('global')) : '—'}</b><span>valor global somado</span></div><div><b>${soma('postos') ? fmtNum(soma('postos')) : '—'}</b><span>postos de trabalho</span></div><div><b>${venc} / ${v90}</b><span>vencidos / vencem em 90 dias</span></div></div>
+      <h3>Contratos críticos</h3>${crit.length ? tbl(['Contrato', 'Órgão / unidade', 'Término', 'Riscos altos', 'Motivo'], crit.map(l => [esc(l.c.codigo), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), l.V.fim ? esc(fmtDate(l.V.fim)) : '—', String(l.n.Alto), esc([l.n.Alto && 'risco alto', isISO(l.V.fim) && daysUntil(l.V.fim) < 0 && 'vigência vencida', isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90 && 'vence em até 90 dias'].filter(Boolean).join(', '))]), 'small') : '<p>Nenhum contrato crítico identificado.</p>'}
+      <h3>Providências prioritárias (riscos altos)</h3>${prov.length ? tbl(['Contrato', 'Risco', 'Providência', 'Setor'], prov, 'small') : '<p>Nenhum risco alto apontado.</p>'}
+      <h3>Oportunidades de atualização financeira</h3>${ops.length ? tbl(['Contrato', 'Oportunidade', 'Fundamento'], ops, 'small') : '<p>Nenhuma identificada com os documentos disponíveis.</p>'}
+      <p class="r-muted">Fatos contratuais e conclusões da auditoria estão separados em cada ficha. Informações ausentes dos documentos aparecem como “não identificado”; não se presume lucro, prejuízo ou crédito sem dados suficientes.</p></section>`);
+    out.push(`<section>${H('Quadro comparativo dos contratos')}${tbl(['Contrato', 'Órgão / unidade', 'Vigência', 'Mensal', 'Global', 'Postos', 'Reajuste', 'Repactuação', 'Revisão', 'Reequilíbrio', 'Riscos A/M/B'], L.map(l => [esc(l.c.codigo) + (l.numero ? '<br><small>' + esc(l.numero) + '</small>' : ''), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), `${l.V.ini ? esc(fmtDate(l.V.ini)) : '—'}<br>${l.V.fim ? esc(fmtDate(l.V.fim)) : '—'}`, l.mensal !== null ? esc(fmtMoney(l.mensal)) : '—', l.global !== null ? esc(fmtMoney(l.global)) : '—', l.postos ? fmtNum(l.postos) : '—', esc(l.sn('reajuste')), esc(l.sn('repactuacao')), esc(l.sn('revisao')), esc(l.sn('reequilibrio')), l.c.auditoria ? `${l.n.Alto}/${l.n.Médio}/${l.n.Baixo}` : '<i class="r-gap">sem análise</i>']), 'small')}<p class="r-muted">Reajuste, repactuação, revisão e reequilíbrio: “prevê / houve”.</p></section>`);
+    out.push(`<section>${H('Fichas individuais dos contratos')}${feitos.length ? feitos.map(l => `<div class="r-ficha"><h3>${esc(l.c.codigo)} — ${esc(l.orgao)}${l.unidade ? ' · ' + esc(l.unidade) : ''}</h3>${AuditCons.fichaHtml(l.c, true)}</div>`).join('') : '<p>Nenhum contrato analisado ainda. Use “Auditoria consultiva (IA)” no painel da empresa.</p>'}</section>`);
+    return out.join('');
   }
 };
