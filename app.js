@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.31.2';
+const APP_VERSAO = '1.31.3';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.31.3', data: '25/11/2026', itens: ['Correção: o Relatório de auditoria filtrado por tomador (ex.: Município de Vila Velha) só aplicava o filtro à seção da auditoria consultiva; sumário, carteira, obrigações, mão de obra, achados e cobertura documental traziam contratos de todos os tomadores. Agora todas as seções usam só os contratos escolhidos, e a capa indica o tomador.'] },
   { numero: '1.31.2', data: '25/11/2026', itens: ['Correção: depois de “Analisar de novo” (ou outra gravação) numa janela aberta a partir de uma lista, ao fechar e reabrir aparecia a versão antiga do registro — os dados estavam salvos, mas a lista não tinha sido atualizada. Agora a lista se atualiza ao fechar a janela e sempre abre a versão mais recente.'] },
   { numero: '1.31.1', data: '25/11/2026', itens: ['Auditoria consultiva passa a ler o CNPJ do órgão contratante e preenche o CNPJ tomador quando estiver vazio.', 'Valor mensal: quando o contrato só traz o valor global, o app calcula o mensal (global ÷ meses da vigência).'] },
   { numero: '1.31.0', data: '25/11/2026', itens: ['Conferência do cadastro (Painel → quadro da pasta do Drive): aponta contrato com CNPJ tomador de outra cidade, número de contrato repetido no mesmo tomador e dados diferentes do que a IA leu nos PDFs (início, término, valor mensal); botão “Revisar” para corrigir marcando o que aplicar.', 'Agrupamento por tomador: a cidade escrita no tomador vale mais que o CNPJ, e a raiz do CNPJ fica com a cidade da maioria dos contratos — um CNPJ errado não leva mais o contrato para o grupo de outra cidade.', 'Conferir com a pasta: lista também os contratos do tomador que estão no sistema mas não estão na pasta.', 'Menu do portal do cliente: mesma correção do fechamento ao arrastar o mouse para fora.'] },
@@ -2700,14 +2701,15 @@ const Consult = {
   },
 
   /* ---------------- PAINEL / DASHBOARD ---------------- */
-  stats(e, de, ate) {
-    const cs = empRecs('contratos', e.id), at = cs.filter(contratoAtivo);
+  /** grupo (opcional): só os contratos daquele tomador — e as obrigações, achados e mão de obra deles */
+  stats(e, de, ate, grupo) {
+    const cs = empRecs('contratos', e.id).filter(c => !grupo || tomadorBase(c) === grupo), at = cs.filter(contratoAtivo), cods = new Set(cs.map(c => c.codigo)), doGrupo = r => !grupo || cods.has(r.contrato);
     const comVal = at.filter(c => num(c.valorMensal) !== null);
     const venc = cs.filter(c => isISO(c.fim) && daysUntil(c.fim) >= 0 && daysUntil(c.fim) <= 90);
     const expir = cs.filter(c => isISO(c.fim) && daysUntil(c.fim) < 0 && !/encerrad/i.test((c.status || '') + (c.grupo || '')));
     const fields = SCHEMAS.contratos.fields;
     const compl = cs.length ? cs.reduce((s, c) => s + fields.filter(f => c[f.k] !== null && c[f.k] !== undefined && c[f.k] !== '' && !isGap(c[f.k])).length, 0) / (cs.length * fields.length) : null;
-    const ob = empRecs('obrigacoes', e.id), ach = empRecs('achados', e.id), mo = empRecs('maoDeObra', e.id);
+    const ob = empRecs('obrigacoes', e.id).filter(doGrupo), ach = empRecs('achados', e.id).filter(doGrupo), mo = empRecs('maoDeObra', e.id).filter(doGrupo);
     const obSt = s => ob.filter(o => norm(o.status).startsWith(s)).length;
     const obVerif = ob.filter(o => o.status && !/n[aã]o verificad|n[aã]o aplic/i.test(o.status));
     const conf = obVerif.length ? ob.filter(o => /^cumprido/i.test(o.status || '')).length / obVerif.length : null;
@@ -3009,7 +3011,7 @@ const Report = {
       <div class="fld"><label>até</label><input name="ate" placeholder="MM/AAAA" value="${esc(comps.length ? fmtComp(comps[comps.length - 1]) : '')}"></div>
       <div class="fld"><label>Responsável técnico</label><input name="resp" value="${esc(esc0.advogado || Session.user.nome || '')}"></div>
       <div class="fld"><label>OAB</label><input name="oab" value="${esc(esc0.oab || '')}"></div>
-      <div class="fld full"><label>Contratos da auditoria consultiva</label><select name="grupo"><option value="">Todos os contratos da empresa</option>${[...new Set(empRecs('contratos', e.id).map(tomadorBase))].sort().map(g => `<option>${esc(g)}</option>`).join('')}</select></div>
+      <div class="fld full"><label>Contratos do relatório (todas as seções)</label><select name="grupo"><option value="">Todos os contratos da empresa</option>${[...new Set(empRecs('contratos', e.id).map(tomadorBase))].sort().map(g => `<option>${esc(g)}</option>`).join('')}</select></div>
       <div class="fld full"><label>Seções</label><div class="chips-select">${Report.SECOES.map(([k, l]) => `<label class="chip-opt"><input type="checkbox" name="sec" value="${k}" checked><span>${l}</span></label>`).join('')}</div></div>
       ${AuditCons.loteHtml(e)}
       <div class="fld full"><label>Parecer / considerações do consultor</label><textarea name="parecer" rows="5" placeholder="Conclusões, recomendações prioritárias e próximos passos…"></textarea></div>
@@ -3024,7 +3026,7 @@ const Report = {
     };
   },
   build(e, o) {
-    const S = Consult.stats(e, o.de, o.ate), I = S.ind, esc0 = escritorio();
+    const S = Consult.stats(e, o.de, o.ate, o.grupo), I = S.ind, esc0 = escritorio(), cods = new Set(S.cs.map(c => c.codigo));
     const L = I.map(i => fmtCompShort(i.competencia)), g = k => I.map(i => num(i[k]));
     const chart = (title, spec) => `<figure class="r-fig"><figcaption>${esc(title)}</figcaption>${spec.series.some(s => s.values.some(v => num(v) !== null)) ? legendHtml(spec.series) + svgChart(spec, 680, 220).svg : '<p class="r-muted">Sem dados no período.</p>'}</figure>`;
     const tbl = (heads, rows, cls = '') => `<table class="r-t ${cls}"><thead><tr>${heads.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -3042,7 +3044,7 @@ const Report = {
       ${tbl(['ID', 'Tomador / unidade', 'Nº', 'Início', 'Término', 'Valor mensal', 'Status'], S.cs.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true })).map(c => [esc(c.codigo), `${v(tomadorBase(c))}<br><small>${v(c.unidade || c.grupo)}</small>`, v(c.numero), v(fmtDate(c.inicio)), v(fmtDate(c.fim)), num(c.valorMensal) !== null ? esc(fmtMoney(c.valorMensal)) : v(c.valorMensal), v(c.status)]), 'small')}</section>`);
     if (o.secs.has('indicadores')) {
       const T = I.map(i => ['inss', 'fgts', 'iss', 'federais', 'outrosTributos'].reduce((s, k) => s + (num(i[k]) || 0), 0));
-      sec.push(`<section>${H('Indicadores econômico-financeiros')}<p>Período analisado: ${esc(per)}.</p>
+      sec.push(`<section>${H('Indicadores econômico-financeiros')}<p>Período analisado: ${esc(per)}.${o.grupo ? ' Os indicadores mensais são da empresa como um todo (todos os tomadores), não só dos contratos deste relatório.' : ''}</p>
       ${chart('Receitas × custos (R$)', { labels: L, kind: 'line', series: [{ name: 'Receita', values: g('receita') }, { name: 'Custo total', values: g('custo') }, { name: 'Folha', values: g('folha') }] })}
       ${chart('Tributos e encargos, inclusive previdência (R$)', { labels: L, kind: 'stack', series: [{ name: 'INSS', values: g('inss') }, { name: 'FGTS', values: g('fgts') }, { name: 'ISS', values: g('iss') }, { name: 'PIS/COFINS/IRPJ/CSLL', values: g('federais') }, { name: 'Outros', values: g('outrosTributos') }] })}
       ${chart('Admissões × desligamentos', { labels: L, kind: 'bar', axisFmt: x => fmtNum(x), series: [{ name: 'Admissões', values: g('admissoes'), color: 'var(--s3)' }, { name: 'Desligamentos', values: g('desligamentos'), color: 'var(--s5)' }] })}
@@ -3062,15 +3064,15 @@ const Report = {
       ${list.length ? tbl(['ID', 'Contrato', 'Área', 'Achado', 'Risco', 'Recomendação', 'Prazo', 'Status'], list.slice(0, 150).map(a => [v(a.codigo), v(a.contrato), v(a.area), v(a.achado), `<span class="r-risk ${norm(a.risco).replace(/\W/g, '')}">${v(a.risco)}</span>`, v(a.recomendacao), v(fmtDate(a.prazo)), v(a.status)]), 'small') : ''}</section>`);
     }
     if (o.secs.has('documentos')) {
-      const docs = empRecs('documentos', e.id), ads = empRecs('aditivos', e.id);
+      const docs = empRecs('documentos', e.id).filter(d => !o.grupo || cods.has(d.contrato)), ads = empRecs('aditivos', e.id).filter(d => !o.grupo || cods.has(d.contrato));
       const leg = {}; docs.forEach(d => leg[d.legibilidade || 'Não informado'] = (leg[d.legibilidade || 'Não informado'] || 0) + 1);
       sec.push(`<section>${H('Cobertura documental e limitações')}<p>${docs.length} documento(s) inventariados e ${ads.length} aditivo(s) identificados. ${Object.entries(leg).map(([k, x]) => `${k}: ${x}`).join(' · ')}.</p>
       <p>Os campos marcados como <i class="r-gap">não identificado</i> correspondem a informações não localizadas nos documentos analisados e devem ser confirmadas junto ao tomador ou à área responsável. As conclusões deste relatório limitam-se aos documentos e dados disponibilizados até a data de emissão.</p></section>`);
     }
-    if (o.secs.has('consultiva')) sec.push(AuditCons.relatorio(e, S.cs.filter(c => !o.grupo || tomadorBase(c) === o.grupo).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true })), H, tbl, o.grupo));
+    if (o.secs.has('consultiva')) sec.push(AuditCons.relatorio(e, S.cs.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true })), H, tbl, o.grupo));
     if (o.parecer) sec.push(`<section>${H('Parecer do consultor')}<div class="r-parecer">${esc(o.parecer).replace(/\n/g, '<br>')}</div></section>`);
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(o.titulo)} — ${esc(e.razao)}</title><style>${Report.CSS}</style></head><body>
-    <div class="cover"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="cap">${BRAND.caption}</div><div class="rule"></div><h1>${esc(o.titulo)}</h1><p class="emp">${esc(e.razao)}${e.cnpj ? '<br>CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}</p><p class="meta">Período dos indicadores: ${esc(per)}<br>Emitido em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
+    <div class="cover"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="cap">${BRAND.caption}</div><div class="rule"></div><h1>${esc(o.titulo)}</h1><p class="emp">${esc(e.razao)}${e.cnpj ? '<br>CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${o.grupo ? `<br><b>Contratos com ${esc(o.grupo)}</b>` : ''}</p><p class="meta">Período dos indicadores: ${esc(per)}<br>Emitido em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>
     <main>${sec.join('')}
     <div class="sign"><div class="line"></div><b>${esc(o.resp || '')}</b><span>${esc(o.oab || '')}</span><span>${esc(nomeMarca())} — ${BRAND.caption}</span></div></main>
     <footer>${esc(nomeMarca())} · ${BRAND.caption}${o.conf ? ' · Documento confidencial — uso restrito ao cliente' : ''}</footer></body></html>`;
