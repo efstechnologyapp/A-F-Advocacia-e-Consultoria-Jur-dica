@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.30.0';
+const APP_VERSAO = '1.30.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.30.1', data: '25/11/2026', itens: ['Relatório de auditoria: nova seção “Documentos pendentes de juntada”, com a lista por documento (ex.: Ordem de Serviço — contratos tais) e a tabela por contrato, incluindo os demais documentos apontados pela auditoria.'] },
   { numero: '1.30.0', data: '25/11/2026', itens: ['Vigência que depende de documento fora do sistema (ex.: “12 meses a contar da Ordem de Serviço”, contrato vencido sem aditivo de prorrogação): o card de Vigência, a ficha, a leitura do período, o relatório e a planilha dizem que o prazo depende de documento pendente de juntada e qual é o documento.', 'Corrigir vigência: ao informar só o início, o término é preenchido sozinho com o prazo do contrato (início + prazo − 1 dia).', 'Contrato sem término e com status “Vigente” passa a contar como vigente (e entra na carteira mensal), com o aviso “término a confirmar”.'] },
   { numero: '1.29.5', data: '25/11/2026', itens: ['Relatório de auditoria: clicar em Analisar já inicia a análise, sem confirmação.'] },
   { numero: '1.29.4', data: '25/11/2026', itens: ['Botão “Relatório” da empresa renomeado para “Relatório de auditoria”.', 'A Auditoria consultiva (IA) saiu do Painel e foi para dentro do Relatório de auditoria, acima do parecer: usa o seletor “Contratos da auditoria consultiva” da própria janela — escolha um grupo ou todos e clique em Analisar. O progresso aparece ali e volta a aparecer ao reabrir a janela.'] },
@@ -6981,6 +6982,13 @@ const AuditCons = {
       <h3>Providências prioritárias (riscos altos)</h3>${prov.length ? tbl(['Contrato', 'Risco', 'Providência', 'Setor'], prov, 'small') : '<p>Nenhum risco alto apontado.</p>'}
       <h3>Oportunidades de atualização financeira</h3>${ops.length ? tbl(['Contrato', 'Oportunidade', 'Fundamento'], ops, 'small') : '<p>Nenhuma identificada com os documentos disponíveis.</p>'}
       <p class="r-muted">Fatos contratuais e conclusões da auditoria estão separados em cada ficha. Informações ausentes dos documentos aparecem como “não identificado”; não se presume lucro, prejuízo ou crédito sem dados suficientes.</p></section>`);
+    // documentos pendentes de juntada (lista pronta para pedir à empresa)
+    const pend = L.map(l => ({ l, P: l.P && !l.P.juntado ? l.P : null, outros: (l.a.documentosFaltantes || []).filter(Boolean) })).filter(x => x.P || x.outros.length);
+    const porDoc = {}; pend.forEach(x => x.P && (porDoc[x.P.doc] = porDoc[x.P.doc] || []).push(x.l.c.codigo));
+    if (pend.length) out.push(`<section>${H('Documentos pendentes de juntada')}
+      <p>Documentos que não estão no sistema e são necessários para concluir a auditoria — em especial, para fixar o início e o término da vigência. Recomenda-se solicitá-los à empresa.</p>
+      ${Object.keys(porDoc).length ? `<h3>Para fixar a vigência</h3><ul>${Object.entries(porDoc).map(([d, cs]) => `<li><b>${esc(d)}</b> — ${cs.length} contrato(s): ${esc(cs.join(', '))}</li>`).join('')}</ul>` : ''}
+      ${tbl(['Contrato', 'Órgão / unidade', 'Vigência — documento pendente', 'Outros documentos apontados pela auditoria'], pend.map(x => [esc(x.l.c.codigo) + (x.l.numero ? '<br><small>' + esc(x.l.numero) + '</small>' : ''), esc(x.l.orgao) + (x.l.unidade ? '<br><small>' + esc(x.l.unidade) + '</small>' : ''), x.P ? `<b>${esc(x.P.doc)}</b><br><small>${esc(x.P.motivo)}</small>` : '—', x.outros.length ? x.outros.map(esc).join('<br>') : '—']), 'small')}</section>`);
     out.push(`<section>${H('Quadro comparativo dos contratos')}${tbl(['Contrato', 'Órgão / unidade', 'Vigência', 'Mensal', 'Global', 'Postos', 'Reajuste', 'Repactuação', 'Revisão', 'Reequilíbrio', 'Riscos A/M/B'], L.map(l => [esc(l.c.codigo) + (l.numero ? '<br><small>' + esc(l.numero) + '</small>' : ''), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), `${l.V.ini ? esc(fmtDate(l.V.ini)) : '—'}<br>${l.V.fim ? esc(fmtDate(l.V.fim)) : '—'}${l.P ? `<br><small class="r-gap">pendente: ${esc(l.P.doc)}</small>` : ''}`, l.mensal !== null ? esc(fmtMoney(l.mensal)) : '—', l.global !== null ? esc(fmtMoney(l.global)) : '—', l.postos ? fmtNum(l.postos) : '—', esc(l.sn('reajuste')), esc(l.sn('repactuacao')), esc(l.sn('revisao')), esc(l.sn('reequilibrio')), l.c.auditoria ? `${l.n.Alto}/${l.n.Médio}/${l.n.Baixo}${l.a.alerta ? '<br><b class="r-gap">⚠ docs inconsistentes</b>' : ''}` : '<i class="r-gap">sem análise</i>']), 'small')}<p class="r-muted">Reajuste, repactuação, revisão e reequilíbrio: “prevê / houve”.</p></section>`);
     out.push(`<section>${H('Fichas individuais dos contratos')}${feitos.length ? feitos.map(l => `<div class="r-ficha"><h3>${esc(l.c.codigo)} — ${esc(l.orgao)}${l.unidade ? ' · ' + esc(l.unidade) : ''}</h3>${AuditCons.fichaHtml(l.c, true)}</div>`).join('') : '<p>Nenhum contrato analisado ainda. Use “Auditoria consultiva (IA)” no painel da empresa.</p>'}</section>`);
     return out.join('');
