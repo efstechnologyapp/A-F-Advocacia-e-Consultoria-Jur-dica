@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.28.2';
+const APP_VERSAO = '1.28.3';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.28.3', data: '25/11/2026', itens: ['Agrupamento por município mais preciso: secretarias e fundos entram no município também pela raiz do CNPJ do tomador e pelo nome da cidade na unidade, mesmo quando o nome do contratante não cita a cidade.'] },
   { numero: '1.28.2', data: '25/11/2026', itens: ['Auditoria consultiva e “Ler de novo”: passam a abrir também os PDFs que estão em pastas do Drive fora do app (ligados ao contrato pelo link), pela conta do app.', 'Painel da empresa: “Conferência com a pasta do Drive” — cole o link da pasta e veja quantos contratos há nela, quantos estão no sistema e quais faltam.'] },
   { numero: '1.28.1', data: '25/11/2026', itens: ['Ficha do contrato: o card de Vigência (início, término, dias restantes e prorrogação) substitui o indicador antigo, na mesma linha de Valor mensal, Postos e Completude.', 'Reajuste, repactuação, revisão e reequilíbrio num card só: se o contrato prevê, se já houve e quando, e a data do próximo reajuste (12 meses do último ou do início), com alerta quando o prazo já está aberto.'] },
   { numero: '1.28.0', data: '25/11/2026', itens: ['Auditoria consultiva (IA): a IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual — dados com cláusula e página, custos, faturamento, garantias, penalidades, rescisão, riscos alto/médio/baixo com providência e setor, oportunidades de repactuação e documentos que faltam. Em lote no painel da empresa ou um a um na ficha do contrato.', 'Ficha do contrato: card no topo com vigência (início, término, dias restantes, prorrogação) e se o contrato prevê e se houve reajuste, repactuação/apostilamento, revisão e reequilíbrio econômico-financeiro — com alerta quando passa de 12 meses sem reajuste. Pode ser corrigido à mão.', 'Relatório de auditoria: novas seções de auditoria consultiva (relatório geral, quadro comparativo e fichas individuais), com filtro por tomador; e planilha comparativa em Excel.', 'Contratos por tomador: prefeitura, secretarias e fundos do mesmo município passam a contar juntos (ex.: “Município de Vila Velha”).', 'Painel da empresa: “Conferência com a pasta” mostra PDFs juntados que não ficaram ligados a nenhum contrato.'] },
@@ -2284,11 +2285,21 @@ const empRecs = (c, eid) => DB.where(c, r => r.empresaId === eid);
 const tomadorBase0 = c => String(c.tomador || '').split(/ [–-] /)[0].replace(/\(ver unidade\)/i, '').trim() || 'Não informado';
 /* Municípios que aparecem como tomadores ("Município de X", "Prefeitura Municipal de X"): a
  * prefeitura, as secretarias e os fundos municipais da mesma cidade contam como um só tomador. */
-const cidadesTomador = () => { const s = new Set(); DB.all('contratos').forEach(c => { const m = String(c.tomador || '').match(/(?:munic[ií]pio|prefeitura(?:\s+municipal)?)\s+d[eoa]s?\s+([A-ZÀ-Ú][A-Za-zÀ-ú' ]+?)(?:\s*(?:[\/(,–-]|\bE[SP]\b|$))/i); if (m && m[1].trim().length > 2) s.add(m[1].trim().replace(/\s+/g, ' ')); }); return [...s]; };
+const RE_CIDADE = /(?:munic[ií]pio|prefeitura(?:\s+municipal)?)\s+d[eoa]s?\s+([A-ZÀ-Ú][A-Za-zÀ-ú' ]+?)(?:\s*(?:[\/(,–-]|\bE[SP]\b|$))/i;
+const raizCnpj = c => onlyDigits(c.cnpjTomador).padStart(8, '0').slice(0, 8);
+/* Municípios que aparecem como tomadores ("Município de X", "Prefeitura Municipal de X"): a
+ * prefeitura, as secretarias e os fundos da mesma cidade contam como um só tomador — pelo nome
+ * da cidade no texto ou pela raiz do CNPJ (as secretarias usam o CNPJ do município). */
+const cidadesTomador = () => {
+  const cid = new Set(), porRaiz = {};
+  DB.all('contratos').forEach(c => { const m = String(c.tomador || '').match(RE_CIDADE); if (m && m[1].trim().length > 2) { const x = m[1].trim().replace(/\s+/g, ' '); cid.add(x); if (onlyDigits(c.cnpjTomador).length >= 8) porRaiz[raizCnpj(c)] = x; } });
+  return { lista: [...cid], porRaiz };
+};
 const tomadorBase = c => {
-  const txt = norm([c.tomador, c.unidade, c.grupo, c.objeto].filter(Boolean).join(' '));
-  const cid = cidadesTomador().find(x => new RegExp('\\b' + norm(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(txt));
-  if (cid && /munic|prefeit|secretaria|fundo|camara|autarquia|sem[a-z]{1,5}\b/.test(txt)) return 'Município de ' + cid;
+  const C = cidadesTomador(), txt = norm([c.tomador, c.unidade, c.grupo, c.objeto].filter(Boolean).join(' '));
+  if (onlyDigits(c.cnpjTomador).length >= 8 && C.porRaiz[raizCnpj(c)]) return 'Município de ' + C.porRaiz[raizCnpj(c)];
+  const cid = C.lista.find(x => new RegExp('\\b' + norm(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(txt));
+  if (cid && /munic|prefeit|secretaria|fundo|camara|autarquia|sem[a-z]{1,5}\b|\bpm[a-z]{1,3}\b/.test(txt)) return 'Município de ' + cid;
   return tomadorBase0(c);
 };
 
