@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.26.4';
+const APP_VERSAO = '1.27.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.27.0', data: '25/11/2026', itens: ['Atendimento com mais de um cliente (ex.: casal, coproprietários, vários autores): em “Cliente e caso”, inclua outros clientes ou cadastre um novo na hora.', 'Contrato de honorários com todos os contratantes qualificados, responsabilidade solidária e uma assinatura para cada um.', 'Procuração: com mais de um cliente, escolha entre uma procuração conjunta (todos os outorgantes) ou uma procuração para cada cliente, em páginas separadas.', 'A IA qualifica todos os clientes como requerentes ou autores no requerimento e na petição; as demandas e o processo já nascem com todos os clientes.'] },
   { numero: '1.26.4', data: '18/11/2026', itens: ['Pastas do escritório no Drive compartilhadas automaticamente com cada membro da equipe (administrador ou equipe): os links dos documentos abrem com a própria conta Google de cada um, sem pedir acesso. Clientes não recebem acesso às pastas.', 'Documentos pessoais dos clientes passam a ficar na pasta “_Clientes (documentos pessoais)”.', 'Demanda administrativa: documentos do caso não aparecem mais repetidos.'] },
   { numero: '1.26.3', data: '18/11/2026', itens: ['Demanda administrativa: o quadro Documentos agora se divide em “Documentos pessoais” (do cadastro do cliente) e “Documentos do caso” (do atendimento), sempre atualizados — o que for juntado depois de abrir a demanda também aparece, com link para cada arquivo.'] },
   { numero: '1.26.2', data: '18/11/2026', itens: ['Requerimentos e petições: a IA recebe o endereço, o e-mail e o telefone do escritório cadastrados no sistema e os usa na qualificação e na assinatura; se ainda sobrar algum [COMPLETAR] desses dados, o app preenche sozinho.', 'Requerimento e petição inicial: mostra quando o texto foi redigido pela IA e a data da última edição, e destaca o texto novo ao terminar.'] },
@@ -1715,7 +1716,7 @@ const Views = {
     const procs = DB.where('processos', p => (p.clienteIds || []).includes(id));
     const emps = DB.where('empresas', e => e.clienteId === id);
     const dems = DB.where('demandas', d => (d.clienteIds || []).includes(id));
-    const ats = DB.where('atendimentos', a => a.clienteId === id && !a.processoId && !a.demandaId && !/Não prosseguiu/.test(a.status || ''));
+    const ats = DB.where('atendimentos', a => Atend.ids(a).includes(id) && !a.processoId && !a.demandaId && !/Não prosseguiu/.test(a.status || ''));
     const m = UI.modal({
       title: c.nome, sub: `${esc(c.tipo || '')} ${c.doc ? '· ' + esc(fmtDoc(c.doc)) : ''}`, wide: true,
       body: `<div class="detail-grid"><div><span class="lbl">E-mail</span>${esc(c.email || '—')}</div><div><span class="lbl">Telefone</span>${esc(c.telefone || '—')}</div><div class="full"><span class="lbl">Endereço</span>${esc(c.endereco || '—')}</div></div>
@@ -4579,6 +4580,13 @@ const Atend = {
   fim: /Ajuizado|Protocolado|Concluído|Não prosseguiu/,
   tom: s => /Ajuizado|Protocolado|Concluído/.test(s) ? 'good' : /Não prosseguiu/.test(s) ? 'neutral' : /assinado|pront/.test(s) ? 'info' : 'warn',
   cli: a => DB.get('clientes', a.clienteId),
+  /** todos os clientes do atendimento: o principal e os demais requerentes/autores (ex.: cônjuge) */
+  clis: a => [a.clienteId, ...(a.outrosClientes || [])].filter((x, i, l) => x && l.indexOf(x) === i).map(id => DB.get('clientes', id)).filter(Boolean),
+  ids: a => Atend.clis(a).map(c => c.id),
+  nomes: (a, sep = ' e ') => { const l = Atend.clis(a).map(c => c.nome); return l.length > 1 ? l.slice(0, -1).join(', ') + sep + l[l.length - 1] : l[0] || ''; },
+  /** qualificação de todos, na ordem: "FULANO, …; e BELTRANO, …" */
+  qualifs(a, html = true) { const l = Atend.clis(a).map(c => Atend.qualif(c, html)); return l.length > 1 ? l.slice(0, -1).join('; ') + '; e ' + l[l.length - 1] : l[0] || ''; },
+  assinaturas: (a, papel) => Atend.clis(a).map(c => `<div><span></span><b>${esc(String(c.nome).toUpperCase())}</b>${papel}</div>`).join('') || `<div><span></span><b>${papel.toUpperCase()}</b>${papel}</div>`,
 
   /* ---------- lista ---------- */
   list(v, esfera = 'judicial') {
@@ -4590,7 +4598,7 @@ const Atend = {
       <div class="actions"><button class="btn primary" id="aNovo">${icon('plus')} Novo atendimento</button></div></div>
       <div class="kpis sm">${kpi('Em aberto', abertos.length)}${kpi('Contratos assinados', l.filter(a => a.contratoAssinado).length)}${adm ? kpi('Requerimentos prontos', l.filter(a => a.status === 'Requerimento pronto').length) + kpi('Protocolados', l.filter(a => a.status === 'Protocolado').length) : kpi('Iniciais prontas', l.filter(a => a.status === 'Inicial pronta').length) + kpi('Ajuizados', l.filter(a => a.status === 'Ajuizado').length)}</div>
       <section class="card flush" id="atTbl"></section>`;
-    const rows = l.map(a => ({ ...a, _cli: Atend.cli(a)?.nome || '—', _area: adm ? (a.tipoAdm || '') : AREAS[a.area]?.nome || '', _pc: adm ? Atend.orgaosTxt(a, '; ') : a.parteContraria, _upd: String(a.atualizadoEm || a.criadoEm || a.updatedAt || '').slice(0, 10) }));
+    const rows = l.map(a => ({ ...a, _cli: Atend.nomes(a, ' e ') || '—', _area: adm ? (a.tipoAdm || '') : AREAS[a.area]?.nome || '', _pc: adm ? Atend.orgaosTxt(a, '; ') : a.parteContraria, _upd: String(a.atualizadoEm || a.criadoEm || a.updatedAt || '').slice(0, 10) }));
     dataTable($('#atTbl'), {
       id: adm ? 'atendAdm' : 'atend', rows, schema: { fields: [F('_cli', 'Cliente'), F('assunto', adm ? 'Assunto / pedido' : 'Assunto / ação'), F('_area', adm ? 'Tipo de demanda' : 'Área'), F('_pc', adm ? 'Órgão / cartório' : 'Parte contrária'), F('status', 'Situação'), F('_upd', 'Atualizado', 'date')] },
       cols: ['_cli', 'assunto', '_area', '_pc', 'status', '_upd'],
@@ -4641,7 +4649,7 @@ const Atend = {
     const feito = { caso: !!(c && a.assunto), contrato: !!a.contratoHtml, procuracao: !!a.procuracaoHtml, fatos: !!(a.relato || (a.documentos || []).length), inicial: adm ? (Atend.demandas(a).length > 0 || /Concluído|Protocolado/.test(a.status || '')) : !!a.inicialHtml };
     v.innerHTML = `<div class="proc-h"><div>
         <div class="proc-tags">${adm ? `<span class="pill neutral">${icon('stamp')} Administrativo</span> ${pill(a.tipoAdm || '')}` : pill(AREAS[a.area]?.nome || '')} <span class="pill ${Atend.tom(a.status)}">${esc(a.status || 'Em atendimento')}</span>${a.processoId ? ` <a class="tag" href="#/processo/${a.processoId}">${icon('link')} processo</a>` : ''}${adm && Atend.demandas(a).length ? ` <a class="tag" href="#/atendimento/${a.id}/inicial">${icon('link')} ${Atend.demandas(a).length} demanda(s)</a>` : ''}</div>
-        <h1 class="at-tit">${esc(c?.nome || 'Cliente não encontrado')}</h1>
+        <h1 class="at-tit">${esc(Atend.nomes(a) || 'Cliente não encontrado')}</h1>
         <p class="proc-sub">${esc(a.assunto || '')}${adm ? (Atend.orgaos(a).length ? ` · ${esc(Atend.orgaosTxt(a, '; '))}` : '') : a.parteContraria ? ` <span class="vs">×</span> ${esc(a.parteContraria)}` : ''}</p></div>
         <div class="actions wrap"><select class="input" id="atSt" title="Situação do atendimento">${Atend.stList(a).map(s => `<option ${s === a.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div></div>
       <nav class="steps">${Atend.tabs(a).map(([k, t, ic], i) => `<a href="#/atendimento/${id}/${k}" class="${k === tab ? 'on' : ''} ${feito[k] ? 'ok' : ''}"><span class="n">${feito[k] ? icon('check') : i + 1}</span>${esc(t)}</a>`).join('')}</nav>
@@ -4671,13 +4679,21 @@ const Atend = {
         <div class="fld full"><label>Assunto / ${adm ? 'pedido' : 'ação pretendida'}</label><input name="assunto" value="${esc(a.assunto || '')}"></div>
         <div class="fld full"><label>Anotações internas do atendimento</label><textarea name="obs" rows="4" placeholder="Como chegou ao escritório, urgência, combinações…">${esc(a.obs || '')}</textarea></div>
       </form><div class="right"><button class="btn primary" id="cfOk">${icon('check')} Salvar</button></div></section>
-      <div class="col"><section class="card"><header><h2>${icon('user')} Cliente</h2><button class="btn ghost sm" id="cliEd">${icon('edit')} Editar cadastro</button></header>
-        ${c ? `<p class="qualif">${Atend.qualif(c)}</p>` : '<p class="t-bad">Cliente não encontrado.</p>'}
-        ${fal.length ? `<div class="notice">${icon('alert')}<div>Para o contrato e a inicial saírem completos, falta no cadastro: <b>${esc(fal.join(', '))}</b>.</div></div>` : `<p class="muted small">${icon('check')} Qualificação completa para o contrato e a inicial.</p>`}
+      <div class="col"><section class="card"><header><h2>${icon('user')} ${Atend.clis(a).length > 1 ? 'Clientes' : 'Cliente'}</h2></header>
+        ${Atend.clis(a).map((x, k) => { const fx = Atend.faltas(x); return `<div class="cli-q"><div class="cli-q-h"><b>${esc(x.nome)}</b>${k ? '' : ' <span class="muted small">principal</span>'}<span class="sp"></span><button class="icon-btn sm" data-cled="${x.id}" title="Editar cadastro">${icon('edit')}</button>${k ? `<button class="icon-btn sm" data-clx="${x.id}" title="Tirar do atendimento">${icon('x')}</button>` : ''}</div>
+          <p class="qualif">${Atend.qualif(x)}</p>${fx.length ? `<div class="notice">${icon('alert')}<div>Falta no cadastro: <b>${esc(fx.join(', '))}</b>.</div></div>` : `<p class="muted small">${icon('check')} Qualificação completa.</p>`}</div>`; }).join('') || '<p class="t-bad">Cliente não encontrado.</p>'}
+        <div class="cli-add"><label class="small">${icon('users')} Outros clientes / requerentes <span class="muted">(ex.: cônjuge, coproprietário, outro autor)</span></label>
+          <div class="btn-row"><select class="input" id="cliAdd"><option value="">— incluir cliente —</option>${DB.all('clientes').filter(x => !Atend.ids(a).includes(x.id)).sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR')).map(x => `<option value="${x.id}">${esc(x.nome)}${x.doc ? ' · ' + esc(fmtDoc(x.doc)) : ''}</option>`).join('')}<option value="_novo">+ Cadastrar novo cliente…</option></select></div>
+          <p class="muted small">Contrato, procuração e ${adm ? 'requerimento' : 'petição'} passam a sair com todos.</p></div>
       </section>
       <section class="card"><header><h2>${icon('list')} Próximos passos</h2></header><ol class="next">
         <li><a href="#/atendimento/${a.id}/contrato">Gerar o contrato de honorários</a></li><li><a href="#/atendimento/${a.id}/procuracao">Gerar a procuração</a></li><li><a href="#/atendimento/${a.id}/fatos">Registrar o relato e juntar os documentos</a></li><li><a href="#/atendimento/${a.id}/inicial">${adm ? 'Redigir o(s) requerimento(s) e concluir — o protocolo é informado depois, em cada demanda' : 'Redigir a petição inicial'}</a></li></ol></section></div></div>`;
-    $('#cliEd').onclick = () => c && UI.editRecord('clientes', c, { onSaved: () => App.render(true) });
+    $$('[data-cled]').forEach(b => b.onclick = () => UI.editRecord('clientes', DB.get('clientes', b.dataset.cled), { onSaved: () => App.render(true) }));
+    $$('[data-clx]').forEach(b => b.onclick = async () => { await Atend.salvar(a, { outrosClientes: (a.outrosClientes || []).filter(x => x !== b.dataset.clx) }, 'Cliente retirado do atendimento.'); for (const d of Atend.demandas(a)) await DB.save('demandas', { ...d, clienteIds: Atend.ids(a) }); App.render(true); });
+    // as demandas e o processo já abertos acompanham a lista de clientes do atendimento
+    const sincronizar = async () => { const ids = Atend.ids(a); for (const d of Atend.demandas(a)) await DB.save('demandas', { ...d, clienteIds: ids }); const p = a.processoId && DB.get('processos', a.processoId); if (p) await DB.save('processos', { ...p, clienteIds: [...new Set([...(p.clienteIds || []), ...ids])] }); };
+    const incluir = async id => { await Atend.salvar(a, { outrosClientes: [...new Set([...(a.outrosClientes || []), id])] }); await sincronizar(); UI.toast('Cliente incluído (também nas demandas já abertas). Gere de novo o contrato e a procuração para saírem com todos.', 'ok', 6000); App.render(true); };
+    $('#cliAdd').onchange = e => { const v = e.target.value; if (!v) return; if (v === '_novo') { e.target.value = ''; UI.editRecord('clientes', { tipo: 'Pessoa física', endereco: c?.endereco || '' }, { onSaved: n => incluir(n.id) }); } else incluir(v); };
     const orgRow = () => `<div class="org-row"><input name="org" placeholder="Ex.: Cartório de Registro de Imóveis da Zona Sul"><button type="button" class="icon-btn sm" data-orgx title="Remover">${icon('x')}</button></div>`;
     $('#orgL')?.addEventListener('click', e => { const b = e.target.closest('[data-orgx]'); if (!b) return; if ($$('.org-row', $('#orgL')).length > 1) b.parentElement.remove(); else b.parentElement.querySelector('input').value = ''; });
     $('#orgAdd')?.addEventListener('click', () => { $('#orgL').insertAdjacentHTML('beforeend', orgRow()); $$('#orgL input').pop().focus(); });
@@ -4696,8 +4712,11 @@ const Atend = {
     const nome = `<b>${esc(String(c.nome || '').toUpperCase())}</b>`;
     if (c.tipo === 'Pessoa jurídica' || onlyDigits(c.doc).length === 14)
       return `${nome}, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº ${F_(c.doc && fmtDoc(c.doc), 'CNPJ')}, com sede em ${F_(c.endereco, 'endereço')}${c.email ? ', e-mail ' + esc(c.email) : ''}, neste ato representada por ${F_(c.representante, 'representante legal e qualificação')}`;
-    const ec = c.estadoCivil ? c.estadoCivil.toLowerCase() : '';
-    return `${nome}, ${F_(c.nacionalidade && c.nacionalidade.toLowerCase(), 'nacionalidade')}, ${F_(ec, 'estado civil')}, ${F_(c.profissao && c.profissao.toLowerCase(), 'profissão')}, portador(a) do RG nº ${F_(c.rg, 'RG')}, inscrito(a) no CPF sob o nº ${F_(c.doc && fmtDoc(c.doc), 'CPF')}, residente e domiciliado(a) em ${F_(c.endereco, 'endereço')}${c.email ? ', e-mail ' + esc(c.email) : ''}${c.telefone ? ', telefone ' + esc(c.telefone) : ''}${c.representante ? ', neste ato representado(a) por ' + esc(c.representante) : ''}`;
+    // gênero pela nacionalidade (brasileira/brasileiro); sem ela, mantém a forma neutra (a)
+    const g = /a$/i.test(String(c.nacionalidade || '').trim()) ? 'f' : /o$/i.test(String(c.nacionalidade || '').trim()) ? 'm' : '';
+    const gv = t => g ? t.replace(/o\(a\)/g, g === 'f' ? 'a' : 'o').replace(/r\(a\)/g, g === 'f' ? 'ra' : 'r') : t;
+    const ec = c.estadoCivil ? gv(c.estadoCivil.toLowerCase()) : '';
+    return `${nome}, ${F_(c.nacionalidade && c.nacionalidade.toLowerCase(), 'nacionalidade')}, ${F_(ec, 'estado civil')}, ${F_(c.profissao && c.profissao.toLowerCase(), 'profissão')}, ${gv('portador(a)')} do RG nº ${F_(c.rg, 'RG')}, ${gv('inscrito(a)')} no CPF sob o nº ${F_(c.doc && fmtDoc(c.doc), 'CPF')}, residente e ${gv('domiciliado(a)')} em ${F_(c.endereco, 'endereço')}${c.email ? ', e-mail ' + esc(c.email) : ''}${c.telefone ? ', telefone ' + esc(c.telefone) : ''}${c.representante ? ', neste ato representado(a) por ' + esc(c.representante) : ''}`;
   },
 
   /* ---------- 2. contrato de honorários ---------- */
@@ -4730,7 +4749,7 @@ const Atend = {
     };
     if (a.contratoHtml) Editor.montar($('#ctEd'), { html: a.contratoHtml, titulo: 'Contrato de honorários', salvar: html => Atend.salvar(a, { contratoHtml: html }),
       extra: `<label class="switch"><input type="checkbox" id="ctAss" ${a.contratoAssinado ? 'checked' : ''}><span></span>Contrato assinado</label>`,
-      imprimir: html => Timbre.imprimir(html, 'Contrato de honorários — ' + (c?.nome || ''), { assinatura: false }) });
+      imprimir: html => Timbre.imprimir(html, 'Contrato de honorários — ' + (Atend.nomes(a) || ''), { assinatura: false }) });
     $('#ctAss')?.addEventListener('change', async e => { await Atend.salvar(a, { contratoAssinado: e.target.checked, status: e.target.checked && /Em atendimento|Contrato gerado/.test(a.status) ? 'Contrato assinado' : a.status }, e.target.checked ? 'Contrato marcado como assinado.' : 'Desmarcado.'); App.render(true); });
   },
   modeloContrato(a, c, E, h) {
@@ -4743,14 +4762,14 @@ const Atend = {
     const adm = Atend.adm(a);
     let n = 0; const C = t => `<h2>CLÁUSULA ${['PRIMEIRA', 'SEGUNDA', 'TERCEIRA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÉTIMA', 'OITAVA', 'NONA', 'DÉCIMA', 'DÉCIMA PRIMEIRA', 'DÉCIMA SEGUNDA'][n++]} — ${t}</h2>`;
     return `<h1>CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS E HONORÁRIOS</h1>
-<p>Pelo presente instrumento particular, de um lado, ${c ? Atend.qualif(c) : '<mark>[COMPLETAR: cliente]</mark>'}, doravante denominado(a) <b>CONTRATANTE</b>; e, de outro, ${contratado}, doravante denominado(a) <b>CONTRATADO</b>, têm entre si justo e contratado o seguinte:</p>
+<p>Pelo presente instrumento particular, de um lado, ${Atend.qualifs(a) || '<mark>[COMPLETAR: cliente]</mark>'}, doravante ${Atend.clis(a).length > 1 ? 'denominados, em conjunto, <b>CONTRATANTE</b>' : 'denominado(a) <b>CONTRATANTE</b>'}; e, de outro, ${contratado}, doravante denominado(a) <b>CONTRATADO</b>, têm entre si justo e contratado o seguinte:</p>
 ${C('DO OBJETO')}<p>O CONTRATADO prestará ao CONTRATANTE serviços profissionais de advocacia consistentes na ${esc(h.objeto)}, ${adm ? (h.abrangencia === 'todas' ? 'até a conclusão do procedimento na esfera administrativa ou extrajudicial, inclusive recursos administrativos' : 'até a decisão do órgão ou a conclusão do ato perante o cartório') : h.abrangencia === 'todas' ? 'em todas as instâncias, até o trânsito em julgado da fase de conhecimento' : 'em primeiro grau de jurisdição'}.</p>
 <p><b>Parágrafo único.</b> Não estão incluídos neste contrato ${adm ? (h.abrangencia === 'todas' ? 'medidas judiciais de qualquer natureza' : 'recursos administrativos e medidas judiciais de qualquer natureza') : h.abrangencia === 'todas' ? 'o cumprimento de sentença em autos apartados, ações autônomas, incidentais ou conexas' : 'recursos aos tribunais, o cumprimento de sentença, ações autônomas, incidentais ou conexas'}, que dependerão de novo ajuste entre as partes.</p>
 ${C('DOS HONORÁRIOS CONTRATUAIS')}<p>Pelos serviços descritos, o CONTRATANTE pagará ao CONTRATADO:</p>${h.tipo !== 'exito' ? fixo : ''}${h.tipo !== 'fixo' ? exito : ''}
 ${adm ? '' : `<p><b>Parágrafo primeiro.</b> Os honorários de sucumbência fixados em juízo pertencem exclusivamente ao CONTRATADO (art. 23 da Lei nº 8.906/1994 e art. 85, § 14, do CPC) e não se compensam com os honorários aqui contratados.</p>`}
 ${h.tipo !== 'fixo' ? `<p><b>Parágrafo ${adm ? 'único' : 'segundo'}.</b> Em caso de acordo, judicial ou extrajudicial, os honorários de êxito incidem sobre o valor acordado. Somados aos de sucumbência, os honorários não ultrapassarão as vantagens obtidas pelo CONTRATANTE (art. 50 do Código de Ética e Disciplina da OAB).</p>` : ''}
 ${C('DAS DESPESAS')}<p>Custas, taxas, emolumentos, perícias, diligências, deslocamentos, cópias e demais despesas do ${adm ? 'procedimento (inclusive emolumentos de cartório, taxas e tributos incidentes sobre o ato)' : 'processo'} correm por conta do CONTRATANTE, mediante prestação de contas, salvo se deferida a ${adm ? 'gratuidade ou isenção' : 'gratuidade da justiça'}.</p>
-${C('DAS OBRIGAÇÕES DO CONTRATANTE')}<p>O CONTRATANTE obriga-se a: (i) fornecer informações verdadeiras e completas e os documentos necessários, nos prazos solicitados; (ii) comunicar ao CONTRATADO qualquer mudança de endereço, telefone ou e-mail; (iii) não celebrar acordo sobre o objeto deste contrato sem a ciência do CONTRATADO; e (iv) manter os pagamentos em dia.</p>
+${C('DAS OBRIGAÇÕES DO CONTRATANTE')}<p>O CONTRATANTE obriga-se a: (i) fornecer informações verdadeiras e completas e os documentos necessários, nos prazos solicitados; (ii) comunicar ao CONTRATADO qualquer mudança de endereço, telefone ou e-mail; (iii) não celebrar acordo sobre o objeto deste contrato sem a ciência do CONTRATADO; e (iv) manter os pagamentos em dia.</p>${Atend.clis(a).length > 1 ? '<p><b>Parágrafo único.</b> Havendo mais de um CONTRATANTE, todos respondem solidariamente pelas obrigações deste contrato.</p>' : ''}
 ${C('DAS OBRIGAÇÕES DO CONTRATADO')}<p>O CONTRATADO obriga-se a atuar com zelo e diligência, a manter sigilo sobre as informações recebidas e a informar o CONTRATANTE do andamento da causa, inclusive pelo portal do cliente e por e-mail. A obrigação assumida é de meio, e não de resultado.</p>
 ${C('DO INADIMPLEMENTO')}<p>O atraso no pagamento de qualquer parcela sujeitará o CONTRATANTE a multa de 2% (dois por cento), juros de 1% (um por cento) ao mês e correção monetária pelo IPCA, e acarretará o vencimento antecipado das demais parcelas.</p>
 ${C('DA REVOGAÇÃO E DA RENÚNCIA')}<p>O CONTRATANTE poderá revogar o mandato a qualquer tempo, permanecendo devidos os honorários iniciais e, quanto ao êxito, a parte proporcional ao trabalho realizado, calculada sobre o proveito econômico que vier a ser obtido. O CONTRATADO poderá renunciar ao mandato, continuando a representar o CONTRATANTE nos 10 (dez) dias seguintes à notificação, salvo substituição antes desse prazo (art. 5º, § 3º, da Lei nº 8.906/1994 e art. 112 do CPC).</p>
@@ -4759,7 +4778,7 @@ ${C('DA PROTEÇÃO DE DADOS')}<p>Os dados pessoais do CONTRATANTE serão tratado
 ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pessoa')} para dirimir quaisquer questões oriundas deste contrato.</p>
 <p>E, por estarem assim justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor, na presença das testemunhas abaixo.</p>
 <p class="local">${esc(h.cidade || 'João Pessoa')}, ${dataExt}.</p>
-<div class="assin"><div><span></span><b>${esc(String(c?.nome || 'CONTRATANTE').toUpperCase())}</b>Contratante</div><div><span></span><b>${esc(String(E.advogado || 'CONTRATADO').toUpperCase())}</b>${esc(oabFmt(E.oab) || 'Contratado')}</div></div>
+<div class="assin">${Atend.assinaturas(a, 'Contratante')}<div><span></span><b>${esc(String(E.advogado || 'CONTRATADO').toUpperCase())}</b>${esc(oabFmt(E.oab) || 'Contratado')}</div></div>
 <div class="assin test"><div><span></span><b>Testemunha 1</b>Nome:<br>CPF:</div><div><span></span><b>Testemunha 2</b>Nome:<br>CPF:</div></div>`;
   },
 
@@ -4789,6 +4808,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
         <div class="fld full"><label>Finalidade (opcional — deixe em branco para uma procuração geral)</label><input name="fim" value="${esc(p.fim ?? (Atend.adm(a) ? 'especialmente para representar o(a) OUTORGANTE perante ' + (Atend.orgaosTxt(a) || 'os cartórios, órgãos e repartições competentes') + (Atend.orgaos(a).length > 1 ? ' nos procedimentos de ' : ' no procedimento de ') + (a.tipoAdm || a.assunto || '[COMPLETAR]').replace(/^./, x => x.toLowerCase()) + (a.assunto && a.tipoAdm && a.assunto !== a.tipoAdm ? ' (' + a.assunto + ')' : '') : (a.assunto ? 'especialmente para ' + (tipo === 'extra' ? 'atuar em ' : 'propor ') + a.assunto : '') + (a.parteContraria ? ' em face de ' + a.parteContraria : '')))}"></div>
         <div class="fld"><label>Substabelecimento</label><select name="subst"><option value="com" ${p.subst !== 'sem' && p.subst !== 'nao' ? 'selected' : ''}>Pode substabelecer, com ou sem reserva</option><option value="sem" ${p.subst === 'sem' ? 'selected' : ''}>Só com reserva de poderes</option><option value="nao" ${p.subst === 'nao' ? 'selected' : ''}>Vedado substabelecer</option></select></div>
         <div class="fld"><label>Cidade</label><input name="cidade" value="${esc(p.cidade || a.honorarios?.cidade || 'João Pessoa')}"></div>
+        ${Atend.clis(a).length > 1 ? `<div class="fld full"><label>Outorgantes (${Atend.clis(a).length} clientes)</label><select name="conj"><option value="1" ${p.conjunta !== false ? 'selected' : ''}>Uma procuração conjunta, com todos os outorgantes</option><option value="0" ${p.conjunta === false ? 'selected' : ''}>Uma procuração para cada cliente</option></select></div>` : ''}
       </form>
       <div class="btn-row right"><button class="btn ${a.procuracaoHtml ? 'ghost' : 'primary'}" id="pGer">${icon('sparkle')} ${a.procuracaoHtml ? 'Gerar de novo (substitui o texto)' : 'Gerar procuração'}</button></div></section>
       <div id="prEd"></div>`;
@@ -4796,7 +4816,7 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
     const vis = () => { const t = f.tipo.value, esp = f.esp.checked; $('[data-pf=j]', f).hidden = !esp || t === 'extra'; $('[data-pf=e]', f).hidden = !esp || t === 'judicia'; };
     f.tipo.onchange = vis; f.esp.onchange = vis; vis();
     const ler = () => ({ tipo: f.tipo.value, especiais: f.esp.checked, pj: $$('[name=pj]:checked', f).map(x => x.value), pe: $$('[name=pe]:checked', f).map(x => x.value),
-      outorgados: f.outorgados.value.trim(), fim: f.fim.value.trim(), subst: f.subst.value, cidade: f.cidade.value.trim() || 'João Pessoa' });
+      outorgados: f.outorgados.value.trim(), fim: f.fim.value.trim(), subst: f.subst.value, cidade: f.cidade.value.trim() || 'João Pessoa', conjunta: f.conj ? f.conj.value === '1' : true });
     $('#pGer').onclick = async () => {
       if (a.procuracaoHtml && !await UI.confirm('Gerar de novo substitui o texto da procuração, inclusive o que foi editado. Continuar?', 'Gerar de novo', false)) return;
       const o = ler();
@@ -4804,9 +4824,17 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
       App.render(true);
     };
     if (a.procuracaoHtml) Editor.montar($('#prEd'), { html: a.procuracaoHtml, titulo: 'Procuração', salvar: html => Atend.salvar(a, { procuracaoHtml: html }),
-      imprimir: html => Timbre.imprimir(html, 'Procuração — ' + (c?.nome || '')) });
+      imprimir: html => Timbre.imprimir(html, 'Procuração — ' + (Atend.nomes(a) || '')) });
   },
   modeloProcuracao(a, c, E, o) {
+    const cs = Atend.clis(a);
+    // concordância: "os OUTORGANTES" na conjunta; "a/o OUTORGANTE" conforme a nacionalidade do cliente
+    const conc = (h, l) => { if (l.length > 1) return h.replace(/o\(a\) OUTORGANTE/g, 'os OUTORGANTES'); const n = String(l[0]?.nacionalidade || '').trim(); return /a$/i.test(n) ? h.replace(/o\(a\) OUTORGANTE/g, 'a OUTORGANTE').replace(/defendê-lo\(a\)/g, 'defendê-la') : /o$/i.test(n) ? h.replace(/o\(a\) OUTORGANTE/g, 'o OUTORGANTE').replace(/defendê-lo\(a\)/g, 'defendê-lo') : h; };
+    if (cs.length > 1 && o.conjunta === false) return cs.map(x => conc(Atend.modeloProcuracao1(a, [x], E, o), [x])).join('\n<hr class="quebra">\n');
+    const l = cs.length ? cs : (c ? [c] : []); return conc(Atend.modeloProcuracao1(a, l, E, o), l);
+  },
+  modeloProcuracao1(a, cs, E, o) {
+    const pl = cs.length > 1, q = cs.map(x => Atend.qualif(x)), qtxt = q.length > 1 ? q.slice(0, -1).join('; ') + '; e ' + q[q.length - 1] : q[0];
     const dataExt = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
     const outs = (o.outorgados || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
     const outTxt = (outs.length ? outs.map(s => `<b>${esc(s)}</b>`).join('; ') : '<mark>[COMPLETAR: advogado e OAB]</mark>') +
@@ -4820,14 +4848,14 @@ ${C('DO FORO')}<p>Fica eleito o foro da Comarca de ${esc(h.cidade || 'João Pess
     const lista = l => l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l[0];
     const sub = { com: 'podendo substabelecer, no todo ou em parte, com ou sem reserva de poderes', sem: 'podendo substabelecer, no todo ou em parte, sempre com reserva de poderes', nao: 'vedado o substabelecimento' }[o.subst];
     return `<h1>${titulo}</h1>
-<p><b>OUTORGANTE:</b> ${c ? Atend.qualif(c) : '<mark>[COMPLETAR: outorgante]</mark>'}.</p>
+<p><b>${pl ? 'OUTORGANTES' : 'OUTORGANTE'}:</b> ${qtxt || '<mark>[COMPLETAR: outorgante]</mark>'}.</p>
 <p><b>OUTORGADO(S):</b> ${outTxt}.</p>
-<p><b>PODERES:</b> Pelo presente instrumento particular de mandato, o(a) OUTORGANTE nomeia e constitui seu(s) bastante(s) procurador(es) o(s) OUTORGADO(S), a quem confere ${jud ? pJ : ''}${jud && ext ? '; e, ainda, ' : ''}${ext ? pE : ''}${o.fim ? ', ' + esc(o.fim) : ''}.</p>
+<p><b>PODERES:</b> Pelo presente instrumento particular de mandato, ${pl ? 'os OUTORGANTES nomeiam e constituem' : 'o(a) OUTORGANTE nomeia e constitui'} seu(s) bastante(s) procurador(es) o(s) OUTORGADO(S), a quem confere ${jud ? pJ : ''}${jud && ext ? '; e, ainda, ' : ''}${ext ? pE : ''}${o.fim ? ', ' + esc(o.fim) : ''}.</p>
 ${espJ.length ? `<p><b>PODERES ESPECIAIS (art. 105 do CPC):</b> Confere, ainda, poderes especiais para ${esc(lista(espJ))}.</p>` : ''}
 ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do Código Civil):</b> Confere, também, poderes especiais e expressos para ${esc(lista(espE))}${o.fim ? ', no âmbito da finalidade acima' : ''}.</p>` : ''}
 <p>Os poderes podem ser exercidos em conjunto ou separadamente pelos outorgados, ${sub}.</p>
 <p class="local">${esc(o.cidade || 'João Pessoa')}, ${dataExt}.</p>
-<div class="assin"><div><span></span><b>${esc(String(c?.nome || 'OUTORGANTE').toUpperCase())}</b>Outorgante</div></div>`;
+<div class="assin">${cs.map(x => `<div><span></span><b>${esc(String(x.nome).toUpperCase())}</b>Outorgante</div>`).join('') || '<div><span></span><b>OUTORGANTE</b>Outorgante</div>'}</div>`;
   },
 
   /* ---------- 4. relato e documentos ---------- */
@@ -4889,7 +4917,7 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
   },
   dadosIA(a, c) {
     const E = escritorio();
-    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', enderecoEscritorio: E.endereco || '', emailEscritorio: E.email || '', telefoneEscritorio: E.whatsapp || '', cliente: c?.nome || '', qualificacao: c ? Atend.qualif(c, false).replace(/<[^>]+>/g, '') : '', area: Atend.adm(a) ? 'Administrativo / extrajudicial — ' + (a.tipoAdm || '') : AREAS[a.area]?.nome || '', esfera: Atend.adm(a) ? 'administrativo' : 'judicial', tipoDemanda: a.tipoAdm || '', orgao: Atend.orgaosTxt(a) || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
+    return { escritorio: E.nome || 'Amorim Firmo', advogado: E.advogado || '', oab: oabFmt(E.oab) || '', enderecoEscritorio: E.endereco || '', emailEscritorio: E.email || '', telefoneEscritorio: E.whatsapp || '', cliente: Atend.nomes(a) || c?.nome || '', qualificacao: (Atend.clis(a).length > 1 ? `${Atend.clis(a).length} CLIENTES, todos ${Atend.adm(a) ? 'REQUERENTES' : 'AUTORES'} (qualifique cada um): ` : '') + Atend.qualifs(a, false).replace(/<[^>]+>/g, ''), area: Atend.adm(a) ? 'Administrativo / extrajudicial — ' + (a.tipoAdm || '') : AREAS[a.area]?.nome || '', esfera: Atend.adm(a) ? 'administrativo' : 'judicial', tipoDemanda: a.tipoAdm || '', orgao: Atend.orgaosTxt(a) || '', assunto: a.assunto || '', parteContraria: a.parteContraria || '', relato: a.relato || '', documentos: (a.documentos || []).map(d => ({ nome: d.nome, tipo: d.tipo || '', resumo: d.resumo || '' })) };
   },
   async organizar(a, c) {
     const b = $('#rlIA'); b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está organizando os fatos…`;
@@ -4978,10 +5006,10 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
     };
     if (R.html) Editor.montar($('#inEd'), { html: R.html, titulo: 'Requerimento' + (orgs.length > 1 ? ' — ' + org : ''), salvar: html => gravar({ html, editadoEm: new Date().toISOString() }), peticao: true,
       extra: `<button class="btn ghost sm" id="inPronta">${icon('check')} ${R.pronto ? 'Pronto' : 'Marcar como pronto'}</button>`,
-      imprimir: html => Timbre.imprimir(html, 'Requerimento — ' + org + ' — ' + (c?.nome || ''), { peticao: true }) });
+      imprimir: html => Timbre.imprimir(html, 'Requerimento — ' + org + ' — ' + (Atend.nomes(a) || ''), { peticao: true }) });
     $('#inPronta')?.addEventListener('click', async () => { await gravar({ pronto: true }, 'Requerimento marcado como pronto.'); App.render(true); });
     $('#rqConc')?.addEventListener('click', async () => {
-      const base = { tipo: a.tipoAdm || 'Outra demanda extrajudicial', clienteIds: a.clienteId ? [a.clienteId] : [], atendimentoId: a.id, interessados: a.parteContraria || (an.partesContrarias || []).map(x => x.nome).join('; '), status: 'Aguardando protocolo', responsavel: escritorio().advogado || '', honorarios: '', arquivos: (a.documentos || []).filter(x => x.link).map(x => ({ nome: x.nome, link: x.link, tipo: x.tipo || '', data: x.data })), obs: 'Originada do atendimento de ' + fmtDate(String(a.criadoEm || a.createdAt || todayISO()).slice(0, 10)) + (a.assunto ? ' — ' + a.assunto : '') + '.' };
+      const base = { tipo: a.tipoAdm || 'Outra demanda extrajudicial', clienteIds: Atend.ids(a), atendimentoId: a.id, interessados: a.parteContraria || (an.partesContrarias || []).map(x => x.nome).join('; '), status: 'Aguardando protocolo', responsavel: escritorio().advogado || '', honorarios: '', arquivos: (a.documentos || []).filter(x => x.link).map(x => ({ nome: x.nome, link: x.link, tipo: x.tipo || '', data: x.data })), obs: 'Originada do atendimento de ' + fmtDate(String(a.criadoEm || a.createdAt || todayISO()).slice(0, 10)) + (a.assunto ? ' — ' + a.assunto : '') + '.' };
       const novas = await DB.save('demandas', faltam.map(x => ({ ...base, orgao: x })));
       await DB.save('movimentos', novas.map(d => ({ demandaId: d.id, data: todayISO(), titulo: 'Documentação em preparação para protocolo', descricao: 'Requerimento e documentos sendo reunidos pelo escritório para dar entrada em ' + d.orgao + '.', origem: 'escritorio', visivelCliente: true })));
       await Atend.salvar(a, { demandaIds: [...new Set([...(a.demandaIds || []), ...(a.demandaId ? [a.demandaId] : []), ...novas.map(d => d.id)])], status: 'Concluído' }, novas.length > 1 ? `${novas.length} demandas abertas. Informe o protocolo de cada uma quando der entrada.` : 'Demanda aberta. Informe o protocolo quando der entrada.');
@@ -5025,13 +5053,13 @@ ${espE.length ? `<p><b>PODERES ESPECIAIS EXTRAJUDICIAIS (art. 661, § 1º, do C�
     };
     if (a.inicialHtml) Editor.montar($('#inEd'), { html: a.inicialHtml, titulo: 'Petição inicial', salvar: html => Atend.salvar(a, { inicialHtml: html, inicialEditadoEm: new Date().toISOString() }), peticao: true,
       extra: `<button class="btn ghost sm" id="inPronta">${icon('check')} Marcar como pronta</button>`,
-      imprimir: html => Timbre.imprimir(html, 'Petição inicial — ' + (c?.nome || ''), { peticao: true }) });
+      imprimir: html => Timbre.imprimir(html, 'Petição inicial — ' + (Atend.nomes(a) || ''), { peticao: true }) });
     $('#inPronta')?.addEventListener('click', async () => { await Atend.salvar(a, { status: 'Inicial pronta' }, 'Petição marcada como pronta.'); App.render(true); });
     $('#iAj')?.addEventListener('click', async () => {
       const n = onlyDigits($('#iCnj').value); if (n.length !== 20) return UI.toast('Informe o número CNJ completo (20 dígitos).', 'bad');
       if (!validCNJ(n) && !await UI.confirm('O dígito verificador do número não confere. Registrar assim mesmo?', 'Registrar', false)) return;
       const ex = DB.all('processos').find(p => onlyDigits(p.numero) === n);
-      const p = ex || (await DB.save('processos', { numero: n, area: a.area, clienteIds: a.clienteId ? [a.clienteId] : [], parteContraria: a.parteContraria || (an.partesContrarias || []).map(x => x.nome).join('; '), classe: (a.opcoesInicial?.acao || a.assunto || '').slice(0, 120), status: 'Ativo', fase: 'Conhecimento', tribunal: (tribunalAlias(n) || '').toUpperCase(), distribuicao: todayISO(), valorCausa: num(a.opcoesInicial?.valorCausa) || '', responsavel: escritorio().advogado || '', arquivos: (a.documentos || []).filter(d => d.link).map(d => ({ nome: d.nome, link: d.link, tipo: d.tipo || '', data: d.data })), pastaLink: a.pastaLink || '', obs: 'Originado do atendimento de ' + fmtDate(String(a.criadoEm || todayISO()).slice(0, 10)) + '.' }))[0];
+      const p = ex || (await DB.save('processos', { numero: n, area: a.area, clienteIds: Atend.ids(a), parteContraria: a.parteContraria || (an.partesContrarias || []).map(x => x.nome).join('; '), classe: (a.opcoesInicial?.acao || a.assunto || '').slice(0, 120), status: 'Ativo', fase: 'Conhecimento', tribunal: (tribunalAlias(n) || '').toUpperCase(), distribuicao: todayISO(), valorCausa: num(a.opcoesInicial?.valorCausa) || '', responsavel: escritorio().advogado || '', arquivos: (a.documentos || []).filter(d => d.link).map(d => ({ nome: d.nome, link: d.link, tipo: d.tipo || '', data: d.data })), pastaLink: a.pastaLink || '', obs: 'Originado do atendimento de ' + fmtDate(String(a.criadoEm || todayISO()).slice(0, 10)) + '.' }))[0];
       await DB.save('movimentos', { processoId: p.id, data: todayISO(), titulo: 'Petição inicial protocolada', descricao: a.opcoesInicial?.acao || '', origem: 'escritorio', visivelCliente: true });
       await Atend.salvar(a, { processoId: p.id, status: 'Ajuizado' }, 'Ajuizamento registrado: o processo foi criado e passa a ser acompanhado.');
       if (Session.remote && validCNJ(n)) { try { const r = await apiT('datajud', { numero: n }, 90000); const novos = Judicial.mergeDatajud(p, r); await DB.save('processos', p); if (novos.length) await DB.save('movimentos', novos); } catch { } }
@@ -5104,7 +5132,7 @@ const Timbre = {
       .tb{text-align:center}.tb img{width:15mm}.tb .n{font:600 15pt/1 'Cormorant Garamond',Georgia,serif;letter-spacing:.24em;color:#121c33;margin-top:1.4mm}.tb .l{font:600 6.2pt Manrope,Arial,sans-serif;letter-spacing:.36em;text-transform:uppercase;color:#a07c43;margin-top:1.2mm}.tb .r{width:28mm;height:0;border-top:.6pt solid #b08a4e;margin:3mm auto 0}
       .doc h1{font-size:12.5pt;text-align:center;font-weight:bold;margin:6mm 0 6mm;text-transform:uppercase}.doc h2{font-size:12pt;font-weight:bold;margin:6mm 0 2mm;text-transform:uppercase}.doc h3{font-size:12pt;font-weight:bold;font-style:italic;margin:4mm 0 2mm}
       .doc p{margin:0 0 3mm;text-align:justify}${peticao ? '.doc p{text-indent:25mm}.doc h1+p,.doc p:first-child{text-indent:0}' : ''}.doc li{text-align:justify;margin-bottom:1.5mm}.doc mark{background:#fff3c4}
-      .doc .local{text-align:right;margin-top:8mm}.assin{display:flex;gap:14mm;margin-top:16mm;page-break-inside:avoid}.assin div{flex:1;text-align:center;font-size:10.5pt;line-height:1.35}.assin span{display:block;border-top:.8pt solid #111;margin-bottom:1.5mm}.assin b{display:block}.assin.test{margin-top:14mm;text-align:left}.assin.test div{text-align:left}
+      .doc .local{text-align:right;margin-top:8mm}.assin{display:flex;flex-wrap:wrap;gap:14mm 14mm;margin-top:16mm;page-break-inside:avoid}.assin div{min-width:60mm}hr.quebra{page-break-before:always;border:0;margin:0;height:0}.assin div{flex:1;text-align:center;font-size:10.5pt;line-height:1.35}.assin span{display:block;border-top:.8pt solid #111;margin-bottom:1.5mm}.assin b{display:block}.assin.test{margin-top:14mm;text-align:left}.assin.test div{text-align:left}
       @media print{.doc mark{background:none}}@media screen{body{background:#e9e6df;padding:8mm 0}table.pg{background:#fff;max-width:210mm;margin:0 auto;box-shadow:0 2px 16px rgba(0,0,0,.09)}table.pg td{padding-left:30mm;padding-right:20mm}table.pg>thead td{padding-top:12mm}table.pg>tbody td{padding-bottom:20mm}}</style></head><body>
       <table class="pg"><thead><tr><td><div class="tb"><img src="${new URL(BRAND.logoDark, location.href)}" alt=""><div class="n">${esc(nomeMarca().toUpperCase())}</div><div class="l">${esc(BRAND.caption)}</div><div class="r"></div></div></td></tr></thead>
       <tbody><tr><td><div class="doc">${corpo}</div></td></tr></tbody></table></body></html>`;
