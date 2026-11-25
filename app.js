@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.29.3';
+const APP_VERSAO = '1.29.4';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.29.4', data: '25/11/2026', itens: ['Botão “Relatório” da empresa renomeado para “Relatório de auditoria”.', 'A Auditoria consultiva (IA) saiu do Painel e foi para dentro do Relatório de auditoria, acima do parecer: usa o seletor “Contratos da auditoria consultiva” da própria janela — escolha um grupo ou todos e clique em Analisar. O progresso aparece ali e volta a aparecer ao reabrir a janela.'] },
   { numero: '1.29.3', data: '25/11/2026', itens: ['Auditoria consultiva em lote: a tela se atualiza sozinha a cada contrato concluído (cards do painel, contador de analisados, tomadores), sem precisar recarregar a página. Não atualiza enquanto houver janela aberta ou campo em edição.'] },
   { numero: '1.29.2', data: '25/11/2026', itens: ['Contratos que só dizem o prazo (ex.: “12 meses a contar da assinatura”): o app calcula o término (início + prazo − 1 dia), e o contrato passa a contar como vigente e a entrar na carteira mensal.', 'A IA da auditoria agora lê também a data de assinatura e o prazo em meses; contratos analisados antes e ainda sem término voltam para a fila uma vez.'] },
   { numero: '1.29.1', data: '25/11/2026', itens: ['Juntar documentos: quando um PDF de contrato só “parece” com um contrato cadastrado (sem o mesmo número), ele vem marcado como ligação incerta e, por segurança, como contrato novo — a sugestão fica à vista para escolher só se tiver certeza.', 'Conferência automática ao terminar de juntar: verifica os vínculos e, se a pasta do Drive da empresa estiver informada, compara com ela; avisa na hora se algo ficou errado ou faltando.', 'Auditoria consultiva confere a consistência: se os PDFs forem de outro número ou de contratos diferentes, a ficha, o card do contrato, o relatório e a planilha mostram o alerta “documentos inconsistentes”.'] },
@@ -2428,7 +2429,7 @@ const Consult = {
     const count = c => empRecs(c, eid).length;
     const portalBtn = `<button class="btn ghost" id="wPortal" title="Quem acessa o portal desta empresa e com qual perfil">${icon('key')} Acessos ao portal</button>`;
     v.innerHTML = `<div class="ws-h"><div class="emp-ini lg">${esc((e.fantasia || e.razao).slice(0, 2).toUpperCase())}</div><div><span class="eyebrow">Consultoria jurídica</span><h1>${esc(e.fantasia || e.razao)}</h1><p class="muted">${esc(e.razao)}${e.cnpj ? ' · CNPJ ' + esc(fmtDoc(e.cnpj)) : ''}${e.segmento ? ' · ' + esc(e.segmento) : ''}</p></div>
-      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
+      <div class="actions wrap"><button class="btn ghost" id="wEdit">${icon('edit')} Empresa</button>${portalBtn}<button class="btn ghost" id="wExp">${icon('download')} Exportar Excel</button><button class="btn ghost" id="wRep">${icon('printer')} Relatório de auditoria</button><button class="btn primary" id="wDocs">${icon('upload')} Juntar documentos</button></div></div>
       <div class="tabs scroll">${TABS.map(([k, l, i]) => `<a href="#/empresa/${eid}/${k}" class="${k === T[0] ? 'on' : ''}">${l}${SCHEMAS[k] ? `<em>${count(k)}</em>` : ''}</a>`).join('')}</div>
       <div id="wsBody"></div>`;
     $('#wEdit').onclick = () => Consult.editEmpresa(e);
@@ -2698,7 +2699,7 @@ const Consult = {
       ${kpi('Postos contratados', fmtNum(S.postos), S.custoPrev ? 'custo previsto ' + fmtMoneyShort(S.custoPrev) + '/mês' : '', '', `#/empresa/${e.id}/maoDeObra`)}
     </div>
     ${ins.length ? `<section class="card insight"><header><h2>${icon('sparkle')} Leitura do período</h2><span class="muted small">gerada automaticamente a partir dos dados</span></header><ul>${ins.map(i => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}
-    ${AuditCons.loteHtml(e)}${Consult.conferenciaHtml(e)}
+    ${Consult.conferenciaHtml(e)}
     <div class="seg-tabs"><span class="muted small">Indicadores econômico-financeiros:</span>${[['6', '6 meses'], ['12', '12 meses'], ['24', '24 meses'], ['all', 'Tudo']].map(([k, l]) => `<button class="${st.p === k ? 'on' : ''}" data-per="${k}">${l}</button>`).join('')}<span class="sp"></span><a class="link small" href="#/empresa/${e.id}/indicadores">${icon('edit')} Lançar indicadores</a></div>
     <div class="grid2">
       <section class="card"><header><h2>Receitas × custos</h2></header><div data-chart="rc"></div></section>
@@ -2715,7 +2716,6 @@ const Consult = {
       <section class="card"><header><h2>Situação das obrigações</h2></header>${segBar(S.obDist)}<h4 class="sec">Alertas</h4>${Views.alertasConsultoria(e.id)}</section>
     </div>`;
     $('#heroDocs', host)?.addEventListener('click', () => Docs.open(e));
-    AuditCons.bindLote(host, e);
     Consult.bindConferencia(host, e);
     if (!AuditCons._fins?.[e.id]) { (AuditCons._fins ||= {})[e.id] = 1; AuditCons.completarFins(e).then(n => { if (n) { UI.toast(`${n} contrato(s) com término calculado (início + prazo).`, 'ok'); App.render(); } }).catch(() => {}); }
     const verAch = f => { Achados.st = { risco: 'todos', status: 'abertos', emp: e.id, area: '', busca: '', ...f }; Achados._rolar = 1; location.hash = '#/achados'; };
@@ -2938,7 +2938,7 @@ const Report = {
     const comps = empRecs('indicadores', e.id).map(i => i.competencia).filter(c => /^\d{4}-\d{2}$/.test(c || '')).sort();
     const esc0 = escritorio();
     const m = UI.modal({
-      title: 'Gerar relatório', sub: esc(e.razao), wide: true, body: `<form class="grid-form" id="rf">
+      title: 'Relatório de auditoria', sub: esc(e.razao), wide: true, body: `<form class="grid-form" id="rf">
       <div class="fld full"><label>Título</label><input name="titulo" value="Relatório de Auditoria Contratual"></div>
       <div class="fld"><label>Período dos indicadores — de</label><input name="de" placeholder="MM/AAAA" value="${esc(comps[0] ? fmtComp(comps[0]) : '')}"></div>
       <div class="fld"><label>até</label><input name="ate" placeholder="MM/AAAA" value="${esc(comps.length ? fmtComp(comps[comps.length - 1]) : '')}"></div>
@@ -2946,10 +2946,12 @@ const Report = {
       <div class="fld"><label>OAB</label><input name="oab" value="${esc(esc0.oab || '')}"></div>
       <div class="fld full"><label>Contratos da auditoria consultiva</label><select name="grupo"><option value="">Todos os contratos da empresa</option>${[...new Set(empRecs('contratos', e.id).map(tomadorBase))].sort().map(g => `<option>${esc(g)}</option>`).join('')}</select></div>
       <div class="fld full"><label>Seções</label><div class="chips-select">${Report.SECOES.map(([k, l]) => `<label class="chip-opt"><input type="checkbox" name="sec" value="${k}" checked><span>${l}</span></label>`).join('')}</div></div>
+      ${AuditCons.loteHtml(e)}
       <div class="fld full"><label>Parecer / considerações do consultor</label><textarea name="parecer" rows="5" placeholder="Conclusões, recomendações prioritárias e próximos passos…"></textarea></div>
       <div class="fld check full"><label class="switch"><input type="checkbox" name="conf" checked><span></span>Marcar como confidencial (rodapé)</label></div></form>`,
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="rOk">${icon('printer')} Gerar</button>`
     });
+    AuditCons.bindLote(m, e);
     $('#rOk', m).onclick = async () => {
       const f = $('#rf'); const o = { titulo: f.titulo.value, de: parseComp(f.de.value), ate: parseComp(f.ate.value), resp: f.resp.value, oab: f.oab.value, parecer: f.parecer.value, conf: f.conf.checked, grupo: f.grupo.value, secs: new Set($$('input[name=sec]:checked', f).map(i => i.value)) };
       UI.closeModal();
@@ -3732,8 +3734,8 @@ const Vinculos = {
       UI.toast(`Corrigido: ${Object.keys(novos).length} contrato(s) novo(s), ${saves.documentos.length} PDF(s) religados${apagar.length ? `, ${apagar.length} divergência(s) indevida(s) apagadas` : ''}.`, 'ok', 8000);
       const aud = $('#vnAud', m).checked, fila = [...tocados].map(cod => empRecs('contratos', e.id).find(c => c.codigo === cod)).filter(Boolean);
       volta && volta();
-      // a auditoria roda no próprio quadro "Auditoria consultiva (IA)" do painel, com a barra de progresso
-      if (aud && fila.length) setTimeout(() => { const host = $('#view') || document; AuditCons.rodar(host, e, fila, 'Auditoria dos contratos corrigidos'); }, 300);
+      // a auditoria roda no quadro "Auditoria consultiva (IA)" da janela Relatório de auditoria, com a barra de progresso
+      if (aud && fila.length) setTimeout(() => { Report.dialog(e); AuditCons.rodar($('#modal'), e, fila, 'Auditoria dos contratos corrigidos'); }, 300);
       return;
     };
   }
@@ -6865,31 +6867,41 @@ const AuditCons = {
     $('#acPrint', m).onclick = () => Timbre.imprimir(`<h1>FICHA DE AUDITORIA CONSULTIVA</h1><p style="text-align:center"><b>${esc(c.codigo)} — ${esc(c.tomador || '')}</b><br>${esc(e.razao || '')}</p>` + AuditCons.fichaHtml(c, true), 'Ficha de auditoria — ' + c.codigo);
   },
 
-  /* ---------- em lote (painel da empresa) ---------- */
+  /* ---------- em lote (dentro do "Relatório de auditoria") ---------- */
+  /** bloco da janela do relatório: usa o seletor "Contratos da auditoria consultiva" da própria janela */
   loteHtml(e) {
-    const cs = empRecs('contratos', e.id), feitos = cs.filter(c => c.auditoria && !c.auditoria.manual).length;
-    const grupos = [...new Set(cs.map(tomadorBase))].sort();
-    return `<section class="card ac-lote"><header><h2>${icon('sparkle')} Auditoria consultiva (IA)</h2><span class="muted small">${feitos} de ${cs.length} contratos analisados</span></header>
-      <p class="muted small">A IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual: dados com cláusula e página, riscos alto/médio/baixo, providências, oportunidades de repactuação e documentos que faltam. O resultado vai para o card de cada contrato e para o Relatório de auditoria.</p>
-      <div class="btn-row"><select class="input" id="acGr" style="max-width:340px"><option value="">Todos os tomadores</option>${grupos.map(g => `<option${g === AuditCons._gr ? ' selected' : ''}>${esc(g)}</option>`).join('')}</select>
-      <label class="switch small"><input type="checkbox" id="acRe"><span></span>Refazer os já analisados</label><button class="btn primary" id="acLote">${icon('sparkle')} Analisar</button></div>
-      <div id="acProg"></div></section>`;
+    return `<div class="fld full ac-lote"><label>Auditoria consultiva (IA) <span class="muted small" id="acCont"></span></label>
+      <p class="muted small" style="margin:0 0 8px">A IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual que entra na seção “Auditoria consultiva” do relatório. Analisa os contratos escolhidos acima que ainda não foram lidos.</p>
+      <div class="btn-row"><label class="switch small"><input type="checkbox" id="acRe"><span></span>Refazer os já analisados</label><button type="button" class="btn primary" id="acLote">${icon('sparkle')} Analisar</button></div>
+      <div id="acProg">${AuditCons._rodando ? AuditCons._prog || '' : ''}</div></div>`;
   },
-  bindLote(host, e) {
-    const b = $('#acLote', host); if (!b) return;
+  fila(e, g, re) {
+    return empRecs('contratos', e.id).filter(c => (!g || tomadorBase(c) === g) && (re || !c.auditoria || c.auditoria.manual || AuditCons.semFimAntigo(c))).sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', { numeric: true }));
+  },
+  contador(e, g) {
+    const cs = empRecs('contratos', e.id).filter(c => !g || tomadorBase(c) === g), feitos = cs.filter(c => c.auditoria && !c.auditoria.manual).length, pend = AuditCons.fila(e, g, false).length;
+    const el = $('#acCont'); if (el) el.textContent = `· ${feitos} de ${cs.length} analisados${pend ? ` · ${pend} pendente(s)` : ''}`;
+  },
+  bindLote(m, e) {
+    const b = $('#acLote', m), sel = $('select[name=grupo]', m); if (!b) return;
+    const cont = () => AuditCons.contador(e, sel?.value || ''); cont(); sel?.addEventListener('change', cont);
+    if (AuditCons._rodando) b.disabled = true;
     b.onclick = async () => {
-      const g = (AuditCons._gr = $('#acGr', host).value), re = $('#acRe', host).checked;
-      const fila = empRecs('contratos', e.id).filter(c => (!g || tomadorBase(c) === g) && (re || !c.auditoria || c.auditoria.manual || AuditCons.semFimAntigo(c))).sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', { numeric: true }));
-      if (!fila.length) return UI.toast('Nenhum contrato pendente nesse filtro.', 'ok');
-      if (!await UI.confirm(`Analisar ${fila.length} contrato(s) com a IA? Leva cerca de 1 a 3 minutos por contrato. Pode continuar usando o app; se parar no meio, é só clicar de novo que ele continua dos que faltam.`, 'Analisar', false)) return;
-      AuditCons.rodar(host, e, fila);
+      const g = sel?.value || '', re = $('#acRe', m).checked, fila = AuditCons.fila(e, g, re);
+      if (!fila.length) return UI.toast('Nenhum contrato pendente nessa seleção.', 'ok');
+      // confirmação dentro da própria janela (uma confirmação em outra janela fecharia o relatório)
+      const P = $('#acProg', m);
+      P.innerHTML = `<div class="notice soft">${icon('sparkle')}<div>Analisar <b>${fila.length} contrato(s)</b> com a IA? Leva cerca de 1 a 3 minutos por contrato. Pode fechar esta janela e continuar usando o app: ao reabrir o Relatório de auditoria, o progresso aparece de novo. Se parar no meio, é só clicar em Analisar de novo que ele continua dos que faltam.<div class="btn-row" style="margin-top:8px"><button type="button" class="btn ghost sm" id="acNao">Cancelar</button><button type="button" class="btn primary sm" id="acSim">${icon('sparkle')} Analisar</button></div></div></div>`;
+      $('#acNao', P).onclick = () => { P.innerHTML = ''; };
+      $('#acSim', P).onclick = () => AuditCons.rodar(m, e, fila);
     };
   },
 
   /** redesenha a tela aberta (cards, contadores, listas) a cada contrato concluído — exceto se houver janela aberta ou campo em edição */
   atualizarTela() {
     const a = document.activeElement;
-    if ($('#modal') || (a && a.matches && a.matches('input:not([type=checkbox]),textarea') && a.id !== 'acGr')) return;
+    const rel = $('#modal #acProg');
+    if (($('#modal') && !rel) || (!rel && a && a.matches && a.matches('input:not([type=checkbox]),textarea'))) return;
     try { App.render(true); } catch (_) {}
   },
   /** roda a análise de uma fila de contratos mostrando o progresso no próprio quadro do painel */
@@ -6897,16 +6909,16 @@ const AuditCons = {
     if (AuditCons._rodando) return UI.toast('Já há uma análise em andamento — acompanhe no quadro.', 'warn');
     // procura o quadro a cada passo: se a tela for redesenhada, o progresso continua aparecendo
     const Pq = () => $('#acProg') || $('#acProg', host), Bq = () => $('#acLote');
-    if (!Pq()) return; let ok = 0, erro = []; AuditCons._parar = false; AuditCons._rodando = true; if (Bq()) Bq().disabled = true;
+    if (!Pq()) return UI.toast('Abra o Relatório de auditoria para acompanhar a análise.', 'warn'); let ok = 0, erro = []; AuditCons._parar = false; AuditCons._rodando = true; if (Bq()) Bq().disabled = true;
     $('.ac-lote')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     for (const [i, c] of fila.entries()) {
       if (AuditCons._parar) break;
-      const P = Pq(); if (Bq()) Bq().disabled = true; if (P) P.innerHTML = `<div class="ac-prog">${titulo ? `<div class="small"><b>${esc(titulo)}</b></div>` : ''}<div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`;
+      const P = Pq(); if (Bq()) Bq().disabled = true; AuditCons._prog = `<div class="ac-prog">${titulo ? `<div class="small"><b>${esc(titulo)}</b></div>` : ''}<div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`; if (P) P.innerHTML = AuditCons._prog;
       if (P) $('#acStop', P).onclick = () => { AuditCons._parar = true; UI.toast('Vai parar ao terminar o contrato atual.'); };
-      try { await AuditCons.analisar(e, c); ok++; AuditCons.atualizarTela(); } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
+      try { await AuditCons.analisar(e, c); ok++; AuditCons.atualizarTela(); AuditCons.contador(e, $('#modal select[name=grupo]')?.value || ''); } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
     }
     AuditCons._rodando = false; AuditCons.atualizarTela(); if (Bq()) Bq().disabled = false;
-    const n = empRecs('contratos', e.id), hd = $('.ac-lote header span'); if (hd) hd.textContent = `${n.filter(c => c.auditoria && !c.auditoria.manual).length} de ${n.length} contratos analisados`;
+    AuditCons.contador(e, $('#modal select[name=grupo]')?.value || '');
     const P = Pq(); if (P) P.innerHTML = `<div class="notice ${erro.length ? 'warn' : 'soft'}">${icon(erro.length ? 'alert' : 'check')}<div><b>${ok} contrato(s) analisados.</b>${erro.length ? `<br>Não analisados (${erro.length}):<ul>${erro.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div></div>`;
   },
 
