@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.32.0';
+const APP_VERSAO = '1.32.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.32.1', data: '25/11/2026', itens: ['Juntar documentos: convenção coletiva, ata de registro de preços e edital não criam mais contrato novo — vão como “só registrar o documento” e o app pede a abrangência (para quais contratos vale).', 'Definir abrangência: a opção “só este contrato” fica registrada e o aviso some.'] },
   { numero: '1.32.0', data: '25/11/2026', itens: ['Documento comum a vários contratos (convenção coletiva, ata de registro de preços, edital): na aba Documentos, “Definir abrangência” — vale para todos os contratos de um tomador ou para os escolhidos. A auditoria de cada contrato passa a ler o documento.', 'Convenção coletiva (CCT): a IA compara os salários da planilha com os pisos da CCT e estima o novo custo mensal e o valor da repactuação. Aparece no card de reajuste do contrato, na ficha, no painel (card “Repactuação pela CCT” e carteira atualizada), na leitura do período, no relatório (seção “Impacto da CCT nos custos”) e na planilha.'] },
   { numero: '1.31.5', data: '25/11/2026', itens: ['Leitura do período no Painel e no portal: a lista de contratos pendentes fica recolhida — aparece ao clicar em “Ver os N contrato(s)” e some em “Recolher”. No relatório impresso continua aberta.', 'Reajuste, repactuação, revisão e reequilíbrio aparecem como um só tema (previsto, já houve e quando, próximo) no quadro comparativo, na ficha e na planilha, sem informação repetida.'] },
   { numero: '1.31.4', data: '25/11/2026', itens: ['Relatório de auditoria: quadro comparativo cabe na página (os quatro temas de reajuste numa só coluna).', 'Explicação de “Contratos críticos” e legenda dos níveis de risco (alto, médio, baixo) abaixo de cada tabela com classificação de risco e no rodapé das páginas.', 'Todas as tabelas que citam contrato trazem também o nº real e o órgão/unidade (providências, oportunidades, obrigações, mão de obra, achados).', 'A IA da auditoria usa os mesmos critérios de nível de risco da legenda.', 'Leitura do período (painel, portal e relatório): abaixo de cada alerta, em letra menor, a lista dos contratos pendentes com o nº e o órgão/unidade.', 'Rodapé do relatório impresso não sobrepõe mais o texto e traz “Página X de Y”.'] },
@@ -3675,6 +3676,9 @@ const Docs = {
     const vazio = v => v === null || v === undefined || v === '' || isGap(v);
     const igual = (f, a, b) => { if (f.type === 'money') return Math.abs((num(a) || 0) - (num(b) || 0)) < 0.01; if (f.type === 'date') return parseDate(a) === parseDate(b); if (f.type === 'doc') return onlyDigits(a) === onlyDigits(b); return norm(a) === norm(b); };
     const card = (r, i) => {
+      // convenção coletiva, ata de registro de preços, edital: não é contrato — nunca cria contrato novo; a abrangência é definida depois
+      if (r.ia && (/\bcct\b|conven[cç][aã]o[- _]coletiva|acordo[- _]coletivo/i.test(r.nome) || DocComum.ehComum({ tipo: r.ia.tipo, arquivo: r.nome })) && !r._comum) {
+        r._comum = true; if (/^contrato/i.test(r.ia.tipo || '') && /\bcct\b|conven/i.test(r.nome)) r.ia.tipo = 'Convenção coletiva de trabalho'; r.contrato = ''; r.sugestao = ''; }
       const c = cs.find(x => x.codigo === r.contrato), ia = r.ia || {};
       const ehAditivo = /aditivo/i.test(ia.tipo || r.nome);
       const linhas = r.ia ? Docs.CAMPOS.map(([k, ik]) => {
@@ -3695,7 +3699,7 @@ const Docs = {
       const obr = (ia.obrigacoes || []).filter(o => o && o.obrigacao);
       return `<section class="rev" data-i="${i}">
         <header>${icon(ehAditivo ? 'edit' : 'file')}<div><b>${esc(r.nome)}</b><small>${esc(ia.tipo || 'Documento')}${ia.numeroAditivo ? ' · ' + esc(ia.numeroAditivo) : ''}${ia.paginas ? ' · ' + ia.paginas + ' pág.' : ''}${r.link ? ` · <a href="${esc(r.link)}" target="_blank" rel="noopener">abrir no Drive</a>` : ''}</small></div>
-          <select data-c="${i}"><option value="__novo">+ Criar novo contrato</option><option value="__nenhum" ${!r.contrato ? '' : ''}>Só registrar o documento (sem contrato)</option>${cs.map(x => `<option value="${esc(x.codigo)}" ${x.codigo === r.contrato ? 'selected' : ''}>${esc(x.codigo)} · ${esc((x.unidade || x.grupo || '').slice(0, 50))}${x.codigo === r.sugestao ? ' (sugestão incerta)' : ''}</option>`).join('')}</select></header>
+          <select data-c="${i}"><option value="__novo">+ Criar novo contrato</option><option value="__nenhum" ${r._comum ? 'selected' : ''}>Só registrar o documento (sem contrato)</option>${cs.map(x => `<option value="${esc(x.codigo)}" ${x.codigo === r.contrato ? 'selected' : ''}>${esc(x.codigo)} · ${esc((x.unidade || x.grupo || '').slice(0, 50))}${x.codigo === r.sugestao ? ' (sugestão incerta)' : ''}</option>`).join('')}</select></header>
         <p class="small t-warn" data-w="${i}">${Docs.aviso(e, r, r.contrato)}</p>
         ${r.sugestao ? `<p class="small t-warn">${icon('alert')} <b>Ligação incerta:</b> o único contrato parecido é ${esc(r.sugestao)}, mas só pelo nome${Docs.numDoc(r.nome, r.ia) ? ` (o PDF é o nº ${esc(Docs.numDoc(r.nome, r.ia))})` : ''}. Por segurança vai como <b>contrato novo</b>; escolha ${esc(r.sugestao)} no seletor só se tiver certeza.</p>` : r.incerto ? `<p class="small t-warn">${icon('alert')} <b>Ligação incerta</b> (só por semelhança de nome): confira se ${esc(r.contrato)} é mesmo o contrato deste documento.</p>` : ''}
         <p class="muted small">${r.contrato ? `Ligado a <b>${esc(r.contrato)}</b> por ${esc(r.por)}.` : r.sugestao ? '' : 'Não encontrei um contrato correspondente — escolha um ou crie um novo.'}${r.iaErro && r.fileId ? ` <button type="button" class="btn ghost xs" data-reler="${i}">${icon('sync')} Ler de novo com a IA</button>` : ''}${r.iaErro ? ` <span class="t-bad">A IA não conseguiu ler: ${esc(r.iaErro)}</span>` : ''}</p>
@@ -3853,7 +3857,7 @@ const DocComum = {
   },
   /** documentos do contrato, incluindo os comuns que valem para ele */
   doContrato: c => DB.where('documentos', d => d.empresaId === c.empresaId && DocComum.vale(d, c)),
-  rotulo(d) { const v = d.valePara; return !v ? '' : v.tipo === 'tomador' ? `todos os contratos com ${v.grupo}` : `${(v.contratos || []).length} contrato(s)`; },
+  rotulo(d) { const v = d.valePara; return !v ? '' : v.tipo === 'so' ? 'só o contrato ' + (d.contrato || '—') : v.tipo === 'tomador' ? `todos os contratos com ${v.grupo}` : `${(v.contratos || []).length} contrato(s)`; },
   /** comuns (pela classificação) que ainda valem para um contrato só */
   semAbrangencia: e => empRecs('documentos', e.id).filter(d => DocComum.ehComum(d) && !d.valePara),
   abrir(e, d, volta) {
@@ -3862,8 +3866,8 @@ const DocComum = {
     const sug = v.grupo || (dono ? tomadorBase(dono) : grupos[0]);
     const m = UI.modal({ title: 'Vale para quais contratos?', sub: esc(d.arquivo || d.tipo || 'documento'), wide: true, body: `<form id="dcF" class="dc-f">
       <p class="muted small">Convenção coletiva, ata de registro de preços ou edital normalmente valem para vários contratos. Os contratos marcados passam a usar este documento na auditoria consultiva (ex.: a IA compara os salários da planilha com os pisos da CCT e calcula a repactuação).</p>
-      <label class="radio"><input type="radio" name="t" value="" ${!v.tipo ? 'checked' : ''}> Só o contrato ${esc(d.contrato || '—')}</label>
-      <label class="radio"><input type="radio" name="t" value="tomador" ${v.tipo === 'tomador' || !v.tipo && DocComum.ehComum(d) ? 'checked' : ''}> Todos os contratos com <select name="g" class="input" style="width:auto;display:inline-block">${grupos.map(g => `<option ${g === sug ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select> <small class="muted" id="dcN"></small></label>
+      <label class="radio"><input type="radio" name="t" value="so" ${v.tipo === 'so' ? 'checked' : ''}> Só o contrato ${esc(d.contrato || '—')}</label>
+      <label class="radio"><input type="radio" name="t" value="tomador" ${v.tipo === 'tomador' || !v.tipo ? 'checked' : ''}> Todos os contratos com <select name="g" class="input" style="width:auto;display:inline-block">${grupos.map(g => `<option ${g === sug ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select> <small class="muted" id="dcN"></small></label>
       <label class="radio"><input type="radio" name="t" value="lista" ${v.tipo === 'lista' ? 'checked' : ''}> Escolher os contratos</label>
       <div class="dc-l" id="dcL">${cs.map(c => `<label class="chk"><input type="checkbox" value="${esc(c.codigo)}" ${(v.contratos || []).includes(c.codigo) || c.codigo === d.contrato ? 'checked' : ''}> <b>${esc(c.codigo)}</b> ${esc(c.numero || '')} <small class="muted">${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</small></label>`).join('')}</div></form>`,
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="dcOk">${icon('check')} Salvar</button>` });
@@ -3871,7 +3875,7 @@ const DocComum = {
     f.addEventListener('change', upd); upd();
     $('#dcOk', m).onclick = async () => {
       const t = f.t.value, cur = DB.get('documentos', d.id) || d;
-      const vp = t === 'tomador' ? { tipo: 'tomador', grupo: f.g.value } : t === 'lista' ? { tipo: 'lista', contratos: $$('#dcL input:checked', m).map(i => i.value) } : null;
+      const vp = t === 'tomador' ? { tipo: 'tomador', grupo: f.g.value } : t === 'lista' ? { tipo: 'lista', contratos: $$('#dcL input:checked', m).map(i => i.value) } : { tipo: 'so' };
       await DB.save('documentos', { ...cur, valePara: vp });
       const n = cs.filter(c => DocComum.vale({ ...cur, valePara: vp }, c)).length;
       UI.closeModal(); UI.toast(`Documento vale para ${n} contrato(s). Para a auditoria considerar, analise de novo esses contratos (Relatório de auditoria → Refazer os já analisados).`, 'ok', 9000);
