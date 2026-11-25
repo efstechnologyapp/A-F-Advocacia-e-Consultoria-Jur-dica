@@ -27,7 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.29.0', data: '25/11/2026', itens: ['Juntar documentos: o número do contrato escrito no PDF passa a mandar — um PDF do contrato nº X nunca mais é ligado, por semelhança de nome, a um contrato de nº Y; sem contrato com aquele número, a sugestão é criar um novo. Na revisão, aviso em destaque se você escolher um contrato de número diferente.', 'Conferência com a pasta: detecta PDFs de contrato ligados ao contrato errado e corrige em um clique — cria o contrato certo (ou usa o que já tem o número), leva junto postos, obrigações e aditivos que vieram do PDF, apaga as divergências indevidas e refaz a auditoria consultiva dos envolvidos.'] },
+  { numero: '1.29.0', data: '25/11/2026', itens: ['As análises em lote (inclusive as da correção de vínculos) aparecem sempre no quadro “Auditoria consultiva (IA)” do painel, com barra de progresso e botão Parar.', 'Juntar documentos: o número do contrato escrito no PDF passa a mandar — um PDF do contrato nº X nunca mais é ligado, por semelhança de nome, a um contrato de nº Y; sem contrato com aquele número, a sugestão é criar um novo. Na revisão, aviso em destaque se você escolher um contrato de número diferente.', 'Conferência com a pasta: detecta PDFs de contrato ligados ao contrato errado e corrige em um clique — cria o contrato certo (ou usa o que já tem o número), leva junto postos, obrigações e aditivos que vieram do PDF, apaga as divergências indevidas e refaz a auditoria consultiva dos envolvidos.'] },
   { numero: '1.28.4', data: '25/11/2026', itens: ['Inventário documental: nova coluna “Juntado ao sistema em” (data e hora em que cada arquivo entrou no app), com os mais recentes no topo por padrão.', 'Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
   { numero: '1.28.3', data: '25/11/2026', itens: ['A auditoria consultiva também preenche o tomador quando ele está vazio no cadastro.', 'Agrupamento por município mais preciso: secretarias e fundos entram no município também pela raiz do CNPJ do tomador e pelo nome da cidade na unidade, mesmo quando o nome do contratante não cita a cidade.'] },
   { numero: '1.28.2', data: '25/11/2026', itens: ['Auditoria consultiva e “Ler de novo”: passam a abrir também os PDFs que estão em pastas do Drive fora do app (ligados ao contrato pelo link), pela conta do app.', 'Painel da empresa: “Conferência com a pasta do Drive” — cole o link da pasta e veja quantos contratos há nela, quantos estão no sistema e quais faltam.'] },
@@ -3710,12 +3710,11 @@ const Vinculos = {
       for (const [coll, id] of apagar) await DB.remove(coll, id);
       UI.closeModal();
       UI.toast(`Corrigido: ${Object.keys(novos).length} contrato(s) novo(s), ${saves.documentos.length} PDF(s) religados${apagar.length ? `, ${apagar.length} divergência(s) indevida(s) apagadas` : ''}.`, 'ok', 8000);
-      if ($('#vnAud', m).checked) {
-        const fila = [...tocados].map(cod => empRecs('contratos', e.id).find(c => c.codigo === cod)).filter(Boolean);
-        let ok = 0; for (const [i, c] of fila.entries()) { UI.toast(`Auditoria consultiva ${i + 1} de ${fila.length}: ${c.codigo}…`, '', 180000); try { await AuditCons.analisar(e, c); ok++; } catch (er) { UI.toast(`${c.codigo}: ${er.message}`, 'warn', 8000); } }
-        UI.toast(`Auditoria consultiva refeita em ${ok} de ${fila.length} contrato(s).`, 'ok', 8000);
-      }
+      const aud = $('#vnAud', m).checked, fila = [...tocados].map(cod => empRecs('contratos', e.id).find(c => c.codigo === cod)).filter(Boolean);
       volta && volta();
+      // a auditoria roda no próprio quadro "Auditoria consultiva (IA)" do painel, com a barra de progresso
+      if (aud && fila.length) setTimeout(() => { const host = $('#view') || document; AuditCons.rodar(host, e, fila, 'Auditoria dos contratos corrigidos'); }, 300);
+      return;
     };
   }
 };
@@ -6831,16 +6830,26 @@ const AuditCons = {
       const fila = empRecs('contratos', e.id).filter(c => (!g || tomadorBase(c) === g) && (re || !c.auditoria || c.auditoria.manual)).sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', { numeric: true }));
       if (!fila.length) return UI.toast('Nenhum contrato pendente nesse filtro.', 'ok');
       if (!await UI.confirm(`Analisar ${fila.length} contrato(s) com a IA? Leva cerca de 1 a 3 minutos por contrato. Pode continuar usando o app; se parar no meio, é só clicar de novo que ele continua dos que faltam.`, 'Analisar', false)) return;
-      const P = $('#acProg', host); let ok = 0, erro = []; AuditCons._parar = false; b.disabled = true;
-      for (const [i, c] of fila.entries()) {
-        if (AuditCons._parar) break;
-        P.innerHTML = `<div class="ac-prog"><div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`;
-        $('#acStop', P).onclick = () => { AuditCons._parar = true; UI.toast('Vai parar ao terminar o contrato atual.'); };
-        try { await AuditCons.analisar(e, c); ok++; } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
-      }
-      b.disabled = false;
-      P.innerHTML = `<div class="notice ${erro.length ? 'warn' : 'soft'}">${icon(erro.length ? 'alert' : 'check')}<div><b>${ok} contrato(s) analisados.</b>${erro.length ? `<br>Não analisados (${erro.length}):<ul>${erro.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div></div>`;
+      AuditCons.rodar(host, e, fila);
     };
+  },
+
+  /** roda a análise de uma fila de contratos mostrando o progresso no próprio quadro do painel */
+  async rodar(host, e, fila, titulo = '') {
+    if (AuditCons._rodando) return UI.toast('Já há uma análise em andamento — acompanhe no quadro.', 'warn');
+    // procura o quadro a cada passo: se a tela for redesenhada, o progresso continua aparecendo
+    const Pq = () => $('#acProg') || $('#acProg', host), Bq = () => $('#acLote');
+    if (!Pq()) return; let ok = 0, erro = []; AuditCons._parar = false; AuditCons._rodando = true; if (Bq()) Bq().disabled = true;
+    $('.ac-lote')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    for (const [i, c] of fila.entries()) {
+      if (AuditCons._parar) break;
+      const P = Pq(); if (Bq()) Bq().disabled = true; if (P) P.innerHTML = `<div class="ac-prog">${titulo ? `<div class="small"><b>${esc(titulo)}</b></div>` : ''}<div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`;
+      if (P) $('#acStop', P).onclick = () => { AuditCons._parar = true; UI.toast('Vai parar ao terminar o contrato atual.'); };
+      try { await AuditCons.analisar(e, c); ok++; } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
+    }
+    if (Bq()) Bq().disabled = false; AuditCons._rodando = false;
+    const n = empRecs('contratos', e.id), hd = $('.ac-lote header span'); if (hd) hd.textContent = `${n.filter(c => c.auditoria && !c.auditoria.manual).length} de ${n.length} contratos analisados`;
+    const P = Pq(); if (P) P.innerHTML = `<div class="notice ${erro.length ? 'warn' : 'soft'}">${icon(erro.length ? 'alert' : 'check')}<div><b>${ok} contrato(s) analisados.</b>${erro.length ? `<br>Não analisados (${erro.length}):<ul>${erro.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div></div>`;
   },
 
   /* ---------- quadro comparativo e relatório geral ---------- */
