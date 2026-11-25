@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.29.0';
+const APP_VERSAO = '1.29.1';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.29.1', data: '25/11/2026', itens: ['Juntar documentos: quando um PDF de contrato só “parece” com um contrato cadastrado (sem o mesmo número), ele vem marcado como ligação incerta e, por segurança, como contrato novo — a sugestão fica à vista para escolher só se tiver certeza.', 'Conferência automática ao terminar de juntar: verifica os vínculos e, se a pasta do Drive da empresa estiver informada, compara com ela; avisa na hora se algo ficou errado ou faltando.', 'Auditoria consultiva confere a consistência: se os PDFs forem de outro número ou de contratos diferentes, a ficha, o card do contrato, o relatório e a planilha mostram o alerta “documentos inconsistentes”.'] },
   { numero: '1.29.0', data: '25/11/2026', itens: ['As análises em lote (inclusive as da correção de vínculos) aparecem sempre no quadro “Auditoria consultiva (IA)” do painel, com barra de progresso e botão Parar.', 'Juntar documentos: o número do contrato escrito no PDF passa a mandar — um PDF do contrato nº X nunca mais é ligado, por semelhança de nome, a um contrato de nº Y; sem contrato com aquele número, a sugestão é criar um novo. Na revisão, aviso em destaque se você escolher um contrato de número diferente.', 'Conferência com a pasta: detecta PDFs de contrato ligados ao contrato errado e corrige em um clique — cria o contrato certo (ou usa o que já tem o número), leva junto postos, obrigações e aditivos que vieram do PDF, apaga as divergências indevidas e refaz a auditoria consultiva dos envolvidos.'] },
   { numero: '1.28.4', data: '25/11/2026', itens: ['Inventário documental: nova coluna “Juntado ao sistema em” (data e hora em que cada arquivo entrou no app), com os mais recentes no topo por padrão.', 'Empresa: no computador, as abas (Documentos, Aditivos, Remessas mensais, Portal, Relatórios…) quebram em duas linhas em vez de ficarem escondidas à direita.'] },
   { numero: '1.28.3', data: '25/11/2026', itens: ['A auditoria consultiva também preenche o tomador quando ele está vazio no cadastro.', 'Agrupamento por município mais preciso: secretarias e fundos entram no município também pela raiz do CNPJ do tomador e pelo nome da cidade na unidade, mesmo quando o nome do contratante não cita a cidade.'] },
@@ -2518,24 +2519,33 @@ const Consult = {
   },
   bindConferencia(host, e) {
     $('#vnRep', host)?.addEventListener('click', () => Vinculos.abrir(e, () => App.render(true)));
-    const b = $('#cfOk', host); if (!b) return;
-    b.onclick = async () => {
-      const link = $('#cfPasta', host).value.trim(); if (!link) return UI.toast('Cole o link da pasta.', 'warn');
-      b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} Lendo a pasta…`;
-      try {
-        const r = await apiT('listarPasta', { pasta: link }, 120000);
-        const cur = DB.get('empresas', e.id); if (cur && cur.pastaContratos !== link) await DB.save('empresas', { ...cur, pastaContratos: link });
-        const cs = empRecs('contratos', e.id), docs = empRecs('documentos', e.id), noSis = new Set();
-        cs.forEach(c => [c.numero, c.auditoria?.identificacao?.numeroContrato].forEach(t => { const n = Consult.numCt(t); n && noSis.add(n); }));
-        docs.forEach(d => { if (d.contrato && cs.some(c => c.codigo === d.contrato)) { const n = Consult.numCt(d.arquivo) || Consult.numCt(d.numero); n && noSis.add(n); } });
-        const porNum = {}; r.arquivos.forEach(a => { const n = Consult.numCt(a.nome) || '(sem nº no nome) ' + a.nome; (porNum[n] = porNum[n] || []).push(a); });
-        const nums = Object.keys(porNum), falta = nums.filter(n => !noSis.has(n)), tem = nums.filter(n => noSis.has(n));
-        $('#cfRes', host).innerHTML = `<div class="notice ${falta.length ? 'warn' : 'soft'}">${icon(falta.length ? 'alert' : 'check')}<div>Pasta <b>${esc(r.pasta)}</b>: ${r.arquivos.length} PDF(s), <b>${nums.length} contrato(s)</b> diferentes. No sistema: <b>${tem.length}</b>. ${falta.length ? `Faltam <b>${falta.length}</b>:` : 'Nenhum faltando.'}
-          ${falta.length ? `<ul class="plain files">${falta.sort().map(n => `<li>${icon('file')} <b>${esc(n)}</b> — ${porNum[n].map(a => `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>`).join(', ')}</li>`).join('')}</ul><p class="small">Para incluir: baixe esses PDFs e arraste em <b>Juntar documentos</b> — o app lê e cria os contratos.</p>` : ''}
-          ${nums.length < r.arquivos.length ? `<p class="small muted">${r.arquivos.length - nums.length} arquivo(s) repetem o número de outro (ex.: o mesmo contrato salvo duas vezes).</p>` : ''}</div></div>`;
-      } catch (er) { UI.toast(er.message, 'bad', 9000); }
-      b.disabled = false; b.innerHTML = `${icon('search')} Conferir`;
-    };
+    const b = $('#cfOk', host); if (b) b.onclick = () => Consult.conferir(e);
+  },
+  /** compara a pasta do Drive com os contratos cadastrados e mostra o resultado no quadro */
+  async conferir(e, silencioso) {
+    const b = $('#cfOk'), out = $('#cfRes'), link = ($('#cfPasta')?.value || e.pastaContratos || '').trim();
+    if (!link) { if (!silencioso) UI.toast('Cole o link da pasta.', 'warn'); return null; }
+    if (b) { b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} Lendo a pasta…`; }
+    let falta = null;
+    try {
+      const r = await apiT('listarPasta', { pasta: link }, 120000);
+      const cur = DB.get('empresas', e.id); if (cur && cur.pastaContratos !== link) await DB.save('empresas', { ...cur, pastaContratos: link });
+      const cs = empRecs('contratos', e.id), noSis = new Set(); cs.forEach(c => Docs.numsDe(c).forEach(n => noSis.add(n)));
+      const porNum = {}; r.arquivos.forEach(a => { const n = Consult.numCt(a.nome) || '(sem nº no nome) ' + a.nome; (porNum[n] = porNum[n] || []).push(a); });
+      const nums = Object.keys(porNum), tem = nums.filter(n => noSis.has(n)); falta = nums.filter(n => !noSis.has(n));
+      if (out) out.innerHTML = `<div class="notice ${falta.length ? 'warn' : 'soft'}">${icon(falta.length ? 'alert' : 'check')}<div>Pasta <b>${esc(r.pasta)}</b>: ${r.arquivos.length} PDF(s), <b>${nums.length} contrato(s)</b> diferentes. No sistema: <b>${tem.length}</b>. ${falta.length ? `Faltam <b>${falta.length}</b>:` : 'Nenhum faltando.'}
+        ${falta.length ? `<ul class="plain files">${falta.sort().map(n => `<li>${icon('file')} <b>${esc(n)}</b> — ${porNum[n].map(a => `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>`).join(', ')}</li>`).join('')}</ul><p class="small">Para incluir: baixe esses PDFs e arraste em <b>Juntar documentos</b> — o app lê e cria os contratos.</p>` : ''}
+        ${nums.length < r.arquivos.length ? `<p class="small muted">${r.arquivos.length - nums.length} arquivo(s) repetem o número de outro (ex.: o mesmo contrato salvo duas vezes).</p>` : ''}</div></div>`;
+    } catch (er) { if (!silencioso) UI.toast(er.message, 'bad', 9000); }
+    if (b) { b.disabled = false; b.innerHTML = `${icon('search')} Conferir`; }
+    return falta;
+  },
+  /** logo depois de juntar documentos: verifica vínculos e confere com a pasta, mostrando o resultado */
+  async posJuntada(e) {
+    const k = Vinculos.conflitos(e), n = k.reduce((s, x) => s + x.outros.length, 0);
+    const falta = e.pastaContratos && Session.remote ? await Consult.conferir(DB.get('empresas', e.id) || e, true) : null;
+    if (n || (falta && falta.length)) { $('#cfCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); UI.toast(`Conferência automática: ${[n && `${n} PDF(s) em contrato de outro número`, falta && falta.length && `${falta.length} contrato(s) da pasta ainda fora do sistema`].filter(Boolean).join(' · ')} — veja o quadro de conferência.`, 'warn', 10000); }
+    else UI.toast(`Conferência automática: vínculos conferidos${falta ? ' e pasta do Drive completa' : ''}.`, 'ok', 5000);
   },
   arquivosHtml(e, c, dc) {
     const ord = d => /aditivo/i.test(d.tipo || d.arquivo || '') ? 1 : /contrato/i.test(d.tipo || '') ? 0 : 2;
@@ -3552,7 +3562,12 @@ const Docs = {
   CAMPOS: [['tomador', 'tomador'], ['cnpjTomador', 'cnpjTomador'], ['unidade', 'unidade'], ['objeto', 'objeto'], ['numero', 'numeroContrato'], ['inicio', 'inicio'], ['fim', 'fim'], ['prazo', 'prazo'], ['valorMensal', 'valorMensal'], ['valorAnual', 'valorAnual'], ['reajuste', 'reajuste'], ['cct', 'cct'], ['fiscal', 'fiscal']],
   revisar(e, res, erros) {
     // casa cada arquivo com um contrato (depois da importação da planilha, se houver)
-    res.forEach(r => { const mt = Docs.match(e, r.nome, r.ia); r.contrato = mt?.c?.codigo || ''; r.por = mt?.por || ''; });
+    res.forEach(r => {
+      const mt = Docs.match(e, r.nome, r.ia); r.contrato = mt?.c?.codigo || ''; r.por = mt?.por || ''; r.sugestao = '';
+      // achado só por semelhança de nome: para PDF de contrato, a dúvida cai no lado seguro (criar novo), com a sugestão à vista
+      if (mt && /^semelhan/.test(mt.por) && !/aditivo|apostil/i.test((r.ia && r.ia.tipo) || r.nome)) { r.sugestao = r.contrato; r.contrato = ''; r.por = ''; }
+      else if (mt && /^semelhan/.test(mt.por)) r.incerto = true;
+    });
     const cs = empRecs('contratos', e.id).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
     const vazio = v => v === null || v === undefined || v === '' || isGap(v);
     const igual = (f, a, b) => { if (f.type === 'money') return Math.abs((num(a) || 0) - (num(b) || 0)) < 0.01; if (f.type === 'date') return parseDate(a) === parseDate(b); if (f.type === 'doc') return onlyDigits(a) === onlyDigits(b); return norm(a) === norm(b); };
@@ -3577,9 +3592,10 @@ const Docs = {
       const obr = (ia.obrigacoes || []).filter(o => o && o.obrigacao);
       return `<section class="rev" data-i="${i}">
         <header>${icon(ehAditivo ? 'edit' : 'file')}<div><b>${esc(r.nome)}</b><small>${esc(ia.tipo || 'Documento')}${ia.numeroAditivo ? ' · ' + esc(ia.numeroAditivo) : ''}${ia.paginas ? ' · ' + ia.paginas + ' pág.' : ''}${r.link ? ` · <a href="${esc(r.link)}" target="_blank" rel="noopener">abrir no Drive</a>` : ''}</small></div>
-          <select data-c="${i}"><option value="__novo">+ Criar novo contrato</option><option value="__nenhum" ${!r.contrato ? '' : ''}>Só registrar o documento (sem contrato)</option>${cs.map(x => `<option value="${esc(x.codigo)}" ${x.codigo === r.contrato ? 'selected' : ''}>${esc(x.codigo)} · ${esc((x.unidade || x.grupo || '').slice(0, 50))}</option>`).join('')}</select></header>
+          <select data-c="${i}"><option value="__novo">+ Criar novo contrato</option><option value="__nenhum" ${!r.contrato ? '' : ''}>Só registrar o documento (sem contrato)</option>${cs.map(x => `<option value="${esc(x.codigo)}" ${x.codigo === r.contrato ? 'selected' : ''}>${esc(x.codigo)} · ${esc((x.unidade || x.grupo || '').slice(0, 50))}${x.codigo === r.sugestao ? ' (sugestão incerta)' : ''}</option>`).join('')}</select></header>
         <p class="small t-warn" data-w="${i}">${Docs.aviso(e, r, r.contrato)}</p>
-        <p class="muted small">${r.contrato ? `Ligado a <b>${esc(r.contrato)}</b> por ${esc(r.por)}.` : 'Não encontrei um contrato correspondente — escolha um ou crie um novo.'}${r.iaErro && r.fileId ? ` <button type="button" class="btn ghost xs" data-reler="${i}">${icon('sync')} Ler de novo com a IA</button>` : ''}${r.iaErro ? ` <span class="t-bad">A IA não conseguiu ler: ${esc(r.iaErro)}</span>` : ''}</p>
+        ${r.sugestao ? `<p class="small t-warn">${icon('alert')} <b>Ligação incerta:</b> o único contrato parecido é ${esc(r.sugestao)}, mas só pelo nome${Docs.numDoc(r.nome, r.ia) ? ` (o PDF é o nº ${esc(Docs.numDoc(r.nome, r.ia))})` : ''}. Por segurança vai como <b>contrato novo</b>; escolha ${esc(r.sugestao)} no seletor só se tiver certeza.</p>` : r.incerto ? `<p class="small t-warn">${icon('alert')} <b>Ligação incerta</b> (só por semelhança de nome): confira se ${esc(r.contrato)} é mesmo o contrato deste documento.</p>` : ''}
+        <p class="muted small">${r.contrato ? `Ligado a <b>${esc(r.contrato)}</b> por ${esc(r.por)}.` : r.sugestao ? '' : 'Não encontrei um contrato correspondente — escolha um ou crie um novo.'}${r.iaErro && r.fileId ? ` <button type="button" class="btn ghost xs" data-reler="${i}">${icon('sync')} Ler de novo com a IA</button>` : ''}${r.iaErro ? ` <span class="t-bad">A IA não conseguiu ler: ${esc(r.iaErro)}</span>` : ''}</p>
         ${linhas ? `<table class="mini revt"><thead><tr><th></th><th>Campo</th><th>No cadastro</th><th>No documento</th></tr></thead><tbody>${linhas}</tbody></table>` : (r.ia ? '<p class="muted small">Os dados do documento conferem com o cadastro.</p>' : '')}
         ${ia.alteracoes ? `<p class="small"><b>O que o documento altera:</b> ${esc(ia.alteracoes)}</p>` : ''}
         ${postos.length ? `<label class="switch"><input type="checkbox" data-postos="${i}" ${nPostos ? '' : 'checked'}><span></span>Lançar ${postos.length} posto(s) em Mão de obra ${nPostos ? `<em class="divg">já há ${nPostos} lançados — marcar substitui</em>` : ''}</label><div class="muted small pl">${postos.slice(0, 8).map(p => `${esc(p.posto)} (${fmtNum(p.quantidade) || '?'})${num(p.custoMensalTotal) !== null ? ' ' + fmtMoneyShort(p.custoMensalTotal) : ''}`).join(' · ')}${postos.length > 8 ? ' …' : ''}</div>` : ''}
@@ -3645,6 +3661,7 @@ const Docs = {
       UI.closeModal();
       UI.toast(`Aplicado: ${saves.contratos.length} contrato(s), ${saves.documentos.length} documento(s), ${saves.maoDeObra.length} posto(s), ${saves.obrigacoes.length} obrigação(ões), ${saves.achados.length} achado(s).`, 'ok', 7000);
       App.render();
+      setTimeout(() => Consult.posJuntada(e), 400);
     };
   }
 };
@@ -6721,7 +6738,7 @@ const AuditCons = {
   /** faixa de auditoria abaixo dos indicadores */
   barraHtml(c) {
     const a = c.auditoria;
-    return `<div class="ac-bar">${a ? `<span class="muted small">${icon('sparkle')} ${a.manual ? 'Quadro preenchido à mão' : 'Auditoria consultiva de ' + esc(fmtDateTime(a.em)) + ' · ' + (n => `${n.Alto} risco(s) alto, ${n.Médio} médio, ${n.Baixo} baixo`)(AuditCons.riscos(c))}</span>${a.manual ? '' : `<button type="button" class="btn ghost sm" id="acFicha">${icon('file')} Ver ficha completa</button>`}` : `<span class="muted small">${icon('sparkle')} Sem auditoria consultiva: a IA lê contrato, aditivos e apostilamentos e preenche vigência e reajuste.</span>`}<button type="button" class="btn ghost sm" id="acEdit">${icon('edit')} Corrigir</button><button type="button" class="btn ${a && !a.manual ? 'ghost' : 'primary'} sm" id="acRun">${icon('sparkle')} ${a && !a.manual ? 'Analisar de novo' : 'Auditoria consultiva (IA)'}</button></div>`;
+    return `${a?.alerta ? `<div class="notice bad">${icon('alert')}<div><b>Documentos inconsistentes:</b> ${esc(a.alerta)} A ficha de auditoria deste contrato pode misturar informações — corrija o vínculo e clique em “Analisar de novo”.</div></div>` : ''}<div class="ac-bar">${a ? `<span class="muted small">${icon('sparkle')} ${a.manual ? 'Quadro preenchido à mão' : 'Auditoria consultiva de ' + esc(fmtDateTime(a.em)) + ' · ' + (n => `${n.Alto} risco(s) alto, ${n.Médio} médio, ${n.Baixo} baixo`)(AuditCons.riscos(c))}</span>${a.manual ? '' : `<button type="button" class="btn ghost sm" id="acFicha">${icon('file')} Ver ficha completa</button>`}` : `<span class="muted small">${icon('sparkle')} Sem auditoria consultiva: a IA lê contrato, aditivos e apostilamentos e preenche vigência e reajuste.</span>`}<button type="button" class="btn ghost sm" id="acEdit">${icon('edit')} Corrigir</button><button type="button" class="btn ${a && !a.manual ? 'ghost' : 'primary'} sm" id="acRun">${icon('sparkle')} ${a && !a.manual ? 'Analisar de novo' : 'Auditoria consultiva (IA)'}</button></div>`;
   },
   bindCard(m, e, c, volta) {
     $('#acRun', m)?.addEventListener('click', async ev => { const b = ev.currentTarget; b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} A IA está analisando os documentos… (até 5 min)`; try { await AuditCons.analisar(e, c); UI.toast('Auditoria consultiva concluída.'); volta(); } catch (er) { UI.toast('IA: ' + er.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Tentar de novo`; } });
@@ -6747,7 +6764,12 @@ const AuditCons = {
     if (vazio('valorMensal') && num(vl.mensal) !== null) add.valorMensal = num(vl.mensal);
     if (vazio('valorAnual') && num(vl.global) !== null) add.valorAnual = num(vl.global);
     if (vazio('reajuste') && r.reajuste && (ok(r.reajuste.indice) || ok(r.reajuste.dataBase))) add.reajuste = [r.reajuste.indice, r.reajuste.dataBase].filter(ok).join(' · ');
-    await DB.save('contratos', { ...cur, ...add, auditoria: { ...r, em: new Date().toISOString(), arquivos: arqs.map(a => a.nome) } });
+    // confere se os documentos são mesmo deste contrato (número lido × cadastro; PDFs de números diferentes)
+    const alerta = [], lido = Consult.numCt(id.numeroContrato), cad = Consult.numCt(cur.numero);
+    if (lido && cad && lido !== cad) alerta.push(`Os documentos analisados são do contrato nº ${lido}, mas o cadastro é o nº ${cad}.`);
+    const cf = Vinculos.conflitos(e).find(x => x.c.codigo === cur.codigo);
+    if (cf) alerta.push(`Há PDFs de contratos diferentes ligados a este contrato (${[cf.proprio, ...cf.outros.map(o => o.n)].filter((x, i, l) => l.indexOf(x) === i).join(', ')}) — corrija em Conferência com a pasta.`);
+    await DB.save('contratos', { ...cur, ...add, auditoria: { ...r, em: new Date().toISOString(), arquivos: arqs.map(a => a.nome), alerta: alerta.join(' ') } });
     return r;
   },
   /** correção manual: vigência e reajuste */
@@ -6781,6 +6803,7 @@ const AuditCons = {
     const nv = n => ({ Alto: 'alto', Médio: 'medio', Baixo: 'baixo' })[n] || 'baixo';
     const rs = (a.riscos || []).slice().sort((x, y) => ['Alto', 'Médio', 'Baixo'].indexOf(x.nivel) - ['Alto', 'Médio', 'Baixo'].indexOf(y.nivel));
     return `<div class="ac-ficha">
+      ${a.alerta ? `<p class="ac-res" style="border-left-color:#b4233c"><b>⚠ Documentos inconsistentes:</b> ${esc(a.alerta)}</p>` : ''}
       ${a.resumo ? `<p class="ac-res"><b>Conclusão da auditoria:</b> ${esc(a.resumo)}</p>` : ''}
       <h4>Fatos contratuais</h4>
       <table class="${rel ? 'r-t small' : 'ac-t'}"><tbody>
@@ -6866,9 +6889,9 @@ const AuditCons = {
     const ops = []; L.forEach(l => (l.a.oportunidades || []).forEach(o => ops.push([l.c.codigo, l.numero, o.descricao || '', o.fundamento || '', o.ref || ''])));
     download(XLSX.write([
       { name: 'Comparativo', title: 'AUDITORIA CONSULTIVA — QUADRO COMPARATIVO', subtitle: sub,
-        headers: ['Contrato', 'Nº contrato', 'Órgão', 'Unidade', 'Início', 'Término', 'Dias p/ vencer', 'Prorrogável', 'Valor mensal (R$)', 'Valor global (R$)', 'Postos', 'Reajuste (prevê/houve)', 'Repactuação (prevê/houve)', 'Revisão (prevê/houve)', 'Reequilíbrio (prevê/houve)', 'Riscos altos', 'Riscos médios', 'Riscos baixos', 'Oportunidades', 'Documentos faltantes', 'Analisado em'],
-        types: ['text', 'text', 'text', 'text', 'text', 'text', 'num', 'text', 'money', 'money', 'num', 'text', 'text', 'text', 'text', 'num', 'num', 'num', 'num', 'text', 'text'],
-        rows: L.map(l => [l.c.codigo, l.numero, l.orgao, l.unidade, fmtDate(l.V.ini), fmtDate(l.V.fim), isISO(l.V.fim) ? daysUntil(l.V.fim) : '', AuditCons.t(l.V.prorr), l.mensal ?? '', l.global ?? '', l.postos ?? '', l.sn('reajuste'), l.sn('repactuacao'), l.sn('revisao'), l.sn('reequilibrio'), l.n.Alto, l.n.Médio, l.n.Baixo, (l.a.oportunidades || []).length, (l.a.documentosFaltantes || []).join('; '), l.a.em ? fmtDateTime(l.a.em) : 'não analisado']) },
+        headers: ['Contrato', 'Nº contrato', 'Órgão', 'Unidade', 'Início', 'Término', 'Dias p/ vencer', 'Prorrogável', 'Valor mensal (R$)', 'Valor global (R$)', 'Postos', 'Reajuste (prevê/houve)', 'Repactuação (prevê/houve)', 'Revisão (prevê/houve)', 'Reequilíbrio (prevê/houve)', 'Riscos altos', 'Riscos médios', 'Riscos baixos', 'Oportunidades', 'Documentos faltantes', 'Alerta de consistência', 'Analisado em'],
+        types: ['text', 'text', 'text', 'text', 'text', 'text', 'num', 'text', 'money', 'money', 'num', 'text', 'text', 'text', 'text', 'num', 'num', 'num', 'num', 'text', 'text', 'text'],
+        rows: L.map(l => [l.c.codigo, l.numero, l.orgao, l.unidade, fmtDate(l.V.ini), fmtDate(l.V.fim), isISO(l.V.fim) ? daysUntil(l.V.fim) : '', AuditCons.t(l.V.prorr), l.mensal ?? '', l.global ?? '', l.postos ?? '', l.sn('reajuste'), l.sn('repactuacao'), l.sn('revisao'), l.sn('reequilibrio'), l.n.Alto, l.n.Médio, l.n.Baixo, (l.a.oportunidades || []).length, (l.a.documentosFaltantes || []).join('; '), l.a.alerta || '', l.a.em ? fmtDateTime(l.a.em) : 'não analisado']) },
       { name: 'Riscos', title: 'RISCOS POR CONTRATO', subtitle: sub, headers: ['Contrato', 'Nº', 'Tipo', 'Nível', 'Risco', 'Consequência', 'Providência', 'Setor', 'Referência'], types: Array(9).fill('text'), rows: riscos },
       { name: 'Oportunidades', title: 'OPORTUNIDADES DE ATUALIZAÇÃO FINANCEIRA', subtitle: sub, headers: ['Contrato', 'Nº', 'Oportunidade', 'Fundamento', 'Referência'], types: Array(5).fill('text'), rows: ops }
     ]), `Auditoria_consultiva_${(e.fantasia || e.razao).replace(/[^\w]+/g, '_')}_${todayISO()}.xlsx`);
@@ -6877,7 +6900,7 @@ const AuditCons = {
   /** seções do Relatório de auditoria */
   relatorio(e, cs, H, tbl, grupo) {
     const L = cs.map(AuditCons.linha), feitos = L.filter(l => l.c.auditoria), soma = k => L.reduce((s, l) => s + (l[k] || 0), 0);
-    const crit = L.filter(l => l.n.Alto || (isISO(l.V.fim) && daysUntil(l.V.fim) <= 90));
+    const crit = L.filter(l => l.a.alerta || l.n.Alto || (isISO(l.V.fim) && daysUntil(l.V.fim) <= 90));
     const prov = []; L.forEach(l => (l.a.riscos || []).filter(r => /^alto/i.test(r.nivel || '')).forEach(r => prov.push([esc(l.c.codigo), esc(r.descricao || ''), esc(r.providencia || ''), esc(r.setor || '')])));
     const ops = []; L.forEach(l => (l.a.oportunidades || []).forEach(o => ops.push([esc(l.c.codigo), esc(o.descricao || ''), esc(o.fundamento || '')])));
     const venc = L.filter(l => isISO(l.V.fim) && daysUntil(l.V.fim) < 0).length, v90 = L.filter(l => isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90).length;
@@ -6885,11 +6908,11 @@ const AuditCons = {
     out.push(`<section>${H('Auditoria consultiva — relatório geral' + (grupo ? ' (' + grupo + ')' : ''))}
       <p>${cs.length} contrato(s) no escopo${grupo ? ` com ${esc(grupo)}` : ''}; ${feitos.length} com ficha de auditoria consultiva.${feitos.length < cs.length ? ` <i class="r-gap">${cs.length - feitos.length} ainda sem análise.</i>` : ''}</p>
       <div class="r-kpis"><div><b>${soma('mensal') ? fmtMoneyShort(soma('mensal')) : '—'}</b><span>valor mensal somado</span></div><div><b>${soma('global') ? fmtMoneyShort(soma('global')) : '—'}</b><span>valor global somado</span></div><div><b>${soma('postos') ? fmtNum(soma('postos')) : '—'}</b><span>postos de trabalho</span></div><div><b>${venc} / ${v90}</b><span>vencidos / vencem em 90 dias</span></div></div>
-      <h3>Contratos críticos</h3>${crit.length ? tbl(['Contrato', 'Órgão / unidade', 'Término', 'Riscos altos', 'Motivo'], crit.map(l => [esc(l.c.codigo), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), l.V.fim ? esc(fmtDate(l.V.fim)) : '—', String(l.n.Alto), esc([l.n.Alto && 'risco alto', isISO(l.V.fim) && daysUntil(l.V.fim) < 0 && 'vigência vencida', isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90 && 'vence em até 90 dias'].filter(Boolean).join(', '))]), 'small') : '<p>Nenhum contrato crítico identificado.</p>'}
+      <h3>Contratos críticos</h3>${crit.length ? tbl(['Contrato', 'Órgão / unidade', 'Término', 'Riscos altos', 'Motivo'], crit.map(l => [esc(l.c.codigo), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), l.V.fim ? esc(fmtDate(l.V.fim)) : '—', String(l.n.Alto), esc([l.a.alerta && 'documentos inconsistentes', l.n.Alto && 'risco alto', isISO(l.V.fim) && daysUntil(l.V.fim) < 0 && 'vigência vencida', isISO(l.V.fim) && daysUntil(l.V.fim) >= 0 && daysUntil(l.V.fim) <= 90 && 'vence em até 90 dias'].filter(Boolean).join(', '))]), 'small') : '<p>Nenhum contrato crítico identificado.</p>'}
       <h3>Providências prioritárias (riscos altos)</h3>${prov.length ? tbl(['Contrato', 'Risco', 'Providência', 'Setor'], prov, 'small') : '<p>Nenhum risco alto apontado.</p>'}
       <h3>Oportunidades de atualização financeira</h3>${ops.length ? tbl(['Contrato', 'Oportunidade', 'Fundamento'], ops, 'small') : '<p>Nenhuma identificada com os documentos disponíveis.</p>'}
       <p class="r-muted">Fatos contratuais e conclusões da auditoria estão separados em cada ficha. Informações ausentes dos documentos aparecem como “não identificado”; não se presume lucro, prejuízo ou crédito sem dados suficientes.</p></section>`);
-    out.push(`<section>${H('Quadro comparativo dos contratos')}${tbl(['Contrato', 'Órgão / unidade', 'Vigência', 'Mensal', 'Global', 'Postos', 'Reajuste', 'Repactuação', 'Revisão', 'Reequilíbrio', 'Riscos A/M/B'], L.map(l => [esc(l.c.codigo) + (l.numero ? '<br><small>' + esc(l.numero) + '</small>' : ''), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), `${l.V.ini ? esc(fmtDate(l.V.ini)) : '—'}<br>${l.V.fim ? esc(fmtDate(l.V.fim)) : '—'}`, l.mensal !== null ? esc(fmtMoney(l.mensal)) : '—', l.global !== null ? esc(fmtMoney(l.global)) : '—', l.postos ? fmtNum(l.postos) : '—', esc(l.sn('reajuste')), esc(l.sn('repactuacao')), esc(l.sn('revisao')), esc(l.sn('reequilibrio')), l.c.auditoria ? `${l.n.Alto}/${l.n.Médio}/${l.n.Baixo}` : '<i class="r-gap">sem análise</i>']), 'small')}<p class="r-muted">Reajuste, repactuação, revisão e reequilíbrio: “prevê / houve”.</p></section>`);
+    out.push(`<section>${H('Quadro comparativo dos contratos')}${tbl(['Contrato', 'Órgão / unidade', 'Vigência', 'Mensal', 'Global', 'Postos', 'Reajuste', 'Repactuação', 'Revisão', 'Reequilíbrio', 'Riscos A/M/B'], L.map(l => [esc(l.c.codigo) + (l.numero ? '<br><small>' + esc(l.numero) + '</small>' : ''), esc(l.orgao) + (l.unidade ? '<br><small>' + esc(l.unidade) + '</small>' : ''), `${l.V.ini ? esc(fmtDate(l.V.ini)) : '—'}<br>${l.V.fim ? esc(fmtDate(l.V.fim)) : '—'}`, l.mensal !== null ? esc(fmtMoney(l.mensal)) : '—', l.global !== null ? esc(fmtMoney(l.global)) : '—', l.postos ? fmtNum(l.postos) : '—', esc(l.sn('reajuste')), esc(l.sn('repactuacao')), esc(l.sn('revisao')), esc(l.sn('reequilibrio')), l.c.auditoria ? `${l.n.Alto}/${l.n.Médio}/${l.n.Baixo}${l.a.alerta ? '<br><b class="r-gap">⚠ docs inconsistentes</b>' : ''}` : '<i class="r-gap">sem análise</i>']), 'small')}<p class="r-muted">Reajuste, repactuação, revisão e reequilíbrio: “prevê / houve”.</p></section>`);
     out.push(`<section>${H('Fichas individuais dos contratos')}${feitos.length ? feitos.map(l => `<div class="r-ficha"><h3>${esc(l.c.codigo)} — ${esc(l.orgao)}${l.unidade ? ' · ' + esc(l.unidade) : ''}</h3>${AuditCons.fichaHtml(l.c, true)}</div>`).join('') : '<p>Nenhum contrato analisado ainda. Use “Auditoria consultiva (IA)” no painel da empresa.</p>'}</section>`);
     return out.join('');
   }
