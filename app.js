@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.28.1';
+const APP_VERSAO = '1.28.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.28.2', data: '25/11/2026', itens: ['Auditoria consultiva e “Ler de novo”: passam a abrir também os PDFs que estão em pastas do Drive fora do app (ligados ao contrato pelo link), pela conta do app.', 'Painel da empresa: “Conferência com a pasta do Drive” — cole o link da pasta e veja quantos contratos há nela, quantos estão no sistema e quais faltam.'] },
   { numero: '1.28.1', data: '25/11/2026', itens: ['Ficha do contrato: o card de Vigência (início, término, dias restantes e prorrogação) substitui o indicador antigo, na mesma linha de Valor mensal, Postos e Completude.', 'Reajuste, repactuação, revisão e reequilíbrio num card só: se o contrato prevê, se já houve e quando, e a data do próximo reajuste (12 meses do último ou do início), com alerta quando o prazo já está aberto.'] },
   { numero: '1.28.0', data: '25/11/2026', itens: ['Auditoria consultiva (IA): a IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual — dados com cláusula e página, custos, faturamento, garantias, penalidades, rescisão, riscos alto/médio/baixo com providência e setor, oportunidades de repactuação e documentos que faltam. Em lote no painel da empresa ou um a um na ficha do contrato.', 'Ficha do contrato: card no topo com vigência (início, término, dias restantes, prorrogação) e se o contrato prevê e se houve reajuste, repactuação/apostilamento, revisão e reequilíbrio econômico-financeiro — com alerta quando passa de 12 meses sem reajuste. Pode ser corrigido à mão.', 'Relatório de auditoria: novas seções de auditoria consultiva (relatório geral, quadro comparativo e fichas individuais), com filtro por tomador; e planilha comparativa em Excel.', 'Contratos por tomador: prefeitura, secretarias e fundos do mesmo município passam a contar juntos (ex.: “Município de Vila Velha”).', 'Painel da empresa: “Conferência com a pasta” mostra PDFs juntados que não ficaram ligados a nenhum contrato.'] },
   { numero: '1.27.0', data: '25/11/2026', itens: ['Atendimento com mais de um cliente (ex.: casal, coproprietários, vários autores): em “Cliente e caso”, inclua outros clientes ou cadastre um novo na hora.', 'Contrato de honorários com todos os contratantes qualificados, responsabilidade solidária e uma assinatura para cada um.', 'Procuração: com mais de um cliente, escolha entre uma procuração conjunta (todos os outorgantes) ou uma procuração para cada cliente, em páginas separadas.', 'A IA qualifica todos os clientes como requerentes ou autores no requerimento e na petição; as demandas e o processo já nascem com todos os clientes.'] },
@@ -2487,14 +2488,37 @@ const Consult = {
     return `<p class="arq-leg">${icon(ctOk && !semLink.length ? 'check' : 'alert')}<span>${msgs.join(' ')}</span></p>`;
   },
   /** arquivos do contrato no Drive do escritório (contrato, aditivos, termos…) */
-  /** PDFs juntados à empresa que não ficaram ligados a nenhum contrato cadastrado */
+  /** nº de contrato normalizado a partir de um texto (ex.: "Contrato n° 045-2026 …" → "45/2026") */
+  numCt(t) { const m = String(t || '').match(/(?:n[º°o.]?\s*)?\b(\d{1,4})\s*[-./]\s*(20\d{2})\b/i); return m ? (+m[1]) + '/' + m[2] : ''; },
+  /** conferência: PDFs soltos no app + comparação com uma pasta do Drive */
   conferenciaHtml(e) {
     const cods = new Set(empRecs('contratos', e.id).map(c => c.codigo));
     const soltos = empRecs('documentos', e.id).filter(d => d.link && (!d.contrato || !cods.has(d.contrato)));
-    if (!soltos.length) return '';
-    return `<section class="card"><header><h2>${icon('alert')} Conferência com a pasta</h2><span class="muted small">${soltos.length} arquivo(s) sem contrato no sistema</span></header>
-      <p class="muted small">Estes PDFs foram juntados, mas não estão ligados a nenhum contrato cadastrado — por isso não entram nas contagens. Abra o arquivo e cadastre o contrato (ou ligue-o ao contrato certo em Inventário documental).</p>
-      <ul class="plain files">${soltos.map(d => `<li>${icon('file')} <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.arquivo || d.tipo || 'documento')}</a>${d.contrato ? ` <small class="muted">ligado a “${esc(d.contrato)}”, que não existe no cadastro</small>` : ''}</li>`).join('')}</ul></section>`;
+    return `<section class="card" id="cfCard"><header><h2>${icon('list')} Conferência com a pasta do Drive</h2></header>
+      <p class="muted small">Cole o link da pasta com os PDFs dos contratos (ex.: a pasta “VILA VELHA”): o app compara os números dos contratos dos arquivos com os cadastrados e mostra o que falta no sistema.</p>
+      <div class="btn-row"><input class="input" id="cfPasta" placeholder="https://drive.google.com/drive/folders/…" value="${esc(e.pastaContratos || '')}" style="flex:1;min-width:240px"><button class="btn ghost" id="cfOk">${icon('search')} Conferir</button></div>
+      <div id="cfRes"></div>
+      ${soltos.length ? `<h4 class="sec">${soltos.length} arquivo(s) juntados sem contrato no sistema</h4><ul class="plain files">${soltos.map(d => `<li>${icon('file')} <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.arquivo || d.tipo || 'documento')}</a>${d.contrato ? ` <small class="muted">ligado a “${esc(d.contrato)}”, que não existe no cadastro</small>` : ''}</li>`).join('')}</ul>` : ''}</section>`;
+  },
+  bindConferencia(host, e) {
+    const b = $('#cfOk', host); if (!b) return;
+    b.onclick = async () => {
+      const link = $('#cfPasta', host).value.trim(); if (!link) return UI.toast('Cole o link da pasta.', 'warn');
+      b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} Lendo a pasta…`;
+      try {
+        const r = await apiT('listarPasta', { pasta: link }, 120000);
+        const cur = DB.get('empresas', e.id); if (cur && cur.pastaContratos !== link) await DB.save('empresas', { ...cur, pastaContratos: link });
+        const cs = empRecs('contratos', e.id), docs = empRecs('documentos', e.id), noSis = new Set();
+        cs.forEach(c => [c.numero, c.auditoria?.identificacao?.numeroContrato].forEach(t => { const n = Consult.numCt(t); n && noSis.add(n); }));
+        docs.forEach(d => { if (d.contrato && cs.some(c => c.codigo === d.contrato)) { const n = Consult.numCt(d.arquivo) || Consult.numCt(d.numero); n && noSis.add(n); } });
+        const porNum = {}; r.arquivos.forEach(a => { const n = Consult.numCt(a.nome) || '(sem nº no nome) ' + a.nome; (porNum[n] = porNum[n] || []).push(a); });
+        const nums = Object.keys(porNum), falta = nums.filter(n => !noSis.has(n)), tem = nums.filter(n => noSis.has(n));
+        $('#cfRes', host).innerHTML = `<div class="notice ${falta.length ? 'warn' : 'soft'}">${icon(falta.length ? 'alert' : 'check')}<div>Pasta <b>${esc(r.pasta)}</b>: ${r.arquivos.length} PDF(s), <b>${nums.length} contrato(s)</b> diferentes. No sistema: <b>${tem.length}</b>. ${falta.length ? `Faltam <b>${falta.length}</b>:` : 'Nenhum faltando.'}
+          ${falta.length ? `<ul class="plain files">${falta.sort().map(n => `<li>${icon('file')} <b>${esc(n)}</b> — ${porNum[n].map(a => `<a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.nome)}</a>`).join(', ')}</li>`).join('')}</ul><p class="small">Para incluir: baixe esses PDFs e arraste em <b>Juntar documentos</b> — o app lê e cria os contratos.</p>` : ''}
+          ${nums.length < r.arquivos.length ? `<p class="small muted">${r.arquivos.length - nums.length} arquivo(s) repetem o número de outro (ex.: o mesmo contrato salvo duas vezes).</p>` : ''}</div></div>`;
+      } catch (er) { UI.toast(er.message, 'bad', 9000); }
+      b.disabled = false; b.innerHTML = `${icon('search')} Conferir`;
+    };
   },
   arquivosHtml(e, c, dc) {
     const ord = d => /aditivo/i.test(d.tipo || d.arquivo || '') ? 1 : /contrato/i.test(d.tipo || '') ? 0 : 2;
@@ -2663,6 +2687,7 @@ const Consult = {
     </div>`;
     $('#heroDocs', host)?.addEventListener('click', () => Docs.open(e));
     AuditCons.bindLote(host, e);
+    Consult.bindConferencia(host, e);
     const verAch = f => { Achados.st = { risco: 'todos', status: 'abertos', emp: e.id, area: '', busca: '', ...f }; Achados._rolar = 1; location.hash = '#/achados'; };
     $$('[data-ach-r]', host).forEach(x => x.onclick = () => verAch({ risco: x.dataset.achR }));
     $$('[data-ach-a]', host).forEach(x => x.onclick = () => verAch({ area: x.dataset.achA }));
