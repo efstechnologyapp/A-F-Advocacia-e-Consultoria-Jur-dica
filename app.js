@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.34.0';
+const APP_VERSAO = '1.34.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,8 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.34.2', data: '25/11/2026', itens: ['Análises retomáveis: se a auditoria parar no meio (erro, atualização, internet), a próxima rodada continua só dos contratos que faltam — no assistente da CCT (com opção “refazer todos”) e no Relatório de auditoria com “Refazer os já analisados”.'] },
+  { numero: '1.34.1', data: '25/11/2026', itens: ['CCT: quando a auditoria confirma a convenção mas não encontra a planilha de custos, o contrato mantém a estimativa preliminar pelos postos (em vez de ficar sem valor).', 'Assistente da CCT, etapa 2: aviso dos contratos marcados antes que não batem com a CCT, com botão para desmarcar.'] },
   { numero: '1.34.0', data: '25/11/2026', itens: ['Assistente da convenção coletiva, numa janela só e sem trocar de página: 1. Leitura (o que a IA leu) → 2. Contratos (marcados pela categoria, com o motivo) → 3. Impacto preliminar por contrato → 4. Auditoria (situação de cada contrato) → resumo final com repactuação e carteira atualizada.', 'Análises longas: ao fechar a janela, o andamento segue num selo no canto da tela (contrato da vez, tempo restante, ver e parar).', 'CCT: a função hospitalar/convencional do contrato é ligada ao piso correspondente.'] },
   { numero: '1.33.4', data: '25/11/2026', itens: ['Abrangência da CCT: contrato sem a sigla do estado no cadastro (ex.: “Município de Vila Velha”) usa o estado dos outros contratos da mesma cidade.', 'Ao salvar a abrangência, o documento passa a valer só para os contratos marcados (inclusive o contrato a que foi juntado, se desmarcado); dos desvinculados, saem da ficha os dados da CCT.'] },
   { numero: '1.33.3', data: '25/11/2026', itens: ['CCT: o cruzamento com os contratos usa todas as funções lidas (inclusive as citadas só dentro das atividades) — porteiro, ASG banheirista etc. deixam de aparecer como “não constam”.', 'CCT com várias tabelas por área (geral, industrial, petrolífera…): a IA usa a tabela que vale para órgãos públicos e informa qual; também informa a regra de reajuste do ano seguinte.'] },
@@ -3996,6 +3998,8 @@ const DocComum = {
     const W = DocComum._W && DocComum._W.d.id === d.id ? DocComum._W : (DocComum._W = { e, d, etapa: 1, res: {} });
     W.e = e; W.d = DB.get('documentos', d.id) || d;
     if (etapa) W.etapa = etapa; else if (AuditCons._rodando && W.fila) W.etapa = 4;
+    if (!W.sel && W.d.valePara?.tipo === 'lista' && !DocComum._sug?.[W.d.id]) W.sel = W.d.valePara.contratos.slice();
+    if (W.etapa > 2 && !W.sel) W.etapa = 2;
     const info = W.d.cctInfo, cs = empRecs('contratos', e.id).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
     const nSel = () => (W.sel || []).length, imp = W.imp || 0;
     const passos = [['1. Leitura', info ? `${(info.categoria || 'CCT').split(' ').slice(-3).join(' ')} · ${(info.baseTerritorial || []).join(', ').slice(0, 30)}` : ''], ['2. Contratos', W.sel ? `${nSel()} marcados` : ''], ['3. Impacto preliminar', W.imp !== undefined ? fmtMoneyShort(imp) + '/mês' : ''], ['4. Auditoria', W.fila ? (W.fim ? 'concluída' : 'em andamento') : 'refina pela planilha']];
@@ -4021,7 +4025,8 @@ const DocComum = {
       const av = Object.fromEntries(cs.map(c => [c.codigo, DocComum.cobre(info, c)]));
       if (!W.sel) { const v = W.d.valePara; W.sel = v && v.tipo === 'lista' && !DocComum._sug?.[W.d.id] ? v.contratos.slice() : cs.filter(c => av[c.codigo].ok === true).map(c => c.codigo); }
       const ordem = cs.slice().sort((a, b) => (av[b.codigo].ok === true) - (av[a.codigo].ok === true) || (av[b.codigo].ok === null) - (av[a.codigo].ok === null));
-      body = `<p class="muted small" style="margin-top:0">O app marcou os contratos da categoria e da base territorial da convenção. Confira — o motivo está embaixo de cada um.</p>
+      const naoBate = W.sel.filter(cod => av[cod] && av[cod].ok === false);
+      body = `${naoBate.length ? `<div class="notice warn">${icon('alert')}<div><b>${naoBate.length} contrato(s) marcados antes não batem com a CCT:</b> ${esc(naoBate.join(', '))}. <button type="button" class="btn ghost sm" id="wzDes">Desmarcar esses</button></div></div>` : ''}<p class="muted small" style="margin-top:0">O app marcou os contratos da categoria e da base territorial da convenção. Confira — o motivo está embaixo de cada um.</p>
         <div class="dc-l dc-l1" id="wzL">${ordem.map(c => { const x = av[c.codigo]; return `<label class="chk"><input type="checkbox" value="${esc(c.codigo)}" ${W.sel.includes(c.codigo) ? 'checked' : ''}> <span><b>${esc(c.codigo)}</b> ${esc(c.numero || '')} <small class="muted">${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</small>${x.motivo ? `<br><small class="${x.ok === true ? 't-ok' : x.ok === false ? 't-warn' : 'muted'}">${x.ok === true ? '✓' : x.ok === false ? '✗' : '?'} ${esc(x.motivo)}</small>` : ''}</span></label>`; }).join('')}</div>`;
       foot = `<button class="btn ghost" id="wzBk">← Voltar</button><button class="btn primary" id="wzNx">Continuar: ver o impacto →</button>`;
     } else if (W.etapa === 3) {
@@ -4030,11 +4035,13 @@ const DocComum = {
       body = `<div class="table-wrap"><table class="mini wz-imp"><thead><tr><th>Contrato</th><th>Órgão / unidade</th><th>Funções cobertas (piso)</th><th class="r">Impacto/mês</th></tr></thead><tbody>
         ${L.sort((a, b) => (b.K?.imp || 0) - (a.K?.imp || 0)).map(({ c, K }) => `<tr><td><b>${esc(c.codigo)}</b><br><small>${esc(c.numero || '')}</small></td><td>${esc(tomadorBase(c))}${c.unidade ? '<br><small>' + esc(c.unidade) + '</small>' : ''}</td><td>${K && K.postos.filter(p => p.pisoCCT).length ? K.postos.filter(p => p.pisoCCT).map(p => `${esc(p.funcao)} <small class="muted">(${esc(fmtMoney(p.pisoCCT))})</small>`).join('<br>') : '<span class="muted">postos ainda não lidos</span>'}</td><td class="r">${K && K.imp !== null ? `<b>${K.imp >= 0 ? '+' : ''}${esc(fmtMoney(K.imp))}</b>` : '<i class="muted">a auditoria calcula</i>'}</td></tr>`).join('')}
         <tr class="tot"><td colspan="3"><b>Total (${L.length} contratos)</b> <small class="muted">— estimativa preliminar: (piso − salário) × quantidade × ${String(AuditCons.FATOR_CCT).replace('.', ',')}</small></td><td class="r"><b>+${esc(fmtMoney(W.imp))}</b></td></tr></tbody></table></div>`;
+      const desde = String(W.d.valePara?.em || ''), feitos = W.sel.filter(cod => { const c = cs.find(x => x.codigo === cod); return c && c.auditoria && !c.auditoria.manual && String(c.auditoria.em || '') > desde; });
+      if (feitos.length) body += `<div class="notice soft">${icon('check')}<div><b>${feitos.length} de ${W.sel.length} contrato(s) já foram analisados com esta CCT</b> (numa rodada anterior). A auditoria continua só dos ${W.sel.length - feitos.length} que faltam. <label class="chk" style="display:inline-flex;gap:6px;margin-left:6px"><input type="checkbox" id="wzRef" style="width:auto"> refazer todos</label></div></div>`;
       foot = `<button class="btn ghost" id="wzBk">← Voltar</button><button class="btn ghost" id="wzSv">Salvar sem auditar</button><button class="btn primary" id="wzNx">${icon('sparkle')} Continuar: rodar a auditoria →</button>`;
     } else if (W.etapa === 4) {
       const atual = !W.fim && (W.fila || []).find(x => !W.res[x]);
       const linhas = (W.fila || []).map(cod => { const r = W.res[cod], c = cs.find(x => x.codigo === cod), K = c && AuditCons.cct(c);
-        const sit = !r ? (cod === atual && AuditCons._rodando ? '<span class="muted">◌ analisando…</span>' : '<span class="muted">○ na fila</span>') : r.erro ? `<span class="t-warn">✗ ${esc(r.erro)}</span>` : !K ? '<span class="muted">— CCT não aplicável a este contrato</span>' : K.prelim || K.imp === null ? '<span class="t-warn">⚠ sem planilha de custos — fica a estimativa</span>' : '<span class="t-ok">✓ analisado pela planilha</span>';
+        const sit = r && r.antes ? '<span class="t-ok">✓ já analisado (rodada anterior)</span>' : !r ? (cod === atual && AuditCons._rodando ? '<span class="muted">◌ analisando…</span>' : '<span class="muted">○ na fila</span>') : r.erro ? `<span class="t-warn">✗ ${esc(r.erro)}</span>` : !K ? '<span class="muted">— CCT não aplicável a este contrato</span>' : K.prelim || K.imp === null ? '<span class="t-warn">⚠ sem planilha de custos — fica a estimativa</span>' : '<span class="t-ok">✓ analisado pela planilha</span>';
         return `<tr><td><b>${esc(cod)}</b> <small class="muted">${esc(c ? tomadorBase(c).replace('Município de ', '') + (c.unidade ? ' · ' + c.unidade : '') : '')}</small></td><td>${sit}</td><td class="r">${r && K && K.imp !== null ? esc(fmtMoney(K.imp)) : '—'}</td></tr>`; }).join('');
       body = `<div id="acProg">${AuditCons._rodando ? AuditCons._prog || '' : ''}</div><div class="table-wrap" style="margin-top:10px"><table class="mini"><thead><tr><th>Contrato</th><th>Situação</th><th class="r">Impacto/mês</th></tr></thead><tbody>${linhas}</tbody></table></div>
         <p class="muted small">Pode minimizar: a análise continua e um selo no canto da tela mostra o andamento.</p>`;
@@ -4054,6 +4061,7 @@ const DocComum = {
     $('#wzBk', m)?.addEventListener('click', () => { if (W.etapa === 2) W.sel = $$('#wzL input:checked', m).map(i => i.value); ir(W.etapa - 1); });
     $('#wzRel', m)?.addEventListener('click', () => { W.d = { ...W.d, cctInfo: null }; W.sel = null; DocComum._sug = { ...(DocComum._sug || {}), [W.d.id]: 1 }; DocComum._lerNoAssistente(e, W); });
     $('#wzStop', m)?.addEventListener('click', () => AuditCons.parar());
+    $('#wzDes', m)?.addEventListener('click', () => { const nb = new Set(W.sel.filter(cod => DocComum.cobre(info, cs.find(c => c.codigo === cod) || {}).ok === false)); W.sel = $$('#wzL input:checked', m).map(i => i.value).filter(v => !nb.has(v)); ir(2); });
     $('#wzPn', m)?.addEventListener('click', () => { UI.closeModal(); location.hash = `#/empresa/${e.id}/painel`; });
     $('#wzRp', m)?.addEventListener('click', () => Report.dialog(e));
     $('#wzErr', m)?.addEventListener('click', () => { UI.closeModal(); const c = cs.find(x => W.res[x.codigo]?.erro); c && Consult.contrato360(e, c); });
@@ -4061,8 +4069,15 @@ const DocComum = {
     $('#wzNx', m)?.addEventListener('click', async () => {
       if (W.etapa === 1) return ir(2);
       if (W.etapa === 2) { W.sel = $$('#wzL input:checked', m).map(i => i.value); if (!W.sel.length) return UI.toast('Marque ao menos um contrato.', 'warn'); await DocComum._salvar(e, W); return ir(3); }
-      if (W.etapa === 3) { W.fila = W.sel.slice(); W.res = {}; W.fim = false; ir(4);
-        const fila = W.fila.map(cod => DB.get('contratos', (cs.find(c => c.codigo === cod) || {}).id)).filter(Boolean);
+      if (W.etapa === 3) {
+        // retomada: contratos já analisados depois de ligar esta CCT não entram de novo (salvo se pedir para refazer)
+        const desde = String(W.d.valePara?.em || ''), refazer = $('#wzRef', m)?.checked;
+        const feitos = W.sel.filter(cod => { const c = cs.find(x => x.codigo === cod); return c && c.auditoria && !c.auditoria.manual && String(c.auditoria.em || '') > desde; });
+        W.fila = refazer ? W.sel.slice() : W.sel.filter(cod => !feitos.includes(cod)); W.res = {}; W.fim = false;
+        if (!refazer) feitos.forEach(cod => W.res[cod] = { ok: true, antes: true });
+        if (!W.fila.length) { W.fila = W.sel.slice(); W.fim = true; return ir(5); }
+        W.fila = refazer ? W.fila : W.sel.slice(); ir(4);
+        const fila = W.fila.filter(cod => !W.res[cod]?.antes).map(cod => DB.get('contratos', (cs.find(c => c.codigo === cod) || {}).id)).filter(Boolean);
         AuditCons.rodar(null, e, fila, 'Auditoria com a CCT', { abrir: () => DocComum.assistente(e, W.d), onItem: (c, ok, er) => { W.res[c.codigo] = ok ? { ok: true } : { erro: er }; if ($('#modal .wz')) DocComum.assistente(e, W.d, 4); }, onFim: R => { W.fim = true; if ($('#modal .wz')) { R.fechado = true; DocComum.assistente(e, W.d, 5); } } });
         return; }
       if (W.etapa === 4) return ir(5);
@@ -7110,6 +7125,8 @@ const AuditCons = {
     const xa = c.auditoria?.cct, aiNova = xa && xa.aplicavel !== undefined && (!dc || String(c.auditoria.em || '') >= String(dc.valePara?.em || dc.cctInfo.lidoEm || ''));
     if (!aiNova && dc) return AuditCons.cctPrelim(c, dc);
     const x = xa; if (!x || AuditCons.sn(x.aplicavel) !== 'sim') return null;
+    // a IA confirmou a CCT mas não achou a planilha de custos: mantém a estimativa preliminar pelos postos
+    if (dc && num(x.impactoMensal) === null && num(x.custoMensalEstimado) === null) { const P = AuditCons.cctPrelim(c, dc); if (P && P.imp !== null) return { ...P, x: { ...P.x, ...x, observacao: [x.observacao, P.x.observacao].filter(Boolean).join(' ') } }; }
     const atual = num(x.custoMensalAtual), est = num(x.custoMensalEstimado), imp = num(x.impactoMensal) ?? (atual !== null && est !== null ? est - atual : null);
     const pct = num(x.impactoPercentual) ?? (imp !== null && atual ? imp / atual * 100 : null), ok = v => v && !/^n[ãa]o identificad/i.test(String(v));
     return { x, atual, est, imp, pct, pedida: AuditCons.sn(x.repactuacaoPedida), numero: ok(x.numero) ? x.numero : '', dataBase: ok(x.dataBase) ? x.dataBase : '', vigencia: ok(x.vigencia) ? x.vigencia : '', postos: (x.postos || []).filter(p => p && p.funcao) };
@@ -7297,12 +7314,17 @@ const AuditCons = {
     const cs = empRecs('contratos', e.id).filter(c => !g || tomadorBase(c) === g), feitos = cs.filter(c => c.auditoria && !c.auditoria.manual).length, pend = AuditCons.fila(e, g, false).length;
     const el = $('#acCont'); if (el) el.textContent = `· ${feitos} de ${cs.length} analisados${pend ? ` · ${pend} pendente(s)` : ''}`;
   },
-  bindLote(m, e) {
+  bindLote(m0, e) {
+    let m = m0;
     const b = $('#acLote', m), sel = $('select[name=grupo]', m); if (!b) return;
     const cont = () => AuditCons.contador(e, sel?.value || ''); cont(); sel?.addEventListener('change', cont);
     if (AuditCons._rodando) b.disabled = true;
     b.onclick = async () => {
-      const g = sel?.value || '', re = $('#acRe', m).checked, fila = AuditCons.fila(e, g, re);
+      const g = sel?.value || '', re = $('#acRe', m).checked, k = 'af-refazer:' + e.id + ':' + g;
+      let desde = ''; try { desde = re ? localStorage.getItem(k) || '' : ''; } catch (_) {}
+      let fila = AuditCons.fila(e, g, re);
+      if (re && desde) { const resto = fila.filter(c => String(c.auditoria?.em || '') < desde); if (resto.length < fila.length && await UI.confirm(`${fila.length - resto.length} contrato(s) já foram refeitos na rodada anterior (iniciada em ${fmtDateTime(desde)}). Continuar só dos ${resto.length} que faltam?`, 'Continuar dos que faltam', false)) fila = resto; else desde = ''; Report.dialog(e); m = $('#modal'); }
+      if (re && !desde) try { localStorage.setItem(k, new Date().toISOString()); } catch (_) {}
       if (!fila.length) return UI.toast('Nenhum contrato pendente nessa seleção.', 'ok');
       AuditCons.rodar(m, e, fila);
     };
