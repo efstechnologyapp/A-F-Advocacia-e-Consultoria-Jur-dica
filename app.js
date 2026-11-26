@@ -27,7 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
-  { numero: '1.33.4', data: '25/11/2026', itens: ['Abrangência da CCT: contrato sem a sigla do estado no cadastro (ex.: “Município de Vila Velha”) usa o estado dos outros contratos da mesma cidade.'] },
+  { numero: '1.33.4', data: '25/11/2026', itens: ['Abrangência da CCT: contrato sem a sigla do estado no cadastro (ex.: “Município de Vila Velha”) usa o estado dos outros contratos da mesma cidade.', 'Ao salvar a abrangência, o documento passa a valer só para os contratos marcados (inclusive o contrato a que foi juntado, se desmarcado); dos desvinculados, saem da ficha os dados da CCT.'] },
   { numero: '1.33.3', data: '25/11/2026', itens: ['CCT: o cruzamento com os contratos usa todas as funções lidas (inclusive as citadas só dentro das atividades) — porteiro, ASG banheirista etc. deixam de aparecer como “não constam”.', 'CCT com várias tabelas por área (geral, industrial, petrolífera…): a IA usa a tabela que vale para órgãos públicos e informa qual; também informa a regra de reajuste do ano seguinte.'] },
   { numero: '1.33.2', data: '25/11/2026', itens: ['Leitura da CCT: a IA agrupa as funções por atividade (limpeza, portaria, recepção…), indica o piso vigente quando a tabela tem mais de um valor e explica as colunas; a janela mostra as atividades abrangidas, a lista completa de funções com piso e o piso de cada função coberta do contrato.'] },
   { numero: '1.33.1', data: '25/11/2026', itens: ['Abrangência da CCT: quando a base territorial é “todo o estado”, o app confere o estado de cada contrato — contratos de outro estado ficam de fora e os sem estado identificado ficam desmarcados para conferir.'] },
@@ -3854,8 +3854,10 @@ const Vinculos = {
 const DocComum = {
   ehComum: d => /conven[cç][aã]o coletiva|\bcct\b|acordo coletivo|diss[ií]dio|ata de registro|\barp\b|\bedital\b/i.test((d.tipo || '') + ' ' + (d.arquivo || '')),
   vale(d, c) {
-    if (d.contrato === c.codigo) return true;
-    const v = d.valePara; if (!v || d.empresaId !== c.empresaId) return false;
+    const v = d.valePara;
+    // abrangência definida (tomador ou lista): vale só para esses — inclusive o contrato a que o arquivo foi juntado
+    if (!v || v.tipo === 'so') return d.contrato === c.codigo;
+    if (d.empresaId !== c.empresaId) return false;
     if (v.tipo === 'tomador') return tomadorBase(c) === v.grupo;
     if (v.tipo === 'lista') return (v.contratos || []).includes(c.codigo);
     return false;
@@ -3974,8 +3976,13 @@ const DocComum = {
     $('#dcOk', m).onclick = async () => {
       const t = f.t.value, cur = DB.get('documentos', d.id) || d;
       const vp = t === 'tomador' ? { tipo: 'tomador', grupo: f.g.value } : t === 'lista' ? { tipo: 'lista', contratos: $$('#dcL input:checked', m).map(i => i.value) } : { tipo: 'so' };
+      const antes = cs.filter(c => DocComum.vale(cur, c)).map(c => c.codigo);
       const nv = { ...cur, valePara: { ...vp, em: new Date().toISOString() } }; await DB.save('documentos', nv);
       const alvo = cs.filter(c => DocComum.vale(nv, c)), aud = $('#dcAud', m)?.checked;
+      // contratos desvinculados: apaga da ficha os dados da CCT lidos com este documento
+      const sairam = cs.filter(c => antes.includes(c.codigo) && !alvo.includes(c));
+      if (cct) { const limpar = sairam.map(c => DB.get('contratos', c.id) || c).filter(c => c.auditoria?.cct); if (limpar.length) await DB.save('contratos', limpar.map(c => { const au = { ...c.auditoria }; delete au.cct; return { ...c, auditoria: au, cct: /^CCT /.test(c.cct || '') ? '' : c.cct }; })); }
+      if (sairam.length) UI.toast(`Desvinculado de ${sairam.length} contrato(s): ${sairam.map(c => c.codigo).slice(0, 8).join(', ')}${sairam.length > 8 ? '…' : ''}.`, 'ok', 8000);
       UI.closeModal();
       if (aud && alvo.length) { setTimeout(() => { Report.dialog(e); AuditCons.rodar($('#modal'), e, alvo, 'Auditoria com a convenção coletiva'); }, 300); UI.toast(`Convenção ligada a ${alvo.length} contrato(s). A estimativa do impacto já aparece; a auditoria refina contrato a contrato.`, 'ok', 8000); }
       else { UI.toast(`Documento vale para ${alvo.length} contrato(s).`, 'ok', 6000); volta ? volta() : App.render(true); }
