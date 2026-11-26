@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.34.2';
+const APP_VERSAO = '1.34.3';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.34.3', data: '26/11/2026', itens: ['Assistente da CCT: passar de novo pela etapa 2 sem mudar a seleção não zera mais a retomada (antes, a auditoria recomeçava do zero); resumo mostra “Auditoria interrompida” quando se clica em Parar.'] },
   { numero: '1.34.2', data: '25/11/2026', itens: ['Análises retomáveis: se a auditoria parar no meio (erro, atualização, internet), a próxima rodada continua só dos contratos que faltam — no assistente da CCT (com opção “refazer todos”) e no Relatório de auditoria com “Refazer os já analisados”.'] },
   { numero: '1.34.1', data: '25/11/2026', itens: ['CCT: quando a auditoria confirma a convenção mas não encontra a planilha de custos, o contrato mantém a estimativa preliminar pelos postos (em vez de ficar sem valor).', 'Assistente da CCT, etapa 2: aviso dos contratos marcados antes que não batem com a CCT, com botão para desmarcar.'] },
   { numero: '1.34.0', data: '25/11/2026', itens: ['Assistente da convenção coletiva, numa janela só e sem trocar de página: 1. Leitura (o que a IA leu) → 2. Contratos (marcados pela categoria, com o motivo) → 3. Impacto preliminar por contrato → 4. Auditoria (situação de cada contrato) → resumo final com repactuação e carteira atualizada.', 'Análises longas: ao fechar a janela, o andamento segue num selo no canto da tela (contrato da vez, tempo restante, ver e parar).', 'CCT: a função hospitalar/convencional do contrato é ligada ao piso correspondente.'] },
@@ -4050,7 +4051,8 @@ const DocComum = {
       const L = (W.fila || []).map(cod => cs.find(c => c.codigo === cod)).filter(Boolean).map(c => ({ c, K: AuditCons.cct(c) }));
       const tot = L.reduce((t, x) => t + (x.K?.imp || 0), 0), ap = L.filter(x => x.K && x.K.pedida !== 'sim' && x.K.imp > 0).length, sem = L.filter(x => x.K && (x.K.prelim || x.K.imp === null)).length, err = Object.values(W.res).filter(r => r.erro).length;
       const S = Consult.stats(e);
-      body = `<div class="wz-ok"><div class="ic">✓</div><div><h3>Auditoria com a CCT concluída</h3><p class="muted">${L.length} contrato(s) · ${err} com erro · ${sem} sem planilha de custos (ficou a estimativa)</p></div></div>
+      const fe = (W.fila || []).filter(cod => W.res[cod]).length;
+      body = `<div class="wz-ok"><div class="ic">${W.parado ? '⏸' : '✓'}</div><div><h3>${W.parado ? 'Auditoria interrompida' : 'Auditoria com a CCT concluída'}</h3><p class="muted">${W.parado ? `${fe} de ${L.length} contrato(s) analisados — reabra o assistente para continuar dos que faltam · ` : `${L.length} contrato(s) · `}${err} com erro · ${sem} sem planilha de custos (ficou a estimativa)</p></div></div>
         <div class="wz-kp"><div><b>+${fmtMoneyShort(tot)}</b><span>repactuação por mês (${ap} contrato(s) a pedir)</span></div><div><b>${fmtMoneyShort(S.carteira + S.cct.reduce((t, x) => t + x.K.imp, 0))}</b><span>carteira mensal atualizada</span></div><div><b>${S.carteira ? (tot / S.carteira * 100).toFixed(1).replace('.', ',') + '%' : '—'}</b><span>sobre a carteira</span></div></div>
         <p class="small">O painel, a leitura do período e o relatório já estão atualizados.</p>`;
       foot = `${err ? '<button class="btn ghost" id="wzErr">Ver os contratos com erro</button>' : ''}<button class="btn ghost" id="wzPn">Ver o painel</button><button class="btn primary" id="wzRp">Gerar o relatório</button>`;
@@ -4078,7 +4080,7 @@ const DocComum = {
         if (!W.fila.length) { W.fila = W.sel.slice(); W.fim = true; return ir(5); }
         W.fila = refazer ? W.fila : W.sel.slice(); ir(4);
         const fila = W.fila.filter(cod => !W.res[cod]?.antes).map(cod => DB.get('contratos', (cs.find(c => c.codigo === cod) || {}).id)).filter(Boolean);
-        AuditCons.rodar(null, e, fila, 'Auditoria com a CCT', { abrir: () => DocComum.assistente(e, W.d), onItem: (c, ok, er) => { W.res[c.codigo] = ok ? { ok: true } : { erro: er }; if ($('#modal .wz')) DocComum.assistente(e, W.d, 4); }, onFim: R => { W.fim = true; if ($('#modal .wz')) { R.fechado = true; DocComum.assistente(e, W.d, 5); } } });
+        AuditCons.rodar(null, e, fila, 'Auditoria com a CCT', { abrir: () => DocComum.assistente(e, W.d), onItem: (c, ok, er) => { W.res[c.codigo] = ok ? { ok: true } : { erro: er }; if ($('#modal .wz')) DocComum.assistente(e, W.d, 4); }, onFim: R => { W.fim = true; W.parado = !!AuditCons._parar && R.ok + R.erro.length < fila.length; if ($('#modal .wz')) { R.fechado = true; DocComum.assistente(e, W.d, 5); } } });
         return; }
       if (W.etapa === 4) return ir(5);
     });
@@ -4093,6 +4095,9 @@ const DocComum = {
   /** grava a abrangência (lista) e limpa a CCT das fichas dos contratos desvinculados */
   async _salvar(e, W) {
     const cs = empRecs('contratos', e.id), cur = DB.get('documentos', W.d.id) || W.d, antes = cs.filter(c => DocComum.vale(cur, c)).map(c => c.codigo);
+    // mesma seleção de antes: mantém a data do vínculo (assim a auditoria continua dos que faltam)
+    const igual = cur.valePara?.tipo === 'lista' && cur.valePara.em && [...cur.valePara.contratos].sort().join() === [...W.sel].sort().join();
+    if (igual) { W.d = cur; return; }
     const nv = { ...cur, valePara: { tipo: 'lista', contratos: W.sel.slice(), em: new Date().toISOString() } }; await DB.save('documentos', nv); W.d = nv;
     if (DocComum._sug) delete DocComum._sug[nv.id];
     const sairam = cs.filter(c => antes.includes(c.codigo) && !W.sel.includes(c.codigo));
