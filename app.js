@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.33.0';
+const APP_VERSAO = '1.33.2';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,8 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.33.2', data: '25/11/2026', itens: ['Leitura da CCT: a IA agrupa as funções por atividade (limpeza, portaria, recepção…), indica o piso vigente quando a tabela tem mais de um valor e explica as colunas; a janela mostra as atividades abrangidas, a lista completa de funções com piso e o piso de cada função coberta do contrato.'] },
+  { numero: '1.33.1', data: '25/11/2026', itens: ['Abrangência da CCT: quando a base territorial é “todo o estado”, o app confere o estado de cada contrato — contratos de outro estado ficam de fora e os sem estado identificado ficam desmarcados para conferir.'] },
   { numero: '1.33.0', data: '25/11/2026', itens: ['Convenção coletiva: ao juntar (ou com “Ler a CCT com a IA”), a IA lê a categoria profissional, a base territorial e as funções com piso; a janela de abrangência já marca só os contratos da categoria, com o motivo ao lado (funções cobertas ou não).', 'Impacto da CCT na hora: estimativa preliminar com os postos e salários já cadastrados, nos cards, no painel e no relatório; ao salvar, a auditoria dos contratos marcados roda sozinha e refina pela planilha de custos.', 'Auditoria: confere se a CCT abrange cada função do contrato; funções de outra categoria ficam fora do cálculo.'] },
   { numero: '1.32.1', data: '25/11/2026', itens: ['Juntar documentos: convenção coletiva, ata de registro de preços e edital não criam mais contrato novo — vão como “só registrar o documento” e o app pede a abrangência (para quais contratos vale).', 'Definir abrangência: a opção “só este contrato” fica registrada e o aviso some.'] },
   { numero: '1.32.0', data: '25/11/2026', itens: ['Documento comum a vários contratos (convenção coletiva, ata de registro de preços, edital): na aba Documentos, “Definir abrangência” — vale para todos os contratos de um tomador ou para os escolhidos. A auditoria de cada contrato passa a ler o documento.', 'Convenção coletiva (CCT): a IA compara os salários da planilha com os pisos da CCT e estima o novo custo mensal e o valor da repactuação. Aparece no card de reajuste do contrato, na ficha, no painel (card “Repactuação pela CCT” e carteira atualizada), na leitura do período, no relatório (seção “Impacto da CCT nos custos”) e na planilha.'] },
@@ -3872,6 +3874,20 @@ const DocComum = {
     if (info.numero && !cur.numero) nv.numero = info.numero;
     await DB.save('documentos', nv); return nv;
   },
+  UFS: { AC: 'acre', AL: 'alagoas', AP: 'amapa', AM: 'amazonas', BA: 'bahia', CE: 'ceara', DF: 'distrito federal', ES: 'espirito santo', GO: 'goias', MA: 'maranhao', MT: 'mato grosso', MS: 'mato grosso do sul', MG: 'minas gerais', PA: 'para', PB: 'paraiba', PR: 'parana', PE: 'pernambuco', PI: 'piaui', RJ: 'rio de janeiro', RN: 'rio grande do norte', RS: 'rio grande do sul', RO: 'rondonia', RR: 'roraima', SC: 'santa catarina', SP: 'sao paulo', SE: 'sergipe', TO: 'tocantins' },
+  /** sigla do estado num texto ("…/ES", "Municipal ES", "Espírito Santo"); livre=true aceita "de ES" em minúsculas */
+  ufDe(t, livre) {
+    t = String(t || ''); const ks = Object.keys(DocComum.UFS);
+    const m = t.match(new RegExp('(?:^|[^A-Za-z])(' + ks.join('|') + ')(?![A-Za-z])', livre ? 'i' : ''));
+    if (m) return m[1].toUpperCase();
+    const n = norm(t); return Object.entries(DocComum.UFS).sort((a, b) => b[1].length - a[1].length).find(([, nome]) => new RegExp('\\b' + nome + '\\b').test(n))?.[0] || '';
+  },
+  /** funções da CCT agrupadas por atividade, com o piso vigente */
+  funcoesHtml(info) {
+    const fs = info.funcoes || [], g = {};
+    fs.forEach(f => { const a = f.atividade || (info.atividades || []).find(x => (x.funcoes || []).some(n => norm(n) === norm(f.funcao)))?.atividade || 'Outras'; (g[a] = g[a] || []).push(f); });
+    return `<div class="dc-fl">${Object.entries(g).map(([a, l]) => `<div><b>${esc(a)}</b><ul>${l.map(f => `<li>${esc(f.funcao)}${f.jornada ? ' <small class="muted">' + esc(f.jornada) + '</small>' : ''} — <b>${num(f.piso) ? esc(fmtMoney(f.piso)) : 'sem piso'}</b></li>`).join('')}</ul></div>`).join('')}</div>`;
+  },
   /** sinônimos de funções (para casar a função do contrato com a da CCT) */
   _fn(t) {
     let x = norm(t).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -3882,18 +3898,25 @@ const DocComum = {
   cobre(info, c) {
     if (!info) return { ok: null, motivo: '' };
     const a = c.auditoria || {}, cidade = (tomadorBase(c).match(/^Munic[ií]pio de (.+)$/) || [])[1] || '';
-    const base = (info.baseTerritorial || []).map(norm).join(' | ');
-    const naBase = !base || !cidade || base.includes(norm(cidade)) || /todo o estado|estado (do|de)|todos os municipios/.test(base);
-    if (!naBase) return { ok: false, motivo: `${cidade} fora da base territorial da CCT`, cobertas: [], fora: [] };
+    const base = (info.baseTerritorial || []).map(norm).join(' | '), ufC = DocComum.ufDe([c.tomador, c.unidade, c.grupo, a.identificacao?.orgao].join(' '));
+    const estadoTodo = /todo o estado|estado (do|de|da)|todos os municipios/.test(base), ufB = DocComum.ufDe((info.baseTerritorial || []).join(' '), true);
+    if (estadoTodo && !base.includes(norm(cidade || '#'))) {
+      if (!ufC) return { ok: null, motivo: 'CCT de todo o estado — não identifiquei o estado deste contrato; confira', cobertas: [], fora: [] };
+      if (ufB && ufB !== ufC) return { ok: false, motivo: `contrato em ${ufC}, CCT de ${ufB}`, cobertas: [], fora: [] };
+    } else if (base && cidade && !base.includes(norm(cidade))) return { ok: false, motivo: `${cidade} fora da base territorial da CCT`, cobertas: [], fora: [] };
+    else if (base && !cidade && ufB && ufC && ufB !== ufC) return { ok: false, motivo: `contrato em ${ufC}, CCT de ${ufB}`, cobertas: [], fora: [] };
     const fCCT = (info.funcoes || []).map(f => ({ f, w: DocComum._fn(f.funcao) }));
     const postos = (a.postos || []).map(p => p.funcao).concat(DB.where('maoDeObra', m => m.empresaId === c.empresaId && m.contrato === c.codigo && !m.competencia).map(m => m.posto)).filter(Boolean);
     const cobertas = [], fora = [];
     [...new Set(postos)].forEach(p => { const w = DocComum._fn(p); const hit = fCCT.find(x => [...x.w].filter(k => w.has(k)).length >= Math.min(2, x.w.size, w.size)); (hit ? cobertas : fora).push(p); });
-    const kw = (info.palavrasChave || []).concat(info.categoria || '').map(norm).join(' ');
+    const kw = (info.palavrasChave || []).concat(info.categoria || '', (info.atividades || []).map(x => x.atividade)).map(norm).join(' ');
     const obj = norm([c.objeto, a.identificacao?.objeto, c.unidade].filter(Boolean).join(' '));
     const objOk = ['limpeza', 'conservacao', 'asseio', 'higieniza', 'portaria', 'vigilancia', 'recepcao', 'copeira', 'jardinagem', 'manutencao'].some(k => kw.includes(k) && obj.includes(k));
-    if (cobertas.length) return { ok: true, motivo: `funções cobertas: ${cobertas.slice(0, 3).join(', ')}${cobertas.length > 3 ? '…' : ''}${fora.length ? ` · fora da CCT: ${fora.slice(0, 2).join(', ')}` : ''}`, cobertas, fora };
+    const pisoDe = p => { const w = DocComum._fn(p), h = fCCT.find(x => [...x.w].filter(k => w.has(k)).length >= Math.min(2, x.w.size, w.size)); return h && num(h.f.piso) ? ` (${h.f.funcao}: piso ${fmtMoney(h.f.piso)})` : ''; };
+    if (cobertas.length) return { ok: true, motivo: `funções cobertas: ${cobertas.slice(0, 3).map(p => p + pisoDe(p)).join('; ')}${cobertas.length > 3 ? '…' : ''}${fora.length ? ` · fora da CCT: ${fora.slice(0, 2).join(', ')}` : ''}`, cobertas, fora };
     if (postos.length) return { ok: false, motivo: `nenhuma função do contrato consta na CCT (${postos.slice(0, 2).join(', ')})`, cobertas, fora };
+    const atv = (info.atividades || []).find(x => { const n = norm(x.atividade).split(/[^a-z]+/).filter(w => w.length > 4); return n.some(w => obj.includes(w.slice(0, 6))); });
+    if (atv) return { ok: true, motivo: `objeto do contrato é da atividade “${atv.atividade}” da CCT (postos ainda não lidos)`, cobertas, fora };
     return objOk ? { ok: true, motivo: 'objeto do contrato é da categoria da CCT (postos ainda não lidos)', cobertas, fora } : { ok: null, motivo: 'sem postos nem objeto para conferir', cobertas, fora };
   },
   abrir(e, d, volta) {
@@ -3905,7 +3928,11 @@ const DocComum = {
     const marcado = c => sugere ? av[c.codigo]?.ok === true : v.tipo === 'lista' ? (v.contratos || []).includes(c.codigo) : c.codigo === d.contrato;
     const ordem = info ? cs.slice().sort((a, b) => ((av[b.codigo]?.ok === true) - (av[a.codigo]?.ok === true))) : cs;
     const m = UI.modal({ title: 'Vale para quais contratos?', sub: esc(d.arquivo || d.tipo || 'documento'), wide: true, body: `<form id="dcF" class="dc-f">
-      ${cct ? (info ? `<div class="notice soft">${icon('file')}<div><b>${esc(info.categoria || 'Convenção coletiva')}</b>${info.numero ? ' · ' + esc(info.numero) : ''}${info.dataBase ? ' · data-base ' + esc(isISO(info.dataBase) ? fmtDate(info.dataBase) : info.dataBase) : ''}<br><small>Base territorial: ${esc((info.baseTerritorial || []).join(', ') || 'não identificada')} · ${(info.funcoes || []).length} função(ões) com piso${(info.funcoes || []).length ? ': ' + esc(info.funcoes.slice(0, 6).map(f => f.funcao).join(', ')) + (info.funcoes.length > 6 ? '…' : '') : ''}</small><br><small>O app marcou só os contratos da categoria e da base territorial da CCT — confira e salve.</small></div></div>`
+      ${cct ? (info ? `<div class="notice soft">${icon('file')}<div><b>${esc(info.categoria || 'Convenção coletiva')}</b>${info.numero ? ' · ' + esc(info.numero) : ''}${info.dataBase ? ' · data-base ' + esc(isISO(info.dataBase) ? fmtDate(info.dataBase) : info.dataBase) : ''}<br><small>Base territorial: ${esc((info.baseTerritorial || []).join(', ') || 'não identificada')}${info.vigencia ? ' · vigência ' + esc(info.vigencia) : ''}</small>
+          ${(info.atividades || []).length ? `<div class="dc-atv"><small><b>Atividades abrangidas:</b></small> ${info.atividades.map(x => `<span class="dc-chip">${esc(x.atividade)} <i>${(x.funcoes || []).length}</i></span>`).join('')}</div>` : ''}
+          ${(info.funcoes || []).length ? `<button type="button" class="ins-ab" id="dcFv">Ver as ${info.funcoes.length} funções com piso</button><div id="dcFl" hidden>${DocComum.funcoesHtml(info)}</div>` : ''}
+          ${info.colunasPiso ? `<br><small class="muted">Valores da tabela: ${esc(info.colunasPiso)}</small>` : ''}
+          <br><small>O app marcou só os contratos da categoria e da base territorial da CCT — confira e salve. <button type="button" class="ins-ab" id="dcRel">Ler de novo com a IA</button></small></div></div>`
         : `<div class="notice warn">${icon('sparkle')}<div>A IA ainda não leu esta convenção. <button type="button" class="btn primary sm" id="dcLer">${icon('sparkle')} Ler a CCT com a IA</button><br><small>Ela identifica a categoria profissional, a base territorial e as funções com piso, e o app marca só os contratos da categoria.</small></div></div>`) : `<p class="muted small">Ata de registro de preços ou edital normalmente valem para vários contratos. Os contratos marcados passam a usar este documento na auditoria consultiva.</p>`}
       <label class="radio"><input type="radio" name="t" value="so" ${v.tipo === 'so' && !sugere ? 'checked' : ''}> Só o contrato ${esc(d.contrato || '—')}</label>
       <label class="radio"><input type="radio" name="t" value="tomador" ${!sugere && (v.tipo === 'tomador' || !v.tipo) ? 'checked' : ''}> Todos os contratos com <select name="g" class="input" style="width:auto;display:inline-block">${grupos.map(g => `<option ${g === sug ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select> <small class="muted" id="dcN"></small></label>
@@ -3915,11 +3942,13 @@ const DocComum = {
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="dcOk">${icon('check')} Salvar</button>` });
     const f = $('#dcF', m), upd = () => { const t = f.t.value; $('#dcL', m).hidden = t !== 'lista'; $('#dcN', m).textContent = `(${cs.filter(c => tomadorBase(c) === f.g.value).length} contratos)`; };
     f.addEventListener('change', upd); upd();
-    $('#dcLer', m)?.addEventListener('click', async ev => {
+    $('#dcFv', m)?.addEventListener('click', ev => { const l = $('#dcFl', m); l.hidden = !l.hidden; ev.currentTarget.textContent = l.hidden ? `Ver as ${info.funcoes.length} funções com piso` : 'Recolher a lista de funções'; });
+    $('#dcRel', m)?.addEventListener('click', ev => { const b = ev.currentTarget; b.outerHTML = `<button type="button" class="btn primary sm" id="dcLer">${icon('sparkle')} Ler a CCT com a IA</button>`; bindLer(); $('#dcLer', m).click(); });
+    const bindLer = () => $('#dcLer', m)?.addEventListener('click', async ev => {
       const b = ev.currentTarget; b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} Lendo a CCT… (até 3 min)`;
       try { const nv = await DocComum.lerCCT(DB.get('documentos', d.id) || d); (DocComum._sug ||= {})[d.id] = 1; DocComum.abrir(e, nv, volta); }
       catch (er) { UI.toast('IA: ' + er.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Tentar de novo`; }
-    });
+    }); bindLer();
     $('#dcOk', m).onclick = async () => {
       const t = f.t.value, cur = DB.get('documentos', d.id) || d;
       const vp = t === 'tomador' ? { tipo: 'tomador', grupo: f.g.value } : t === 'lista' ? { tipo: 'lista', contratos: $$('#dcL input:checked', m).map(i => i.value) } : { tipo: 'so' };
