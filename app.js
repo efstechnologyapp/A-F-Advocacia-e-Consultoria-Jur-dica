@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.33.3';
+const APP_VERSAO = '1.33.4';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.33.4', data: '25/11/2026', itens: ['Abrangência da CCT: contrato sem a sigla do estado no cadastro (ex.: “Município de Vila Velha”) usa o estado dos outros contratos da mesma cidade.'] },
   { numero: '1.33.3', data: '25/11/2026', itens: ['CCT: o cruzamento com os contratos usa todas as funções lidas (inclusive as citadas só dentro das atividades) — porteiro, ASG banheirista etc. deixam de aparecer como “não constam”.', 'CCT com várias tabelas por área (geral, industrial, petrolífera…): a IA usa a tabela que vale para órgãos públicos e informa qual; também informa a regra de reajuste do ano seguinte.'] },
   { numero: '1.33.2', data: '25/11/2026', itens: ['Leitura da CCT: a IA agrupa as funções por atividade (limpeza, portaria, recepção…), indica o piso vigente quando a tabela tem mais de um valor e explica as colunas; a janela mostra as atividades abrangidas, a lista completa de funções com piso e o piso de cada função coberta do contrato.'] },
   { numero: '1.33.1', data: '25/11/2026', itens: ['Abrangência da CCT: quando a base territorial é “todo o estado”, o app confere o estado de cada contrato — contratos de outro estado ficam de fora e os sem estado identificado ficam desmarcados para conferir.'] },
@@ -3901,6 +3902,14 @@ const DocComum = {
     fs.forEach(f => { const a = f.atividade || (info.atividades || []).find(x => (x.funcoes || []).some(n => norm(n) === norm(f.funcao)))?.atividade || 'Outras'; (g[a] = g[a] || []).push(f); });
     return `<div class="dc-fl">${Object.entries(g).map(([a, l]) => `<div><b>${esc(a)}</b><ul>${l.map(f => `<li>${esc(f.funcao)}${f.jornada ? ' <small class="muted">' + esc(f.jornada) + '</small>' : ''} — <b>${num(f.piso) ? esc(fmtMoney(f.piso)) : 'sem piso'}</b></li>`).join('')}</ul></div>`).join('')}</div>`;
   },
+  /** estado do contrato: pelo texto do cadastro; se não houver, pelos outros contratos da mesma cidade */
+  ufContrato(c) {
+    const txt = x => [x.tomador, x.unidade, x.grupo, x.auditoria?.identificacao?.orgao].join(' ');
+    const u = DocComum.ufDe(txt(c)); if (u) return u;
+    const g = tomadorBase(c); if (!/^Munic[ií]pio de /.test(g)) return '';
+    const cont = {}; DB.where('contratos', x => x.id !== c.id && tomadorBase(x) === g).forEach(x => { const k = DocComum.ufDe(txt(x)); if (k) cont[k] = (cont[k] || 0) + 1; });
+    return Object.entries(cont).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  },
   /** sinônimos de funções (para casar a função do contrato com a da CCT) */
   _fn(t) {
     let x = norm(t).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -3911,7 +3920,7 @@ const DocComum = {
   cobre(info, c) {
     if (!info) return { ok: null, motivo: '' };
     const a = c.auditoria || {}, cidade = (tomadorBase(c).match(/^Munic[ií]pio de (.+)$/) || [])[1] || '';
-    const base = (info.baseTerritorial || []).map(norm).join(' | '), ufC = DocComum.ufDe([c.tomador, c.unidade, c.grupo, a.identificacao?.orgao].join(' '));
+    const base = (info.baseTerritorial || []).map(norm).join(' | '), ufC = DocComum.ufContrato(c);
     const estadoTodo = /todo o estado|estado (do|de|da)|todos os municipios/.test(base), ufB = DocComum.ufDe((info.baseTerritorial || []).join(' '), true);
     if (estadoTodo && !base.includes(norm(cidade || '#'))) {
       if (!ufC) return { ok: null, motivo: 'CCT de todo o estado — não identifiquei o estado deste contrato; confira', cobertas: [], fora: [] };
