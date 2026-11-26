@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.32.1';
+const APP_VERSAO = '1.33.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.33.0', data: '25/11/2026', itens: ['Convenção coletiva: ao juntar (ou com “Ler a CCT com a IA”), a IA lê a categoria profissional, a base territorial e as funções com piso; a janela de abrangência já marca só os contratos da categoria, com o motivo ao lado (funções cobertas ou não).', 'Impacto da CCT na hora: estimativa preliminar com os postos e salários já cadastrados, nos cards, no painel e no relatório; ao salvar, a auditoria dos contratos marcados roda sozinha e refina pela planilha de custos.', 'Auditoria: confere se a CCT abrange cada função do contrato; funções de outra categoria ficam fora do cálculo.'] },
   { numero: '1.32.1', data: '25/11/2026', itens: ['Juntar documentos: convenção coletiva, ata de registro de preços e edital não criam mais contrato novo — vão como “só registrar o documento” e o app pede a abrangência (para quais contratos vale).', 'Definir abrangência: a opção “só este contrato” fica registrada e o aviso some.'] },
   { numero: '1.32.0', data: '25/11/2026', itens: ['Documento comum a vários contratos (convenção coletiva, ata de registro de preços, edital): na aba Documentos, “Definir abrangência” — vale para todos os contratos de um tomador ou para os escolhidos. A auditoria de cada contrato passa a ler o documento.', 'Convenção coletiva (CCT): a IA compara os salários da planilha com os pisos da CCT e estima o novo custo mensal e o valor da repactuação. Aparece no card de reajuste do contrato, na ficha, no painel (card “Repactuação pela CCT” e carteira atualizada), na leitura do período, no relatório (seção “Impacto da CCT nos custos”) e na planilha.'] },
   { numero: '1.31.5', data: '25/11/2026', itens: ['Leitura do período no Painel e no portal: a lista de contratos pendentes fica recolhida — aparece ao clicar em “Ver os N contrato(s)” e some em “Recolher”. No relatório impresso continua aberta.', 'Reajuste, repactuação, revisão e reequilíbrio aparecem como um só tema (previsto, já houve e quando, próximo) no quadro comparativo, na ficha e na planilha, sem informação repetida.'] },
@@ -2622,7 +2623,7 @@ const Consult = {
   /** logo depois de juntar documentos: verifica vínculos e confere com a pasta, mostrando o resultado */
   async posJuntada(e) {
     const semAb = DocComum.semAbrangencia(e).filter(d => Date.now() - new Date(d.createdAt || 0) < 36e5);
-    if (semAb.length) setTimeout(() => { UI.toast(`${semAb.length} documento(s) comum(ns) juntado(s) (ex.: convenção coletiva). Defina para quais contratos vale.`, 'warn', 9000); DocComum.abrir(e, semAb[0]); }, 1500);
+    if (semAb.length) setTimeout(() => { UI.toast(`${semAb.length} documento(s) comum(ns) juntado(s) (ex.: convenção coletiva). Defina para quais contratos vale.`, 'warn', 9000); (DocComum._auto ||= {})[semAb[0].id] = 1; DocComum.abrir(e, semAb[0]); }, 1500);
     const k = Vinculos.conflitos(e), n = k.reduce((s, x) => s + x.outros.length, 0);
     const falta = e.pastaContratos && Session.remote ? await Consult.conferir(DB.get('empresas', e.id) || e, true) : null;
     if (n || (falta && falta.length)) { $('#cfCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); UI.toast(`Conferência automática: ${[n && `${n} PDF(s) em contrato de outro número`, falta && falta.length && `${falta.length} contrato(s) da pasta ainda fora do sistema`].filter(Boolean).join(' · ')} — veja o quadro de conferência.`, 'warn', 10000); }
@@ -3860,27 +3861,76 @@ const DocComum = {
   rotulo(d) { const v = d.valePara; return !v ? '' : v.tipo === 'so' ? 'só o contrato ' + (d.contrato || '—') : v.tipo === 'tomador' ? `todos os contratos com ${v.grupo}` : `${(v.contratos || []).length} contrato(s)`; },
   /** comuns (pela classificação) que ainda valem para um contrato só */
   semAbrangencia: e => empRecs('documentos', e.id).filter(d => DocComum.ehComum(d) && !d.valePara),
+  ehCCT: d => /\bcct\b|conven[cç][aã]o[- _]coletiva|acordo[- _]coletivo/i.test((d.tipo || '') + ' ' + (d.arquivo || '')),
+  fileId: d => d.fileId || (String(d.link || '').match(/\/d\/([\w-]{20,})/) || [])[1],
+  /** lê a CCT com a IA (categoria, base territorial, funções e pisos) e guarda no documento */
+  async lerCCT(d) {
+    const fid = DocComum.fileId(d); if (!fid) throw new Error('o documento não tem arquivo no Drive');
+    const info = await apiT('lerCCT', { fileId: fid, nome: d.arquivo || d.tipo }, 240000);
+    const cur = DB.get('documentos', d.id) || d, nv = { ...cur, cctInfo: { ...info, lidoEm: new Date().toISOString() } };
+    if (info.ehCCT !== false && /^contrato/i.test(cur.tipo || '')) nv.tipo = 'Convenção coletiva de trabalho';
+    if (info.numero && !cur.numero) nv.numero = info.numero;
+    await DB.save('documentos', nv); return nv;
+  },
+  /** sinônimos de funções (para casar a função do contrato com a da CCT) */
+  _fn(t) {
+    let x = norm(t).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    x = x.replace(/\basg\b/g, 'auxiliar servicos gerais').replace(/\bservente\b/g, 'auxiliar servicos gerais limpeza').replace(/\bauxiliar de limpeza\b/g, 'auxiliar servicos gerais limpeza');
+    return new Set(x.split(' ').filter(w => w.length > 3 && !/^(com|sem|para|horas|semanais|diurno|noturno|insalubridade|hospitalar|convencional|segunda|domingo|inclusive|feriados|de|das|dos)$/.test(w)));
+  },
+  /** a CCT cobre este contrato? { ok: true|false|null, motivo, cobertas, fora } */
+  cobre(info, c) {
+    if (!info) return { ok: null, motivo: '' };
+    const a = c.auditoria || {}, cidade = (tomadorBase(c).match(/^Munic[ií]pio de (.+)$/) || [])[1] || '';
+    const base = (info.baseTerritorial || []).map(norm).join(' | ');
+    const naBase = !base || !cidade || base.includes(norm(cidade)) || /todo o estado|estado (do|de)|todos os municipios/.test(base);
+    if (!naBase) return { ok: false, motivo: `${cidade} fora da base territorial da CCT`, cobertas: [], fora: [] };
+    const fCCT = (info.funcoes || []).map(f => ({ f, w: DocComum._fn(f.funcao) }));
+    const postos = (a.postos || []).map(p => p.funcao).concat(DB.where('maoDeObra', m => m.empresaId === c.empresaId && m.contrato === c.codigo && !m.competencia).map(m => m.posto)).filter(Boolean);
+    const cobertas = [], fora = [];
+    [...new Set(postos)].forEach(p => { const w = DocComum._fn(p); const hit = fCCT.find(x => [...x.w].filter(k => w.has(k)).length >= Math.min(2, x.w.size, w.size)); (hit ? cobertas : fora).push(p); });
+    const kw = (info.palavrasChave || []).concat(info.categoria || '').map(norm).join(' ');
+    const obj = norm([c.objeto, a.identificacao?.objeto, c.unidade].filter(Boolean).join(' '));
+    const objOk = ['limpeza', 'conservacao', 'asseio', 'higieniza', 'portaria', 'vigilancia', 'recepcao', 'copeira', 'jardinagem', 'manutencao'].some(k => kw.includes(k) && obj.includes(k));
+    if (cobertas.length) return { ok: true, motivo: `funções cobertas: ${cobertas.slice(0, 3).join(', ')}${cobertas.length > 3 ? '…' : ''}${fora.length ? ` · fora da CCT: ${fora.slice(0, 2).join(', ')}` : ''}`, cobertas, fora };
+    if (postos.length) return { ok: false, motivo: `nenhuma função do contrato consta na CCT (${postos.slice(0, 2).join(', ')})`, cobertas, fora };
+    return objOk ? { ok: true, motivo: 'objeto do contrato é da categoria da CCT (postos ainda não lidos)', cobertas, fora } : { ok: null, motivo: 'sem postos nem objeto para conferir', cobertas, fora };
+  },
   abrir(e, d, volta) {
     const cs = empRecs('contratos', e.id).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
     const grupos = [...new Set(cs.map(tomadorBase))].sort(), v = d.valePara || {}, dono = cs.find(c => c.codigo === d.contrato);
-    const sug = v.grupo || (dono ? tomadorBase(dono) : grupos[0]);
+    const sug = v.grupo || (dono ? tomadorBase(dono) : grupos[0]), info = d.cctInfo, cct = DocComum.ehCCT(d);
+    const sugere = info && (!v.tipo || DocComum._sug?.[d.id]); if (DocComum._sug) delete DocComum._sug[d.id];
+    const av = info ? Object.fromEntries(cs.map(c => [c.codigo, DocComum.cobre(info, c)])) : {};
+    const marcado = c => sugere ? av[c.codigo]?.ok === true : v.tipo === 'lista' ? (v.contratos || []).includes(c.codigo) : c.codigo === d.contrato;
+    const ordem = info ? cs.slice().sort((a, b) => ((av[b.codigo]?.ok === true) - (av[a.codigo]?.ok === true))) : cs;
     const m = UI.modal({ title: 'Vale para quais contratos?', sub: esc(d.arquivo || d.tipo || 'documento'), wide: true, body: `<form id="dcF" class="dc-f">
-      <p class="muted small">Convenção coletiva, ata de registro de preços ou edital normalmente valem para vários contratos. Os contratos marcados passam a usar este documento na auditoria consultiva (ex.: a IA compara os salários da planilha com os pisos da CCT e calcula a repactuação).</p>
-      <label class="radio"><input type="radio" name="t" value="so" ${v.tipo === 'so' ? 'checked' : ''}> Só o contrato ${esc(d.contrato || '—')}</label>
-      <label class="radio"><input type="radio" name="t" value="tomador" ${v.tipo === 'tomador' || !v.tipo ? 'checked' : ''}> Todos os contratos com <select name="g" class="input" style="width:auto;display:inline-block">${grupos.map(g => `<option ${g === sug ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select> <small class="muted" id="dcN"></small></label>
-      <label class="radio"><input type="radio" name="t" value="lista" ${v.tipo === 'lista' ? 'checked' : ''}> Escolher os contratos</label>
-      <div class="dc-l" id="dcL">${cs.map(c => `<label class="chk"><input type="checkbox" value="${esc(c.codigo)}" ${(v.contratos || []).includes(c.codigo) || c.codigo === d.contrato ? 'checked' : ''}> <b>${esc(c.codigo)}</b> ${esc(c.numero || '')} <small class="muted">${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</small></label>`).join('')}</div></form>`,
+      ${cct ? (info ? `<div class="notice soft">${icon('file')}<div><b>${esc(info.categoria || 'Convenção coletiva')}</b>${info.numero ? ' · ' + esc(info.numero) : ''}${info.dataBase ? ' · data-base ' + esc(isISO(info.dataBase) ? fmtDate(info.dataBase) : info.dataBase) : ''}<br><small>Base territorial: ${esc((info.baseTerritorial || []).join(', ') || 'não identificada')} · ${(info.funcoes || []).length} função(ões) com piso${(info.funcoes || []).length ? ': ' + esc(info.funcoes.slice(0, 6).map(f => f.funcao).join(', ')) + (info.funcoes.length > 6 ? '…' : '') : ''}</small><br><small>O app marcou só os contratos da categoria e da base territorial da CCT — confira e salve.</small></div></div>`
+        : `<div class="notice warn">${icon('sparkle')}<div>A IA ainda não leu esta convenção. <button type="button" class="btn primary sm" id="dcLer">${icon('sparkle')} Ler a CCT com a IA</button><br><small>Ela identifica a categoria profissional, a base territorial e as funções com piso, e o app marca só os contratos da categoria.</small></div></div>`) : `<p class="muted small">Ata de registro de preços ou edital normalmente valem para vários contratos. Os contratos marcados passam a usar este documento na auditoria consultiva.</p>`}
+      <label class="radio"><input type="radio" name="t" value="so" ${v.tipo === 'so' && !sugere ? 'checked' : ''}> Só o contrato ${esc(d.contrato || '—')}</label>
+      <label class="radio"><input type="radio" name="t" value="tomador" ${!sugere && (v.tipo === 'tomador' || !v.tipo) ? 'checked' : ''}> Todos os contratos com <select name="g" class="input" style="width:auto;display:inline-block">${grupos.map(g => `<option ${g === sug ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select> <small class="muted" id="dcN"></small></label>
+      <label class="radio"><input type="radio" name="t" value="lista" ${sugere || v.tipo === 'lista' ? 'checked' : ''}> ${info ? 'Só os contratos da categoria (sugeridos pela leitura da CCT)' : 'Escolher os contratos'}</label>
+      <div class="dc-l${info ? ' dc-l1' : ''}" id="dcL">${ordem.map(c => { const x = av[c.codigo]; return `<label class="chk"><input type="checkbox" value="${esc(c.codigo)}" ${marcado(c) ? 'checked' : ''}> <span><b>${esc(c.codigo)}</b> ${esc(c.numero || '')} <small class="muted">${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</small>${x && x.motivo ? `<br><small class="${x.ok === true ? 't-ok' : x.ok === false ? 't-warn' : 'muted'}">${x.ok === true ? '✓' : x.ok === false ? '✗' : '?'} ${esc(x.motivo)}</small>` : ''}</span></label>`; }).join('')}</div>
+      ${cct ? `<label class="chk" style="margin-top:10px"><input type="checkbox" id="dcAud" checked> <span>Depois de salvar, rodar a auditoria consultiva nos contratos marcados (refina o impacto da CCT pela planilha de custos de cada um)</span></label>` : ''}</form>`,
       foot: `<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="dcOk">${icon('check')} Salvar</button>` });
     const f = $('#dcF', m), upd = () => { const t = f.t.value; $('#dcL', m).hidden = t !== 'lista'; $('#dcN', m).textContent = `(${cs.filter(c => tomadorBase(c) === f.g.value).length} contratos)`; };
     f.addEventListener('change', upd); upd();
+    $('#dcLer', m)?.addEventListener('click', async ev => {
+      const b = ev.currentTarget; b.disabled = true; b.innerHTML = `${icon('sync', 'spin')} Lendo a CCT… (até 3 min)`;
+      try { const nv = await DocComum.lerCCT(DB.get('documentos', d.id) || d); (DocComum._sug ||= {})[d.id] = 1; DocComum.abrir(e, nv, volta); }
+      catch (er) { UI.toast('IA: ' + er.message, 'bad', 9000); b.disabled = false; b.innerHTML = `${icon('sparkle')} Tentar de novo`; }
+    });
     $('#dcOk', m).onclick = async () => {
       const t = f.t.value, cur = DB.get('documentos', d.id) || d;
       const vp = t === 'tomador' ? { tipo: 'tomador', grupo: f.g.value } : t === 'lista' ? { tipo: 'lista', contratos: $$('#dcL input:checked', m).map(i => i.value) } : { tipo: 'so' };
-      await DB.save('documentos', { ...cur, valePara: vp });
-      const n = cs.filter(c => DocComum.vale({ ...cur, valePara: vp }, c)).length;
-      UI.closeModal(); UI.toast(`Documento vale para ${n} contrato(s). Para a auditoria considerar, analise de novo esses contratos (Relatório de auditoria → Refazer os já analisados).`, 'ok', 9000);
-      volta ? volta() : App.render(true);
+      const nv = { ...cur, valePara: { ...vp, em: new Date().toISOString() } }; await DB.save('documentos', nv);
+      const alvo = cs.filter(c => DocComum.vale(nv, c)), aud = $('#dcAud', m)?.checked;
+      UI.closeModal();
+      if (aud && alvo.length) { setTimeout(() => { Report.dialog(e); AuditCons.rodar($('#modal'), e, alvo, 'Auditoria com a convenção coletiva'); }, 300); UI.toast(`Convenção ligada a ${alvo.length} contrato(s). A estimativa do impacto já aparece; a auditoria refina contrato a contrato.`, 'ok', 8000); }
+      else { UI.toast(`Documento vale para ${alvo.length} contrato(s).`, 'ok', 6000); volta ? volta() : App.render(true); }
     };
+    // CCT juntada agora e ainda não lida: lê sozinha ao abrir
+    if (cct && !info && DocComum._auto?.[d.id]) { delete DocComum._auto[d.id]; $('#dcLer', m)?.click(); }
   },
   /** aviso na aba Documentos */
   avisoHtml(e) {
@@ -6900,10 +6950,31 @@ const AuditCons = {
   semFimAntigo: c => !isISO(c.fim) && c.auditoria && !c.auditoria.manual && !('prazoMeses' in (c.auditoria.vigencia || {})) && !/encerrad|rescindid|extint/i.test(c.status || ''),
   /** convenção coletiva lida pela auditoria: impacto estimado nos custos do contrato */
   cct(c) {
-    const x = c.auditoria?.cct; if (!x || AuditCons.sn(x.aplicavel) !== 'sim') return null;
+    // convenção juntada depois da última auditoria: estimativa preliminar na hora, até a auditoria refinar
+    const dc = DocComum.doContrato(c).filter(d => d.cctInfo && d.cctInfo.ehCCT !== false && DocComum.ehCCT(d)).sort((a, b) => String(b.valePara?.em || b.cctInfo.lidoEm).localeCompare(String(a.valePara?.em || a.cctInfo.lidoEm)))[0];
+    const xa = c.auditoria?.cct, aiNova = xa && xa.aplicavel !== undefined && (!dc || String(c.auditoria.em || '') >= String(dc.valePara?.em || dc.cctInfo.lidoEm || ''));
+    if (!aiNova && dc) return AuditCons.cctPrelim(c, dc);
+    const x = xa; if (!x || AuditCons.sn(x.aplicavel) !== 'sim') return null;
     const atual = num(x.custoMensalAtual), est = num(x.custoMensalEstimado), imp = num(x.impactoMensal) ?? (atual !== null && est !== null ? est - atual : null);
     const pct = num(x.impactoPercentual) ?? (imp !== null && atual ? imp / atual * 100 : null), ok = v => v && !/^n[ãa]o identificad/i.test(String(v));
     return { x, atual, est, imp, pct, pedida: AuditCons.sn(x.repactuacaoPedida), numero: ok(x.numero) ? x.numero : '', dataBase: ok(x.dataBase) ? x.dataBase : '', vigencia: ok(x.vigencia) ? x.vigencia : '', postos: (x.postos || []).filter(p => p && p.funcao) };
+  },
+  FATOR_CCT: 1.8,
+  /** impacto estimado só com os postos e salários já cadastrados: (piso − salário) × qtd × fator de encargos */
+  cctPrelim(c, d) {
+    const info = d.cctInfo, cob = DocComum.cobre(info, c); if (cob.ok === false) return null;
+    const fCCT = (info.funcoes || []).filter(f => num(f.piso)).map(f => ({ f, w: DocComum._fn(f.funcao) }));
+    const piso = fn => { const w = DocComum._fn(fn), h = fCCT.find(x => [...x.w].filter(k => w.has(k)).length >= Math.min(2, x.w.size, w.size)); return h ? num(h.f.piso) : null; };
+    const src = (c.auditoria?.postos || []).length ? c.auditoria.postos.map(p => ({ funcao: p.funcao, q: num(p.quantidade), s: num(p.salario) }))
+      : DB.where('maoDeObra', m => m.empresaId === c.empresaId && m.contrato === c.codigo && !m.competencia).map(m => ({ funcao: m.posto, q: num(m.qtdContratada), s: num(m.salario) }));
+    const postos = src.filter(p => p.funcao).map(p => { const pi = piso(p.funcao); return { funcao: p.funcao, quantidade: p.q, salarioContrato: p.s, pisoCCT: pi, variacao: pi && p.s ? (pi - p.s) / p.s * 100 : null, coberta: pi ? 'Sim' : 'Não' }; });
+    const calc = postos.filter(p => p.pisoCCT && p.salarioContrato && p.quantidade);
+    const imp = calc.length ? Math.round(calc.reduce((s, p) => s + Math.max(0, p.pisoCCT - p.salarioContrato) * p.quantidade, 0) * AuditCons.FATOR_CCT * 100) / 100 : null;
+    const atual = num(c.valorMensal), ok = v => v && !/^n[ãa]o identificad/i.test(String(v));
+    return { prelim: true, atual, est: atual !== null && imp !== null ? atual + imp : null, imp, pct: imp !== null && atual ? imp / atual * 100 : null, pedida: 'ni',
+      numero: ok(info.numero) ? info.numero : '', dataBase: ok(info.dataBase) ? info.dataBase : '', vigencia: ok(info.vigencia) ? info.vigencia : '', postos,
+      x: { aplicavel: 'Sim', numero: info.numero, sindicatos: [info.sindicatoLaboral, info.sindicatoPatronal].filter(ok).join(' × '), categoria: info.categoria, repactuacaoPedida: 'Não identificado', beneficios: (info.beneficios || []).map(b => b.nome + (num(b.valor) ? ' R$ ' + fmtMoney(b.valor).replace('R$', '').trim() : '')).join('; '),
+        observacao: imp !== null ? `Estimativa preliminar: (piso da CCT − salário do contrato) × quantidade × ${String(AuditCons.FATOR_CCT).replace('.', ',')} (encargos, provisões e tributos médios de planilhas de dedicação exclusiva). A auditoria do contrato refina pela planilha de custos.` : 'Impacto ainda não calculado: faltam os salários dos postos no cadastro. A auditoria do contrato calcula pela planilha de custos.' } };
   },
   cctTxt: K => `${K.numero ? 'CCT ' + K.numero : 'CCT'}${K.dataBase ? ' · data-base ' + (isISO(K.dataBase) ? fmtDate(K.dataBase) : K.dataBase) : ''}`,
   riscos: c => (c.auditoria?.riscos || []).reduce((o, r) => { const k = norm(r.nivel).startsWith('a') ? 'Alto' : norm(r.nivel).startsWith('m') ? 'Médio' : 'Baixo'; o[k]++; return o; }, { Alto: 0, Médio: 0, Baixo: 0 }),
@@ -6937,7 +7008,7 @@ const AuditCons = {
       <div class="ac-row"><span>Previsto no contrato</span>${AuditCons.pillSN(R.preve)}</div>
       <div class="ac-row"><span>Já houve</span>${AuditCons.pillSN(R.houve)}${R.quando ? `<small>${esc(String(R.quando).slice(0, 90))}</small>` : ''}</div>
       ${R.preve === 'Sim' ? `<div class="ac-prox"><small>Próximo reajuste</small><b>${R.prox ? fmtDate(R.prox) : 'data não identificada'}</b>${dp !== null ? `<small class="${dp < 0 ? 't-warn' : ''}">${dp < 0 ? `prazo aberto há ${-dp} dias — pedir` : `em ${dp} dias`} · 12 meses do ${R.base}</small>` : ''}</div>` : ''}
-      ${R.indice || R.dataBase ? `<small class="muted">${esc([R.indice, R.dataBase && 'data-base ' + R.dataBase].filter(Boolean).join(' · '))}</small>` : ''}${(K => K ? `<div class="ac-cct"><small>${esc(AuditCons.cctTxt(K))}</small>${K.imp !== null ? `<b>${K.imp >= 0 ? '+' : ''}${esc(fmtMoney(K.imp))}/mês${K.pct !== null ? ` (${K.pct.toFixed(1).replace('.', ',')}%)` : ''}</b><small class="${K.pedida === 'sim' ? '' : 't-warn'}">${K.pedida === 'sim' ? 'repactuação já pedida' : 'repactuação pela CCT a pedir'}</small>` : '<small class="muted">impacto não calculado (falta a planilha de custos)</small>'}</div>` : '')(AuditCons.cct(c))}</div>`;
+      ${R.indice || R.dataBase ? `<small class="muted">${esc([R.indice, R.dataBase && 'data-base ' + R.dataBase].filter(Boolean).join(' · '))}</small>` : ''}${(K => K ? `<div class="ac-cct"><small>${esc(AuditCons.cctTxt(K))}</small>${K.imp !== null ? `<b>${K.imp >= 0 ? '+' : ''}${esc(fmtMoney(K.imp))}/mês${K.pct !== null ? ` (${K.pct.toFixed(1).replace('.', ',')}%)` : ''}</b>${K.prelim ? '<small class="muted">estimativa preliminar — a auditoria refina</small>' : ''}<small class="${K.pedida === 'sim' ? '' : 't-warn'}">${K.pedida === 'sim' ? 'repactuação já pedida' : 'repactuação pela CCT a pedir'}</small>` : '<small class="muted">impacto não calculado (falta a planilha de custos)</small>'}</div>` : '')(AuditCons.cct(c))}</div>`;
   },
   /** faixa de auditoria abaixo dos indicadores */
   barraHtml(c) {
@@ -7157,7 +7228,7 @@ const AuditCons = {
     if (KK.length) { const tot = KK.reduce((s, x) => s + (x.K.imp || 0), 0), aPed = KK.filter(x => x.K.pedida !== 'sim' && x.K.imp > 0);
       out.push(`<section>${H('Impacto da convenção coletiva (CCT) nos custos')}
       <p>${KK.length} contrato(s) com convenção coletiva entre os documentos analisados. Impacto mensal estimado: <b>${esc(fmtMoney(tot))}</b>${aPed.length ? `; <b>${aPed.length}</b> contrato(s) com repactuação ainda não pedida, somando <b>${esc(fmtMoney(aPed.reduce((s, x) => s + x.K.imp, 0)))}/mês</b>` : ''}. Estimativa da IA: pisos e benefícios da CCT aplicados à planilha de custos de cada contrato, mantidos os demais percentuais.</p>
-      ${tbl(['Contrato', 'Órgão / unidade', 'CCT', 'Custo mensal (planilha)', 'Estimado com a CCT', 'Impacto mensal', 'Repactuação pedida?'], KK.map(({ l, K }) => [...AuditCons.ctCols(l.c), esc(AuditCons.cctTxt(K)), K.atual !== null ? `<span class="nw">${esc(fmtMoney(K.atual))}</span>` : '—', K.est !== null ? `<span class="nw">${esc(fmtMoney(K.est))}</span>` : '—', K.imp !== null ? `<span class="nw"><b>${esc(fmtMoney(K.imp))}</b></span>${K.pct !== null ? '<br><small>' + K.pct.toFixed(1).replace('.', ',') + '%</small>' : ''}` : '<i class="r-gap">não calculado</i>', esc(AuditCons.t(K.x.repactuacaoPedida))]), 'small')}</section>`); }
+      ${tbl(['Contrato', 'Órgão / unidade', 'CCT', 'Custo mensal (planilha)', 'Estimado com a CCT', 'Impacto mensal', 'Repactuação pedida?'], KK.map(({ l, K }) => [...AuditCons.ctCols(l.c), esc(AuditCons.cctTxt(K)), K.atual !== null ? `<span class="nw">${esc(fmtMoney(K.atual))}</span>` : '—', K.est !== null ? `<span class="nw">${esc(fmtMoney(K.est))}</span>` : '—', K.imp !== null ? `<span class="nw"><b>${esc(fmtMoney(K.imp))}</b></span>${K.pct !== null ? '<br><small>' + K.pct.toFixed(1).replace('.', ',') + '%</small>' : ''}${K.prelim ? '<br><small class="r-gap">preliminar</small>' : ''}` : '<i class="r-gap">não calculado</i>', esc(AuditCons.t(K.x.repactuacaoPedida))]), 'small')}</section>`); }
     // documentos pendentes de juntada (lista pronta para pedir à empresa)
     const pend = L.map(l => ({ l, P: l.P && !l.P.juntado ? l.P : null, outros: (l.a.documentosFaltantes || []).filter(Boolean) })).filter(x => x.P || x.outros.length);
     const porDoc = {}; pend.forEach(x => x.P && (porDoc[x.P.doc] = porDoc[x.P.doc] || []).push(x.l.c.codigo));
