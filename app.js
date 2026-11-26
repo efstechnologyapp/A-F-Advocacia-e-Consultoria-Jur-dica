@@ -16,7 +16,7 @@
    ===================================================================== */
 
 /* A configuração do login fica no arquivo config.js (veja CONFIGURAR-LOGIN.md) */
-const APP_VERSAO = '1.33.4';
+const APP_VERSAO = '1.34.0';
 /* Desenvolvimento e proteção do aplicativo */
 const DEV = { nome: 'EFS Technology', lema: 'Soluções digitais sob medida', tel: '83 9 99944-7957', wa: '5583999447957', email: 'efstechnology.app@gmail.com' };
 /** ícone da EFS Technology (o "E" de linhas de código) */
@@ -27,6 +27,7 @@ const DOMINIOS = ['efstechnologyapp.github.io', 'localhost', '127.0.0.1', '[::1]
 const dominioOk = () => { const h = location.hostname.toLowerCase(); if (!/^https?:$/.test(location.protocol)) return true; return [...DOMINIOS, ...((window.CONFIG && window.CONFIG.DOMINIOS) || [])].some(d => h === d || h.endsWith('.' + d)) || h.endsWith('.localhost'); };
 const CONFIG = Object.assign({ GOOGLE_CLIENT_ID: '', APPS_SCRIPT_URL: '' }, window.CONFIG || {}, { VERSION: APP_VERSAO });
 const VERSOES = [
+  { numero: '1.34.0', data: '25/11/2026', itens: ['Assistente da convenção coletiva, numa janela só e sem trocar de página: 1. Leitura (o que a IA leu) → 2. Contratos (marcados pela categoria, com o motivo) → 3. Impacto preliminar por contrato → 4. Auditoria (situação de cada contrato) → resumo final com repactuação e carteira atualizada.', 'Análises longas: ao fechar a janela, o andamento segue num selo no canto da tela (contrato da vez, tempo restante, ver e parar).', 'CCT: a função hospitalar/convencional do contrato é ligada ao piso correspondente.'] },
   { numero: '1.33.4', data: '25/11/2026', itens: ['Abrangência da CCT: contrato sem a sigla do estado no cadastro (ex.: “Município de Vila Velha”) usa o estado dos outros contratos da mesma cidade.', 'Ao salvar a abrangência, o documento passa a valer só para os contratos marcados (inclusive o contrato a que foi juntado, se desmarcado); dos desvinculados, saem da ficha os dados da CCT.'] },
   { numero: '1.33.3', data: '25/11/2026', itens: ['CCT: o cruzamento com os contratos usa todas as funções lidas (inclusive as citadas só dentro das atividades) — porteiro, ASG banheirista etc. deixam de aparecer como “não constam”.', 'CCT com várias tabelas por área (geral, industrial, petrolífera…): a IA usa a tabela que vale para órgãos públicos e informa qual; também informa a regra de reajuste do ano seguinte.'] },
   { numero: '1.33.2', data: '25/11/2026', itens: ['Leitura da CCT: a IA agrupa as funções por atividade (limpeza, portaria, recepção…), indica o piso vigente quando a tabela tem mais de um valor e explica as colunas; a janela mostra as atividades abrangidas, a lista completa de funções com piso e o piso de cada função coberta do contrato.'] },
@@ -1111,7 +1112,7 @@ const UI = {
     let noFundo = false; m.addEventListener('mousedown', e => { noFundo = e.target === m; });
     m.addEventListener('click', e => { if ((e.target === m && noFundo) || e.target.closest('[data-close]')) UI.closeModal(); });
     setTimeout(() => { const f = $('input:not([type=hidden]):not([type=checkbox]),select,textarea', m); f && f.focus(); }, 30);
-    onOpen && onOpen(m); return m;
+    onOpen && onOpen(m); setTimeout(() => { try { AuditCons.selo(); } catch (_) {} }, 0); return m;
   },
   /** resolve quando o modal for fechado */
   /** resolve quando o modal for fechado; 'substituido' se outra janela tomou o lugar dele */
@@ -1119,7 +1120,7 @@ const UI = {
   closeModal() {
     $('#modal')?.remove(); document.body.classList.remove('noscroll');
     // se algo foi gravado enquanto a janela estava aberta, redesenha a tela por trás ao fechar (listas e cards não ficam desatualizados)
-    setTimeout(() => { if (!$('#modal') && UI._rev0 !== undefined) { const mudou = DB.rev !== UI._rev0; UI._rev0 = undefined; if (mudou) try { App.render(true); } catch (_) {} } }, 0);
+    setTimeout(() => { try { AuditCons.selo(); } catch (_) {} if (!$('#modal') && UI._rev0 !== undefined) { const mudou = DB.rev !== UI._rev0; UI._rev0 = undefined; if (mudou) try { App.render(true); } catch (_) {} } }, 0);
   },
   confirm(msg, okLabel = 'Confirmar', danger = true) {
     return new Promise(res => {
@@ -2498,7 +2499,7 @@ const Consult = {
     host.innerHTML = `${coll === 'indicadores' ? `<div class="notice soft">${icon('chart')}<div>Lance mês a mês a receita, custos, folha, tributos (INSS, FGTS, ISS, federais) e a movimentação de pessoal. Esses dados alimentam os gráficos do <b>Painel</b> e do relatório.</div></div>` : ''}
       ${gaps ? `<div class="notice warn">${icon('alert')}<div><b>${gaps} campo(s) “não identificado no contrato”</b> nesta aba — lacunas documentais que reduzem o índice de completude. Clique no registro para completar quando o documento for obtido.</div></div>` : ''}
       ${coll === 'documentos' ? DocComum.avisoHtml(e) : ''}<section class="card flush" id="dt"></section>`;
-    $$('[data-dcom]', host).forEach(b => b.onclick = () => DocComum.abrir(e, DB.get('documentos', b.dataset.dcom)));
+    $$('[data-dcom]', host).forEach(b => b.onclick = () => DocComum.definir(e, DB.get('documentos', b.dataset.dcom)));
     const open = r => coll === 'contratos' ? Consult.contrato360(e, r) : UI.editRecord(coll, r, { ctx });
     dataTable($('#dt'), { id: coll + e.id, rows, schema: sc, filters, sortDefault: coll === 'documentos' ? 'createdAt' : sc.key || (sc.fields.some(f => f.k === 'contrato') ? 'contrato' : null), sortDir: coll === 'documentos' ? -1 : 1, onOpen: open, actions: `<button class="btn primary sm" id="dtNew">${icon('plus')} Novo</button>`, emptyMsg: `Nenhum registro em ${sc.titulo}. Use “Novo” ou importe a planilha.` });
     $('#dtNew').onclick = () => {
@@ -2627,7 +2628,7 @@ const Consult = {
   /** logo depois de juntar documentos: verifica vínculos e confere com a pasta, mostrando o resultado */
   async posJuntada(e) {
     const semAb = DocComum.semAbrangencia(e).filter(d => Date.now() - new Date(d.createdAt || 0) < 36e5);
-    if (semAb.length) setTimeout(() => { UI.toast(`${semAb.length} documento(s) comum(ns) juntado(s) (ex.: convenção coletiva). Defina para quais contratos vale.`, 'warn', 9000); (DocComum._auto ||= {})[semAb[0].id] = 1; DocComum.abrir(e, semAb[0]); }, 1500);
+    if (semAb.length) setTimeout(() => { UI.toast(`${semAb.length} documento(s) comum(ns) juntado(s) (ex.: convenção coletiva). Defina para quais contratos vale.`, 'warn', 9000); (DocComum._auto ||= {})[semAb[0].id] = 1; DocComum.definir(e, semAb[0]); }, 1500);
     const k = Vinculos.conflitos(e), n = k.reduce((s, x) => s + x.outros.length, 0);
     const falta = e.pastaContratos && Session.remote ? await Consult.conferir(DB.get('empresas', e.id) || e, true) : null;
     if (n || (falta && falta.length)) { $('#cfCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); UI.toast(`Conferência automática: ${[n && `${n} PDF(s) em contrato de outro número`, falta && falta.length && `${falta.length} contrato(s) da pasta ainda fora do sistema`].filter(Boolean).join(' · ')} — veja o quadro de conferência.`, 'warn', 10000); }
@@ -3916,7 +3917,7 @@ const DocComum = {
   _fn(t) {
     let x = norm(t).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
     x = x.replace(/\basg\b/g, 'auxiliar servicos gerais').replace(/\bservente\b/g, 'auxiliar servicos gerais limpeza').replace(/\bauxiliar de limpeza\b/g, 'auxiliar servicos gerais limpeza');
-    return new Set(x.split(' ').filter(w => w.length > 3 && !/^(com|sem|para|horas|semanais|diurno|noturno|insalubridade|hospitalar|convencional|segunda|domingo|inclusive|feriados|de|das|dos)$/.test(w)));
+    return new Set(x.split(' ').filter(w => w.length > 3 && !/^(com|sem|para|horas|semanais|diurno|noturno|insalubridade|segunda|domingo|inclusive|feriados|de|das|dos)$/.test(w)));
   },
   /** a CCT cobre este contrato? { ok: true|false|null, motivo, cobertas, fora } */
   cobre(info, c) {
@@ -3990,6 +3991,102 @@ const DocComum = {
     // CCT juntada agora e ainda não lida: lê sozinha ao abrir
     if (cct && !info && DocComum._auto?.[d.id]) { delete DocComum._auto[d.id]; $('#dcLer', m)?.click(); }
   },
+  /* ---------- assistente da convenção coletiva: 1. Leitura → 2. Contratos → 3. Impacto → 4. Auditoria ---------- */
+  assistente(e, d, etapa) {
+    const W = DocComum._W && DocComum._W.d.id === d.id ? DocComum._W : (DocComum._W = { e, d, etapa: 1, res: {} });
+    W.e = e; W.d = DB.get('documentos', d.id) || d;
+    if (etapa) W.etapa = etapa; else if (AuditCons._rodando && W.fila) W.etapa = 4;
+    const info = W.d.cctInfo, cs = empRecs('contratos', e.id).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
+    const nSel = () => (W.sel || []).length, imp = W.imp || 0;
+    const passos = [['1. Leitura', info ? `${(info.categoria || 'CCT').split(' ').slice(-3).join(' ')} · ${(info.baseTerritorial || []).join(', ').slice(0, 30)}` : ''], ['2. Contratos', W.sel ? `${nSel()} marcados` : ''], ['3. Impacto preliminar', W.imp !== undefined ? fmtMoneyShort(imp) + '/mês' : ''], ['4. Auditoria', W.fila ? (W.fim ? 'concluída' : 'em andamento') : 'refina pela planilha']];
+    const topo = `<div class="wz">${passos.map(([t, sub], i) => { const k = i + 1 < W.etapa || (i === 3 && W.fim) ? 'ok' : i + 1 === W.etapa ? 'now' : ''; return `<div class="${k}"><b>${t}${k === 'ok' ? ' ✓' : ''}</b><small>${esc(sub || '')}</small></div>`; }).join('')}</div>`;
+    let body = '', foot = '';
+    if (W.etapa === 1 && !info) {
+      body = `<div class="wz-c"><div class="wz-spin"></div><h3>Lendo a convenção coletiva com a IA</h3><p class="muted">${esc(W.d.arquivo || '')} · até 3 minutos</p></div>
+        <div class="wz-sub"><div>◌ Categoria profissional e sindicatos</div><div>◌ Base territorial e vigência</div><div>◌ Funções e pisos salariais (tabela que vale para órgãos públicos)</div><div>◌ Benefícios e regra de reajuste</div></div>
+        <p class="muted small" style="text-align:center">Pode fechar: ao reabrir o documento, o assistente continua daqui.</p>`;
+      foot = `<button class="btn ghost" data-close>Fechar</button>`;
+    } else if (W.etapa === 1) {
+      const atv = (info.atividades || []).map(x => `<span class="dc-chip">${esc(x.atividade)} <i>${(x.funcoes || []).length}</i></span>`).join(' ');
+      body = `<table class="wz-t"><tbody>
+        <tr><th>Categoria</th><td>${esc(info.categoria || '—')}</td></tr>
+        <tr><th>Registro / vigência</th><td>${esc([info.numero, info.vigencia, info.dataBase && 'data-base ' + (isISO(info.dataBase) ? fmtDate(info.dataBase) : info.dataBase)].filter(Boolean).join(' · ') || '—')}</td></tr>
+        <tr><th>Sindicatos</th><td>${esc([info.sindicatoLaboral, info.sindicatoPatronal].filter(Boolean).join(' × ') || '—')}</td></tr>
+        <tr><th>Base territorial</th><td>${esc((info.baseTerritorial || []).join(', ') || '—')}</td></tr>
+        <tr><th>Atividades</th><td>${atv || '—'} <button type="button" class="ins-ab" id="wzFv">ver as ${DocComum.funcoesDe(info).length} funções</button><div id="wzFl" hidden>${DocComum.funcoesHtml(info)}</div></td></tr>
+        ${info.tabelaUsada || info.colunasPiso ? `<tr><th>Tabela usada</th><td>${esc([info.tabelaUsada, info.colunasPiso].filter(Boolean).join(' · '))}</td></tr>` : ''}
+        ${info.reajusteProximo ? `<tr><th>Próximo reajuste</th><td class="t-warn">${esc(info.reajusteProximo)}</td></tr>` : ''}</tbody></table>`;
+      foot = `<button class="btn ghost" id="wzRel">${icon('sparkle')} Ler de novo</button><button class="btn primary" id="wzNx">Continuar: conferir os contratos →</button>`;
+    } else if (W.etapa === 2) {
+      const av = Object.fromEntries(cs.map(c => [c.codigo, DocComum.cobre(info, c)]));
+      if (!W.sel) { const v = W.d.valePara; W.sel = v && v.tipo === 'lista' && !DocComum._sug?.[W.d.id] ? v.contratos.slice() : cs.filter(c => av[c.codigo].ok === true).map(c => c.codigo); }
+      const ordem = cs.slice().sort((a, b) => (av[b.codigo].ok === true) - (av[a.codigo].ok === true) || (av[b.codigo].ok === null) - (av[a.codigo].ok === null));
+      body = `<p class="muted small" style="margin-top:0">O app marcou os contratos da categoria e da base territorial da convenção. Confira — o motivo está embaixo de cada um.</p>
+        <div class="dc-l dc-l1" id="wzL">${ordem.map(c => { const x = av[c.codigo]; return `<label class="chk"><input type="checkbox" value="${esc(c.codigo)}" ${W.sel.includes(c.codigo) ? 'checked' : ''}> <span><b>${esc(c.codigo)}</b> ${esc(c.numero || '')} <small class="muted">${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</small>${x.motivo ? `<br><small class="${x.ok === true ? 't-ok' : x.ok === false ? 't-warn' : 'muted'}">${x.ok === true ? '✓' : x.ok === false ? '✗' : '?'} ${esc(x.motivo)}</small>` : ''}</span></label>`; }).join('')}</div>`;
+      foot = `<button class="btn ghost" id="wzBk">← Voltar</button><button class="btn primary" id="wzNx">Continuar: ver o impacto →</button>`;
+    } else if (W.etapa === 3) {
+      const L = W.sel.map(cod => cs.find(c => c.codigo === cod)).filter(Boolean).map(c => ({ c, K: AuditCons.cctPrelim(c, W.d) })), com = L.filter(x => x.K && x.K.imp !== null);
+      W.imp = com.reduce((t, x) => t + x.K.imp, 0);
+      body = `<div class="table-wrap"><table class="mini wz-imp"><thead><tr><th>Contrato</th><th>Órgão / unidade</th><th>Funções cobertas (piso)</th><th class="r">Impacto/mês</th></tr></thead><tbody>
+        ${L.sort((a, b) => (b.K?.imp || 0) - (a.K?.imp || 0)).map(({ c, K }) => `<tr><td><b>${esc(c.codigo)}</b><br><small>${esc(c.numero || '')}</small></td><td>${esc(tomadorBase(c))}${c.unidade ? '<br><small>' + esc(c.unidade) + '</small>' : ''}</td><td>${K && K.postos.filter(p => p.pisoCCT).length ? K.postos.filter(p => p.pisoCCT).map(p => `${esc(p.funcao)} <small class="muted">(${esc(fmtMoney(p.pisoCCT))})</small>`).join('<br>') : '<span class="muted">postos ainda não lidos</span>'}</td><td class="r">${K && K.imp !== null ? `<b>${K.imp >= 0 ? '+' : ''}${esc(fmtMoney(K.imp))}</b>` : '<i class="muted">a auditoria calcula</i>'}</td></tr>`).join('')}
+        <tr class="tot"><td colspan="3"><b>Total (${L.length} contratos)</b> <small class="muted">— estimativa preliminar: (piso − salário) × quantidade × ${String(AuditCons.FATOR_CCT).replace('.', ',')}</small></td><td class="r"><b>+${esc(fmtMoney(W.imp))}</b></td></tr></tbody></table></div>`;
+      foot = `<button class="btn ghost" id="wzBk">← Voltar</button><button class="btn ghost" id="wzSv">Salvar sem auditar</button><button class="btn primary" id="wzNx">${icon('sparkle')} Continuar: rodar a auditoria →</button>`;
+    } else if (W.etapa === 4) {
+      const atual = !W.fim && (W.fila || []).find(x => !W.res[x]);
+      const linhas = (W.fila || []).map(cod => { const r = W.res[cod], c = cs.find(x => x.codigo === cod), K = c && AuditCons.cct(c);
+        const sit = !r ? (cod === atual && AuditCons._rodando ? '<span class="muted">◌ analisando…</span>' : '<span class="muted">○ na fila</span>') : r.erro ? `<span class="t-warn">✗ ${esc(r.erro)}</span>` : !K ? '<span class="muted">— CCT não aplicável a este contrato</span>' : K.prelim || K.imp === null ? '<span class="t-warn">⚠ sem planilha de custos — fica a estimativa</span>' : '<span class="t-ok">✓ analisado pela planilha</span>';
+        return `<tr><td><b>${esc(cod)}</b> <small class="muted">${esc(c ? tomadorBase(c).replace('Município de ', '') + (c.unidade ? ' · ' + c.unidade : '') : '')}</small></td><td>${sit}</td><td class="r">${r && K && K.imp !== null ? esc(fmtMoney(K.imp)) : '—'}</td></tr>`; }).join('');
+      body = `<div id="acProg">${AuditCons._rodando ? AuditCons._prog || '' : ''}</div><div class="table-wrap" style="margin-top:10px"><table class="mini"><thead><tr><th>Contrato</th><th>Situação</th><th class="r">Impacto/mês</th></tr></thead><tbody>${linhas}</tbody></table></div>
+        <p class="muted small">Pode minimizar: a análise continua e um selo no canto da tela mostra o andamento.</p>`;
+      foot = W.fim ? `<button class="btn primary" id="wzNx">Ver o resultado →</button>` : `<button class="btn ghost" id="wzStop">Parar</button><button class="btn primary" data-close>Minimizar e continuar usando o app</button>`;
+    } else {
+      const L = (W.fila || []).map(cod => cs.find(c => c.codigo === cod)).filter(Boolean).map(c => ({ c, K: AuditCons.cct(c) }));
+      const tot = L.reduce((t, x) => t + (x.K?.imp || 0), 0), ap = L.filter(x => x.K && x.K.pedida !== 'sim' && x.K.imp > 0).length, sem = L.filter(x => x.K && (x.K.prelim || x.K.imp === null)).length, err = Object.values(W.res).filter(r => r.erro).length;
+      const S = Consult.stats(e);
+      body = `<div class="wz-ok"><div class="ic">✓</div><div><h3>Auditoria com a CCT concluída</h3><p class="muted">${L.length} contrato(s) · ${err} com erro · ${sem} sem planilha de custos (ficou a estimativa)</p></div></div>
+        <div class="wz-kp"><div><b>+${fmtMoneyShort(tot)}</b><span>repactuação por mês (${ap} contrato(s) a pedir)</span></div><div><b>${fmtMoneyShort(S.carteira + S.cct.reduce((t, x) => t + x.K.imp, 0))}</b><span>carteira mensal atualizada</span></div><div><b>${S.carteira ? (tot / S.carteira * 100).toFixed(1).replace('.', ',') + '%' : '—'}</b><span>sobre a carteira</span></div></div>
+        <p class="small">O painel, a leitura do período e o relatório já estão atualizados.</p>`;
+      foot = `${err ? '<button class="btn ghost" id="wzErr">Ver os contratos com erro</button>' : ''}<button class="btn ghost" id="wzPn">Ver o painel</button><button class="btn primary" id="wzRp">Gerar o relatório</button>`;
+    }
+    const m = UI.modal({ title: 'Convenção coletiva — assistente', sub: esc((W.d.arquivo || '') + (info?.numero ? ' · ' + info.numero : '')), wide: true, body: topo + body, foot });
+    const ir = n => DocComum.assistente(e, W.d, n);
+    $('#wzFv', m)?.addEventListener('click', ev => { const l = $('#wzFl', m); l.hidden = !l.hidden; ev.currentTarget.textContent = l.hidden ? 'ver as funções' : 'recolher'; });
+    $('#wzBk', m)?.addEventListener('click', () => { if (W.etapa === 2) W.sel = $$('#wzL input:checked', m).map(i => i.value); ir(W.etapa - 1); });
+    $('#wzRel', m)?.addEventListener('click', () => { W.d = { ...W.d, cctInfo: null }; W.sel = null; DocComum._sug = { ...(DocComum._sug || {}), [W.d.id]: 1 }; DocComum._lerNoAssistente(e, W); });
+    $('#wzStop', m)?.addEventListener('click', () => AuditCons.parar());
+    $('#wzPn', m)?.addEventListener('click', () => { UI.closeModal(); location.hash = `#/empresa/${e.id}/painel`; });
+    $('#wzRp', m)?.addEventListener('click', () => Report.dialog(e));
+    $('#wzErr', m)?.addEventListener('click', () => { UI.closeModal(); const c = cs.find(x => W.res[x.codigo]?.erro); c && Consult.contrato360(e, c); });
+    $('#wzSv', m)?.addEventListener('click', () => { UI.closeModal(); UI.toast(`Convenção ligada a ${nSel()} contrato(s). Impacto preliminar: ${fmtMoney(W.imp)}/mês. Para refinar, rode a auditoria depois.`, 'ok', 9000); DocComum._W = null; App.render(true); });
+    $('#wzNx', m)?.addEventListener('click', async () => {
+      if (W.etapa === 1) return ir(2);
+      if (W.etapa === 2) { W.sel = $$('#wzL input:checked', m).map(i => i.value); if (!W.sel.length) return UI.toast('Marque ao menos um contrato.', 'warn'); await DocComum._salvar(e, W); return ir(3); }
+      if (W.etapa === 3) { W.fila = W.sel.slice(); W.res = {}; W.fim = false; ir(4);
+        const fila = W.fila.map(cod => DB.get('contratos', (cs.find(c => c.codigo === cod) || {}).id)).filter(Boolean);
+        AuditCons.rodar(null, e, fila, 'Auditoria com a CCT', { abrir: () => DocComum.assistente(e, W.d), onItem: (c, ok, er) => { W.res[c.codigo] = ok ? { ok: true } : { erro: er }; if ($('#modal .wz')) DocComum.assistente(e, W.d, 4); }, onFim: R => { W.fim = true; if ($('#modal .wz')) { R.fechado = true; DocComum.assistente(e, W.d, 5); } } });
+        return; }
+      if (W.etapa === 4) return ir(5);
+    });
+    if (W.etapa === 1 && !info && !W.lendo) DocComum._lerNoAssistente(e, W);
+  },
+  async _lerNoAssistente(e, W) {
+    W.lendo = true; if (!$('#modal .wz') || W.d.cctInfo) DocComum.assistente(e, W.d, 1);
+    try { const nv = await DocComum.lerCCT(DB.get('documentos', W.d.id) || W.d); W.d = nv; W.sel = null; }
+    catch (er) { UI.toast('IA: ' + er.message, 'bad', 9000); }
+    W.lendo = false; if ($('#modal .wz')) DocComum.assistente(e, W.d, 1); else if (W.d.cctInfo) UI.toast('Convenção lida pela IA — clique em “Definir abrangência” na aba Documentos para continuar o assistente.', 'ok', 9000);
+  },
+  /** grava a abrangência (lista) e limpa a CCT das fichas dos contratos desvinculados */
+  async _salvar(e, W) {
+    const cs = empRecs('contratos', e.id), cur = DB.get('documentos', W.d.id) || W.d, antes = cs.filter(c => DocComum.vale(cur, c)).map(c => c.codigo);
+    const nv = { ...cur, valePara: { tipo: 'lista', contratos: W.sel.slice(), em: new Date().toISOString() } }; await DB.save('documentos', nv); W.d = nv;
+    if (DocComum._sug) delete DocComum._sug[nv.id];
+    const sairam = cs.filter(c => antes.includes(c.codigo) && !W.sel.includes(c.codigo));
+    const limpar = sairam.map(c => DB.get('contratos', c.id) || c).filter(c => c.auditoria?.cct);
+    if (limpar.length) await DB.save('contratos', limpar.map(c => { const au = { ...c.auditoria }; delete au.cct; return { ...c, auditoria: au, cct: /^CCT /.test(c.cct || '') ? '' : c.cct }; }));
+    if (sairam.length) UI.toast(`Desvinculada de ${sairam.length} contrato(s): ${sairam.map(c => c.codigo).slice(0, 8).join(', ')}${sairam.length > 8 ? '…' : ''}.`, 'ok', 7000);
+  },
+  /** abre o caminho certo: assistente para convenção coletiva; janela simples para ata/edital */
+  definir(e, d) { return DocComum.ehCCT(d) ? DocComum.assistente(e, d) : DocComum.abrir(e, d); },
   /** aviso na aba Documentos */
   avisoHtml(e) {
     const sem = DocComum.semAbrangencia(e), com = empRecs('documentos', e.id).filter(d => d.valePara);
@@ -7191,6 +7288,7 @@ const AuditCons = {
       <p class="muted small" style="margin:0 0 8px">A IA lê os PDFs de cada contrato (contrato, aditivos, apostilamentos, TR e planilhas) e monta a ficha individual que entra na seção “Auditoria consultiva” do relatório. Analisa os contratos escolhidos acima que ainda não foram lidos (1 a 3 minutos cada). Pode fechar a janela: a análise continua e o progresso volta ao reabrir.</p>
       <div class="btn-row"><label class="switch small"><input type="checkbox" id="acRe"><span></span>Refazer os já analisados</label><button type="button" class="btn primary" id="acLote">${icon('sparkle')} Analisar</button></div>
       <div id="acProg">${AuditCons._rodando ? AuditCons._prog || '' : ''}</div></div>`;
+    // (ao abrir o quadro, o selo do canto some — o progresso aparece aqui)
   },
   fila(e, g, re) {
     return empRecs('contratos', e.id).filter(c => (!g || tomadorBase(c) === g) && (re || !c.auditoria || c.auditoria.manual || AuditCons.semFimAntigo(c))).sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', { numeric: true }));
@@ -7217,22 +7315,44 @@ const AuditCons = {
     if (($('#modal') && !rel) || (!rel && a && a.matches && a.matches('input:not([type=checkbox]),textarea'))) return;
     try { App.render(true); } catch (_) {}
   },
-  /** roda a análise de uma fila de contratos mostrando o progresso no próprio quadro do painel */
-  async rodar(host, e, fila, titulo = '') {
-    if (AuditCons._rodando) return UI.toast('Já há uma análise em andamento — acompanhe no quadro.', 'warn');
-    // procura o quadro a cada passo: se a tela for redesenhada, o progresso continua aparecendo
-    const Pq = () => $('#acProg') || $('#acProg', host), Bq = () => $('#acLote');
-    if (!Pq()) return UI.toast('Abra o Relatório de auditoria para acompanhar a análise.', 'warn'); let ok = 0, erro = []; AuditCons._parar = false; AuditCons._rodando = true; if (Bq()) Bq().disabled = true;
+  /** roda a análise de uma fila de contratos. O progresso aparece no quadro #acProg (Relatório de auditoria
+   *  ou assistente da CCT); se nenhum estiver aberto, num selo no canto da tela. o.onItem(c, ok, erro) a cada contrato. */
+  async rodar(host, e, fila, titulo = '', o = {}) {
+    if (AuditCons._rodando) return UI.toast('Já há uma análise em andamento — acompanhe pelo selo no canto da tela.', 'warn');
+    const Pq = () => $('#acProg'), Bq = () => $('#acLote');
+    const R = AuditCons._run = { titulo: titulo || 'Auditoria consultiva', n: fila.length, i: 0, ok: 0, erro: [], cod: '', ini: Date.now(), fim: false, abrir: o.abrir || null };
+    AuditCons._parar = false; AuditCons._rodando = true; if (Bq()) Bq().disabled = true;
     $('.ac-lote')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     for (const [i, c] of fila.entries()) {
       if (AuditCons._parar) break;
-      const P = Pq(); if (Bq()) Bq().disabled = true; AuditCons._prog = `<div class="ac-prog">${titulo ? `<div class="small"><b>${esc(titulo)}</b></div>` : ''}<div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(tomadorBase(c))}${c.unidade ? ' · ' + esc(c.unidade) : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`; if (P) P.innerHTML = AuditCons._prog;
-      if (P) $('#acStop', P).onclick = () => { AuditCons._parar = true; UI.toast('Vai parar ao terminar o contrato atual.'); };
-      try { await AuditCons.analisar(e, c); ok++; AuditCons.atualizarTela(); AuditCons.contador(e, $('#modal select[name=grupo]')?.value || ''); } catch (er) { erro.push(`${c.codigo}: ${er.message}`); }
+      Object.assign(R, { i, cod: c.codigo, onde: tomadorBase(c) + (c.unidade ? ' · ' + c.unidade : '') });
+      const P = Pq(); if (Bq()) Bq().disabled = true;
+      AuditCons._prog = `<div class="ac-prog">${titulo ? `<div class="small"><b>${esc(titulo)}</b></div>` : ''}<div><b>${i + 1} de ${fila.length}</b> · ${esc(c.codigo)} — ${esc(R.onde)}${AuditCons.resta() ? ' · ' + AuditCons.resta() : ''}</div><div class="bar"><i style="width:${Math.round(i / fila.length * 100)}%"></i></div><button type="button" class="btn ghost sm" id="acStop">Parar</button></div>`;
+      if (P) { P.innerHTML = AuditCons._prog; $('#acStop', P).onclick = () => AuditCons.parar(); }
+      AuditCons.selo();
+      try { await AuditCons.analisar(e, c); R.ok++; o.onItem && o.onItem(c, true); AuditCons.atualizarTela(); AuditCons.contador(e, $('#modal select[name=grupo]')?.value || ''); }
+      catch (er) { R.erro.push({ c, msg: er.message }); o.onItem && o.onItem(c, false, er.message); }
     }
-    AuditCons._rodando = false; AuditCons.atualizarTela(); if (Bq()) Bq().disabled = false;
+    AuditCons._rodando = false; R.fim = true; R.i = fila.length; AuditCons.atualizarTela(); if (Bq()) Bq().disabled = false;
     AuditCons.contador(e, $('#modal select[name=grupo]')?.value || '');
-    const P = Pq(); if (P) P.innerHTML = `<div class="notice ${erro.length ? 'warn' : 'soft'}">${icon(erro.length ? 'alert' : 'check')}<div><b>${ok} contrato(s) analisados.</b>${erro.length ? `<br>Não analisados (${erro.length}):<ul>${erro.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div></div>`;
+    const P = Pq(); if (P) P.innerHTML = `<div class="notice ${R.erro.length ? 'warn' : 'soft'}">${icon(R.erro.length ? 'alert' : 'check')}<div><b>${R.ok} contrato(s) analisados.</b>${R.erro.length ? `<br>Não analisados (${R.erro.length}):<ul>${R.erro.map(x => `<li>${esc(x.c.codigo)}: ${esc(x.msg)}</li>`).join('')}</ul>` : ''}</div></div>`;
+    o.onFim && o.onFim(R);
+    AuditCons.selo();
+  },
+  parar() { AuditCons._parar = true; UI.toast('Vai parar ao terminar o contrato atual.'); },
+  resta() { const R = AuditCons._run; if (!R || R.i < 1) return ''; const m = Math.round((Date.now() - R.ini) / R.i * (R.n - R.i) / 60000); return m < 1 ? 'menos de 1 min' : m < 60 ? `≈ ${m} min` : `≈ ${Math.floor(m / 60)} h ${m % 60} min`; },
+  /** selo no canto da tela: aparece quando a análise está rodando e o quadro de progresso não está à vista */
+  selo() {
+    const R = AuditCons._run; let el = $('#acSelo');
+    if (!R || $('#acProg') || R.fechado) { el?.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'acSelo'; document.body.appendChild(el); }
+    el.className = 'ac-selo' + (R.fim ? (R.erro.length ? ' warn' : ' ok') : '');
+    el.innerHTML = R.fim
+      ? `<div class="r"><b>${icon(R.erro.length ? 'alert' : 'check')} ${esc(R.titulo)} concluída</b><button type="button" class="x" data-sx>×</button></div><div class="r"><small>${R.ok} de ${R.n} contrato(s) analisados${R.erro.length ? ` · ${R.erro.length} com erro` : ''}</small><button type="button" data-sv>ver</button></div>`
+      : `<div class="r"><b>${icon('sparkle')} ${esc(R.titulo)}</b><small>${R.i + 1} de ${R.n}</small></div><div class="bar"><i style="width:${Math.round(R.i / R.n * 100)}%"></i></div><div class="r"><small>${esc(R.cod)} · ${esc(R.onde || '')}${AuditCons.resta() ? '<br>' + AuditCons.resta() + ' restante(s)' : ''}${R.erro.length ? ` · ${R.erro.length} erro(s)` : ''}</small><span><button type="button" data-sv>ver</button> <button type="button" data-sp>parar</button></span></div>`;
+    $('[data-sx]', el)?.addEventListener('click', () => { R.fechado = true; el.remove(); });
+    $('[data-sp]', el)?.addEventListener('click', () => AuditCons.parar());
+    $('[data-sv]', el)?.addEventListener('click', () => { if (R.fim) { R.fechado = true; el.remove(); } (R.abrir || (() => location.hash.includes('/empresa/') && Report.dialog(DB.get('empresas', location.hash.split('/')[2]))))(); });
   },
 
   /* ---------- quadro comparativo e relatório geral ---------- */
